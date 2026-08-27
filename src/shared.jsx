@@ -50,8 +50,8 @@ export const DEFAULT_MENU = {
   footerNote: "Fattoria della Piana",
   theme: "rustica",
   reviewLinks: {
-    google: { url: "", visible: false },
-    tripadvisor: { url: "", visible: false },
+    google: { url: "https://search.google.com/local/writereview?placeid=ChIJ2fN-wtETFRMR6-lHkqwbrD0", visible: true },
+    tripadvisor: { url: "https://www.tripadvisor.it/Restaurant_Review-g2282898-d4770660-Reviews-Masseria_della_Piana-Rosarno_Province_of_Reggio_Calabria_Calabria.html", visible: true },
   },
   categories: [
     {
