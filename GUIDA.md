@@ -86,7 +86,7 @@ account gratuito su un servizio dedicato alle immagini (Cloudinary): il piano
 free basta ampiamente per poche decine di foto e non richiede carta di
 credito.
 
-1. Vai su **https://cloudinary.com** → **Sign up free**
+1. Vai su **https://cloudinary.com** → **Sign up free** (login con account google)
 2. Una volta dentro, nella Dashboard trovi in alto il tuo **Cloud name**:
    tienilo a portata di mano
 3. Vai su **Settings** (icona ingranaggio) → scheda **Upload**

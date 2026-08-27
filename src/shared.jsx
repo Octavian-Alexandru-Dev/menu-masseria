@@ -191,11 +191,11 @@ export const LANGUAGES = [
 
 // Testi fissi dell'interfaccia: tradotti a mano, non richiedono chiamate API.
 export const UI_STRINGS = {
-  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", translating: "Traduzione in corso…", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor" },
-  en: { onRequest: "On request", manageMenu: "Menu management", translating: "Translating…", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor" },
-  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", translating: "Traduciendo…", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor" },
-  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", translating: "Wird übersetzt…", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen" },
-  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", translating: "Traduction en cours…", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor" },
+  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", translating: "Traduzione in corso…", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", closeZoom: "Chiudi" },
+  en: { onRequest: "On request", manageMenu: "Menu management", translating: "Translating…", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", closeZoom: "Close" },
+  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", translating: "Traduciendo…", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", closeZoom: "Cerrar" },
+  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", translating: "Wird übersetzt…", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", closeZoom: "Schließen" },
+  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", translating: "Traduction en cours…", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", closeZoom: "Fermer" },
 };
 
 const TRANSLATION_CACHE_KEY = "mdp-translation-cache-v1";
@@ -315,8 +315,12 @@ export function GlobalStyle({ t }) {
       .mdp-btn:active { transform: scale(0.97); }
       .mdp-fade-in { animation: mdpFade .5s ease both; }
       @keyframes mdpFade { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
+      .mdp-modal-backdrop { animation: mdpBackdropIn .2s ease both; }
+      .mdp-modal-card { animation: mdpModalIn .25s cubic-bezier(.2,.8,.2,1) both; }
+      @keyframes mdpBackdropIn { from { opacity:0; } to { opacity:1; } }
+      @keyframes mdpModalIn { from { opacity:0; transform: scale(.94) translateY(8px); } to { opacity:1; transform:none; } }
       @media (prefers-reduced-motion: reduce) {
-        .mdp-fade-in { animation: none; }
+        .mdp-fade-in, .mdp-modal-backdrop, .mdp-modal-card { animation: none; }
       }
       input, textarea, select {
         font-family: ${t.fontBody};

@@ -2,6 +2,7 @@
 // leggero: nessun import di Firebase Authentication, nessun codice del
 // pannello di gestione — solo React e Firestore per leggere il menù.
 import React, { useState, useEffect, useRef } from "react";
+import { X, Expand } from "lucide-react";
 import {
   THEMES, ital, LANGUAGES, UI_STRINGS, TRANSLATION_LANG_KEY,
   loadTranslationCache, saveTranslationCache, translateMenu,
@@ -125,6 +126,28 @@ export default function ClientView({ menu, onGoAdmin }) {
   const [active, setActive] = useState(visibleCategories[0]?.id);
   const refs = useRef({});
 
+  // Voce ingrandita (per id, non per riferimento): così se la traduzione
+  // finisce di caricare mentre la schermata è aperta, il testo mostrato resta
+  // aggiornato invece di restare bloccato sulla versione italiana iniziale.
+  const [zoomedItemId, setZoomedItemId] = useState(null);
+  const zoomedItem = zoomedItemId
+    ? visibleCategories.flatMap((c) => c.items).find((i) => i.id === zoomedItemId) || null
+    : null;
+
+  useEffect(() => {
+    if (!zoomedItemId) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setZoomedItemId(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [zoomedItemId]);
+
   const scrollTo = (id) => {
     setActive(id);
     refs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -238,15 +261,34 @@ export default function ClientView({ menu, onGoAdmin }) {
             </div>
 
             <div>
-              {cat.items.map((item) => (
-                <div key={item.id} className="mdp-row" style={{ padding: "12px 8px", borderRadius: 6, display: "flex", gap: 14 }}>
-                  {item.image && (
-                    <img
-                      src={optimizedImageUrl(item.image, { width: 128 })}
-                      alt={item.name}
-                      loading="lazy"
-                      style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: `1px solid ${t.line}` }}
-                    />
+              {cat.items.map((item) => {
+                const hasImage = !!item.image;
+                return (
+                <div
+                  key={item.id}
+                  className="mdp-row"
+                  role={hasImage ? "button" : undefined}
+                  tabIndex={hasImage ? 0 : undefined}
+                  onClick={hasImage ? () => setZoomedItemId(item.id) : undefined}
+                  onKeyDown={hasImage ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoomedItemId(item.id); } } : undefined}
+                  style={{ padding: "12px 8px", borderRadius: 6, display: "flex", gap: 14, cursor: hasImage ? "pointer" : "default", outline: "none" }}
+                >
+                  {hasImage && (
+                    <div style={{ position: "relative", flexShrink: 0 }}>
+                      <img
+                        src={optimizedImageUrl(item.image, { width: 128 })}
+                        alt={item.name}
+                        loading="lazy"
+                        style={{ width: 64, height: 64, borderRadius: 8, objectFit: "contain", background: t.bgAlt, display: "block", border: `1px solid ${t.line}` }}
+                      />
+                      <span style={{
+                        position: "absolute", bottom: -5, right: -5, width: 20, height: 20, borderRadius: "50%",
+                        background: t.primary, color: t.bg, border: `2px solid ${t.bg}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <Expand size={10} />
+                      </span>
+                    </div>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
@@ -271,7 +313,8 @@ export default function ClientView({ menu, onGoAdmin }) {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         ))}
@@ -314,6 +357,71 @@ export default function ClientView({ menu, onGoAdmin }) {
           {ui.manageMenu}
         </button>
       </footer>
+
+      {zoomedItem && (
+        <div
+          className="mdp-modal-backdrop"
+          onClick={() => setZoomedItemId(null)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(20,15,10,0.75)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 20, zIndex: 100,
+          }}
+        >
+          <div
+            className="mdp-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: t.card, borderRadius: 14, overflow: "hidden",
+              width: "100%", maxWidth: 440, maxHeight: "88vh", overflowY: "auto",
+              border: `1px solid ${t.line}`, boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+            }}
+          >
+            <div style={{ position: "relative", background: t.bgAlt, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img
+                src={optimizedImageUrl(zoomedItem.image, { width: 800 })}
+                alt={zoomedItem.name}
+                style={{ maxWidth: "100%", maxHeight: "60vh", objectFit: "contain", display: "block" }}
+              />
+              <button
+                onClick={() => setZoomedItemId(null)}
+                aria-label={ui.closeZoom}
+                className="mdp-btn"
+                style={{
+                  position: "absolute", top: 10, right: 10, width: 32, height: 32, borderRadius: "50%",
+                  background: "rgba(0,0,0,0.55)", color: "#fff", border: "none", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ padding: "20px 22px 24px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                <span className="mdp-display" style={{ fontStyle: ital(t), fontSize: 22, fontWeight: 600, color: t.primary }}>
+                  {zoomedItem.name}
+                </span>
+                {zoomedItem.tag && (
+                  <span style={{
+                    fontSize: 10, letterSpacing: 1, textTransform: "uppercase",
+                    color: t.bg, background: t.secondary, padding: "3px 9px", borderRadius: 20,
+                  }}>
+                    {zoomedItem.tag}
+                  </span>
+                )}
+              </div>
+              <div style={{ marginBottom: zoomedItem.description ? 10 : 0 }}>
+                {renderPrice(zoomedItem.price)}
+              </div>
+              {zoomedItem.description && (
+                <div style={{ fontSize: 14, color: t.inkSoft, fontStyle: ital(t), lineHeight: 1.5 }}>
+                  {zoomedItem.description}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -382,7 +382,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                       <div key={item.id} style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: 12, marginBottom: 10, background: t.bg, opacity: item.visible === false ? 0.6 : 1 }}>
                         <div style={{ display: "flex", gap: 12, marginBottom: 10, alignItems: "flex-start" }}>
                           {item.image ? (
-                            <img src={optimizedImageUrl(item.image, { width: 112 })} alt={item.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: `1px solid ${t.line}`, flexShrink: 0 }} />
+                            <img src={optimizedImageUrl(item.image, { width: 112 })} alt={item.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain", background: t.bgAlt, border: `1px solid ${t.line}`, flexShrink: 0 }} />
                           ) : (
                             <div style={{ width: 56, height: 56, borderRadius: 8, border: `1px dashed ${t.line}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: t.inkSoft, textAlign: "center" }}>
                               nessuna foto
