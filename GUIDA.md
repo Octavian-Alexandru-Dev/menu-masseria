@@ -79,6 +79,43 @@ VITE_FIREBASE_APP_ID=1:123456789012:web:abcdef123456
 
 ---
 
+## 3bis. Foto dei piatti
+
+Per poter caricare le foto dei piatti dal pannello di gestione, serve un
+account gratuito su un servizio dedicato alle immagini (Cloudinary): il piano
+free basta ampiamente per poche decine di foto e non richiede carta di
+credito.
+
+1. Vai su **https://cloudinary.com** → **Sign up free**
+2. Una volta dentro, nella Dashboard trovi in alto il tuo **Cloud name**:
+   tienilo a portata di mano
+3. Vai su **Settings** (icona ingranaggio) → scheda **Upload**
+4. Scorri fino a **Upload presets** → **Add upload preset**
+5. Imposta:
+   - **Signing Mode**: `Unsigned`
+   - **Folder**: `menu` (facoltativo, tiene ordinate le foto)
+   - Sotto **Upload Manipulations / Format and quality restrictions**, se
+     disponibile, limita i formati accettati alle sole immagini
+6. Salva e copia il **nome del preset** che hai scelto
+7. Apri il file `.env` (creato al punto 3) e aggiungi in fondo:
+
+```
+VITE_CLOUDINARY_CLOUD_NAME=il-tuo-cloud-name
+VITE_CLOUDINARY_UPLOAD_PRESET=il-nome-del-preset
+```
+
+Da qui in poi, nel pannello di gestione, ogni voce del menù avrà un pulsante
+**"Carica foto"**: la foto viene caricata su Cloudinary e mostrata
+automaticamente sia nel pannello che nel menù pubblico, già ottimizzata
+(formato moderno e dimensione ridotta) senza bisogno di comprimerla a mano
+prima di caricarla.
+
+Se cambi o aggiungi queste variabili dopo aver già pubblicato il sito, ricordati
+di rifare i comandi del punto 6 (`npm run build` e `firebase deploy`) per
+renderle effettive online.
+
+---
+
 ## 4. Installa lo strumento di pubblicazione Firebase
 
 Nello stesso Terminale:
@@ -158,4 +195,6 @@ utente → "Reimposta password", oppure elimina l'utente e ricrealo.
 **Quanto costa nel tempo?**
 Per un solo ristorante con traffico normale resti sempre nella fascia
 gratuita ("Spark") di Firebase: nessun costo, nessuna pubblicità, nessun
-limite di tempo.
+limite di tempo. Anche le foto dei piatti restano gratis: con poche decine di
+immagini sei molto lontano dai limiti del piano free di Cloudinary (25 GB al
+mese, storage + banda + trasformazioni comprese).

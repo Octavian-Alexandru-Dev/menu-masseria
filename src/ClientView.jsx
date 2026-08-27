@@ -7,6 +7,7 @@ import {
   loadTranslationCache, saveTranslationCache, translateMenu,
   GlobalStyle, BranchDivider, Logo,
 } from "./shared";
+import { optimizedImageUrl } from "./cloudinary";
 
 // Logo Google ("G" multicolore) ricreato come SVG vettoriale: nessuna immagine
 // da scaricare, e il testo del pulsante resta HTML vero (traducibile), non
@@ -241,7 +242,7 @@ export default function ClientView({ menu, onGoAdmin }) {
                 <div key={item.id} className="mdp-row" style={{ padding: "12px 8px", borderRadius: 6, display: "flex", gap: 14 }}>
                   {item.image && (
                     <img
-                      src={item.image}
+                      src={optimizedImageUrl(item.image, { width: 128 })}
                       alt={item.name}
                       loading="lazy"
                       style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0, border: `1px solid ${t.line}` }}

@@ -3,9 +3,10 @@
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
 import React, { useState } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star } from "lucide-react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff } from "lucide-react";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { THEMES, ital, uid, GlobalStyle, Logo } from "./shared";
+import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 
 function AdminLogin({ onBack, theme }) {
   const t = THEMES[theme] || THEMES.rustica;
@@ -98,6 +99,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   const [openCats, setOpenCats] = useState(() => new Set(menu.categories.map((c) => c.id)));
   const [confirmDelete, setConfirmDelete] = useState(null); // {type:'cat'|'item', catId, itemId}
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [uploadingItem, setUploadingItem] = useState(null); // id della voce con upload in corso
+  const [uploadErrors, setUploadErrors] = useState({}); // { [itemId]: messaggio }
 
   const toggleCat = (id) => {
     setOpenCats((prev) => {
@@ -139,6 +142,20 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           : c
       ),
     }));
+  };
+
+  const handleImageUpload = async (catId, itemId, file) => {
+    if (!file) return;
+    setUploadingItem(itemId);
+    setUploadErrors((prev) => ({ ...prev, [itemId]: undefined }));
+    try {
+      const url = await uploadMenuImage(file);
+      updateItem(catId, itemId, "image", url);
+    } catch (err) {
+      setUploadErrors((prev) => ({ ...prev, [itemId]: err.message || "Caricamento non riuscito." }));
+    } finally {
+      setUploadingItem(null);
+    }
   };
 
   const addItem = (catId) => {
@@ -363,20 +380,49 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                     const itDelete = confirmDelete?.type === "item" && confirmDelete.itemId === item.id;
                     return (
                       <div key={item.id} style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: 12, marginBottom: 10, background: t.bg, opacity: item.visible === false ? 0.6 : 1 }}>
-                        <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
+                        <div style={{ display: "flex", gap: 12, marginBottom: 10, alignItems: "flex-start" }}>
                           {item.image ? (
-                            <img src={item.image} alt={item.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: `1px solid ${t.line}`, flexShrink: 0 }} />
+                            <img src={optimizedImageUrl(item.image, { width: 112 })} alt={item.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: `1px solid ${t.line}`, flexShrink: 0 }} />
                           ) : (
                             <div style={{ width: 56, height: 56, borderRadius: 8, border: `1px dashed ${t.line}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: t.inkSoft, textAlign: "center" }}>
                               nessuna foto
                             </div>
                           )}
                           <div style={{ flex: 1 }}>
-                            <span style={labelStyle}>URL immagine piatto</span>
-                            <input
-                              style={inputStyle} placeholder="https://…"
-                              value={item.image || ""} onChange={(e) => updateItem(cat.id, item.id, "image", e.target.value)}
-                            />
+                            <span style={labelStyle}>Foto del piatto</span>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <label
+                                className="mdp-btn"
+                                style={{ ...btnGhost(t), cursor: uploadingItem === item.id ? "default" : "pointer", opacity: uploadingItem === item.id ? 0.6 : 1 }}
+                              >
+                                <Upload size={12} />
+                                {uploadingItem === item.id ? "Caricamento…" : item.image ? "Sostituisci foto" : "Carica foto"}
+                                <input
+                                  type="file" accept="image/*" style={{ display: "none" }}
+                                  disabled={uploadingItem === item.id}
+                                  onChange={(e) => {
+                                    const file = e.target.files && e.target.files[0];
+                                    e.target.value = ""; // permette di ricaricare lo stesso file
+                                    handleImageUpload(cat.id, item.id, file);
+                                  }}
+                                />
+                              </label>
+                              {item.image && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateItem(cat.id, item.id, "image", "")}
+                                  className="mdp-btn"
+                                  style={{ ...btnGhost(t), color: t.accent2 }}
+                                >
+                                  <ImageOff size={12} /> Rimuovi
+                                </button>
+                              )}
+                            </div>
+                            {uploadErrors[item.id] && (
+                              <div style={{ display: "flex", gap: 5, alignItems: "center", color: t.accent2, fontSize: 11.5, marginTop: 6 }}>
+                                <AlertCircle size={12} /> {uploadErrors[item.id]}
+                              </div>
+                            )}
                           </div>
                         </div>
 
