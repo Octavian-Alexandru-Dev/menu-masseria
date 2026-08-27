@@ -49,6 +49,10 @@ export const DEFAULT_MENU = {
   location: "Candidoni (RC) · Calabria",
   footerNote: "Fattoria della Piana",
   theme: "rustica",
+  reviewLinks: {
+    google: { url: "", visible: false },
+    tripadvisor: { url: "", visible: false },
+  },
   categories: [
     {
       id: "cat-menu", name: "I Nostri Menù", subtitle: "Le nostre combinazioni", visible: true,
@@ -187,11 +191,11 @@ export const LANGUAGES = [
 
 // Testi fissi dell'interfaccia: tradotti a mano, non richiedono chiamate API.
 export const UI_STRINGS = {
-  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", translating: "Traduzione in corso…" },
-  en: { onRequest: "On request", manageMenu: "Menu management", translating: "Translating…" },
-  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", translating: "Traduciendo…" },
-  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", translating: "Wird übersetzt…" },
-  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", translating: "Traduction en cours…" },
+  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", translating: "Traduzione in corso…", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor" },
+  en: { onRequest: "On request", manageMenu: "Menu management", translating: "Translating…", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor" },
+  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", translating: "Traduciendo…", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor" },
+  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", translating: "Wird übersetzt…", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen" },
+  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", translating: "Traduction en cours…", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor" },
 };
 
 const TRANSLATION_CACHE_KEY = "mdp-translation-cache-v1";

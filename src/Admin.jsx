@@ -3,7 +3,7 @@
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
 import React, { useState } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star } from "lucide-react";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { THEMES, ital, uid, GlobalStyle, Logo } from "./shared";
 
@@ -109,6 +109,20 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
 
   const updateField = (field, value) => setMenu((m) => ({ ...m, [field]: value }));
 
+  const updateReviewLink = (platform, field, value) => {
+    setMenu((m) => {
+      const current = m.reviewLinks || {};
+      const currentPlatform = current[platform] || { url: "", visible: false };
+      return {
+        ...m,
+        reviewLinks: {
+          ...current,
+          [platform]: { ...currentPlatform, [field]: value },
+        },
+      };
+    });
+  };
+
   const updateCategory = (catId, field, value) => {
     setMenu((m) => ({
       ...m,
@@ -158,6 +172,9 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     setMenu((m) => ({ ...m, categories: m.categories.filter((c) => c.id !== catId) }));
     setConfirmDelete(null);
   };
+
+  const google = menu.reviewLinks?.google || { url: "", visible: false };
+  const tripadvisor = menu.reviewLinks?.tripadvisor || { url: "", visible: false };
 
   const inputStyle = {
     width: "100%", padding: "8px 10px", border: `1px solid ${t.line}`, borderRadius: 6,
@@ -250,6 +267,52 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Recensioni */}
+        <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginBottom: 24 }}>
+          <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+            <Star size={13} /> Pulsanti recensioni
+          </div>
+          <div style={{ display: "grid", gap: 18 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={labelStyle}>Link recensione Google</span>
+                <Toggle
+                  t={t}
+                  checked={google.visible === true}
+                  onChange={(v) => updateReviewLink("google", "visible", v)}
+                  label="Visibile ai clienti"
+                />
+              </div>
+              <input
+                style={inputStyle}
+                placeholder="https://g.page/r/…/review"
+                value={google.url}
+                onChange={(e) => updateReviewLink("google", "url", e.target.value)}
+              />
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={labelStyle}>Link recensione TripAdvisor</span>
+                <Toggle
+                  t={t}
+                  checked={tripadvisor.visible === true}
+                  onChange={(v) => updateReviewLink("tripadvisor", "visible", v)}
+                  label="Visibile ai clienti"
+                />
+              </div>
+              <input
+                style={inputStyle}
+                placeholder="https://www.tripadvisor.it/UserReview…"
+                value={tripadvisor.url}
+                onChange={(e) => updateReviewLink("tripadvisor", "url", e.target.value)}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 12, lineHeight: 1.4 }}>
+            I pulsanti compaiono nel piè di pagina del menù solo quando sono attivi e hanno un link impostato.
           </div>
         </div>
 

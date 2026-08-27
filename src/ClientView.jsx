@@ -8,6 +8,20 @@ import {
   GlobalStyle, BranchDivider, Logo,
 } from "./shared";
 
+function reviewBtnStyle(t) {
+  return {
+    display: "inline-block",
+    border: `1px solid ${t.line}`,
+    borderRadius: 20,
+    padding: "8px 16px",
+    fontSize: 11.5,
+    letterSpacing: 0.3,
+    color: t.primary,
+    textDecoration: "none",
+    fontFamily: t.fontBody,
+  };
+}
+
 export default function ClientView({ menu, onGoAdmin }) {
   const t = THEMES[menu.theme] || THEMES.rustica;
 
@@ -53,6 +67,10 @@ export default function ClientView({ menu, onGoAdmin }) {
     .filter((c) => c.visible !== false)
     .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false) }))
     .filter((c) => c.items.length > 0);
+
+  // menu.reviewLinks può mancare nei menù salvati prima dell'introduzione di questa funzione.
+  const google = menu.reviewLinks?.google || { url: "", visible: false };
+  const tripadvisor = menu.reviewLinks?.tripadvisor || { url: "", visible: false };
 
   const [active, setActive] = useState(visibleCategories[0]?.id);
   const refs = useRef({});
@@ -219,6 +237,34 @@ export default function ClientView({ menu, onGoAdmin }) {
         <div style={{ fontSize: 10.5, color: t.inkSoft, opacity: 0.6, marginTop: 14 }}>
           © 2026 {displayMenu.restaurantName}
         </div>
+
+        {(google.visible && google.url) || (tripadvisor.visible && tripadvisor.url) ? (
+          <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
+            {google.visible && google.url && (
+              <a
+                href={google.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mdp-btn"
+                style={reviewBtnStyle(t)}
+              >
+                {ui.reviewGoogle}
+              </a>
+            )}
+            {tripadvisor.visible && tripadvisor.url && (
+              <a
+                href={tripadvisor.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mdp-btn"
+                style={reviewBtnStyle(t)}
+              >
+                {ui.reviewTripadvisor}
+              </a>
+            )}
+          </div>
+        ) : null}
+
         <button
           onClick={onGoAdmin}
           className="mdp-btn"
