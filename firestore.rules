@@ -1,0 +1,19 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Il menù è pubblico in lettura (lo vedono i clienti),
+    // ma può essere modificato solo da un utente autenticato
+    // (l'account admin creato in Firebase Authentication).
+    match /menu/data {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Tutto il resto è bloccato per sicurezza.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
