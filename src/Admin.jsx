@@ -3,7 +3,7 @@
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
 import React, { useState } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff } from "lucide-react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag } from "lucide-react";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { THEMES, ital, uid, GlobalStyle, Logo } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
@@ -112,15 +112,17 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
 
   const updateField = (field, value) => setMenu((m) => ({ ...m, [field]: value }));
 
-  const updateReviewLink = (platform, field, value) => {
+  // Aggiorna un link esterno (url o visibilità) dentro un gruppo di link del
+  // menù, es. group="reviewLinks", key="google" oppure group="socialLinks", key="instagram".
+  const updateLink = (group, key, field, value) => {
     setMenu((m) => {
-      const current = m.reviewLinks || {};
-      const currentPlatform = current[platform] || { url: "", visible: false };
+      const current = m[group] || {};
+      const currentEntry = current[key] || { url: "", visible: false };
       return {
         ...m,
-        reviewLinks: {
+        [group]: {
           ...current,
-          [platform]: { ...currentPlatform, [field]: value },
+          [key]: { ...currentEntry, [field]: value },
         },
       };
     });
@@ -192,6 +194,9 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
 
   const google = menu.reviewLinks?.google || { url: "", visible: false };
   const tripadvisor = menu.reviewLinks?.tripadvisor || { url: "", visible: false };
+  const instagram = menu.socialLinks?.instagram || { url: "", visible: false };
+  const facebook = menu.socialLinks?.facebook || { url: "", visible: false };
+  const shop = menu.socialLinks?.shop || { url: "", visible: false };
 
   const inputStyle = {
     width: "100%", padding: "8px 10px", border: `1px solid ${t.line}`, borderRadius: 6,
@@ -299,7 +304,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                 <Toggle
                   t={t}
                   checked={google.visible === true}
-                  onChange={(v) => updateReviewLink("google", "visible", v)}
+                  onChange={(v) => updateLink("reviewLinks", "google", "visible", v)}
                   label="Visibile ai clienti"
                 />
               </div>
@@ -307,7 +312,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                 style={inputStyle}
                 placeholder="https://g.page/r/…/review"
                 value={google.url}
-                onChange={(e) => updateReviewLink("google", "url", e.target.value)}
+                onChange={(e) => updateLink("reviewLinks", "google", "url", e.target.value)}
               />
             </div>
             <div>
@@ -316,7 +321,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                 <Toggle
                   t={t}
                   checked={tripadvisor.visible === true}
-                  onChange={(v) => updateReviewLink("tripadvisor", "visible", v)}
+                  onChange={(v) => updateLink("reviewLinks", "tripadvisor", "visible", v)}
                   label="Visibile ai clienti"
                 />
               </div>
@@ -324,12 +329,75 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                 style={inputStyle}
                 placeholder="https://www.tripadvisor.it/UserReview…"
                 value={tripadvisor.url}
-                onChange={(e) => updateReviewLink("tripadvisor", "url", e.target.value)}
+                onChange={(e) => updateLink("reviewLinks", "tripadvisor", "url", e.target.value)}
               />
             </div>
           </div>
           <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 12, lineHeight: 1.4 }}>
             I pulsanti compaiono nel piè di pagina del menù solo quando sono attivi e hanno un link impostato.
+          </div>
+        </div>
+
+        {/* Social e shop */}
+        <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginBottom: 24 }}>
+          <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+            <ShoppingBag size={13} /> Social e shop online
+          </div>
+          <div style={{ display: "grid", gap: 18 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={labelStyle}><Instagram size={11} style={{ verticalAlign: -1, marginRight: 4 }} />Link profilo Instagram</span>
+                <Toggle
+                  t={t}
+                  checked={instagram.visible === true}
+                  onChange={(v) => updateLink("socialLinks", "instagram", "visible", v)}
+                  label="Visibile ai clienti"
+                />
+              </div>
+              <input
+                style={inputStyle}
+                placeholder="https://www.instagram.com/…"
+                value={instagram.url}
+                onChange={(e) => updateLink("socialLinks", "instagram", "url", e.target.value)}
+              />
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={labelStyle}><Facebook size={11} style={{ verticalAlign: -1, marginRight: 4 }} />Link pagina Facebook</span>
+                <Toggle
+                  t={t}
+                  checked={facebook.visible === true}
+                  onChange={(v) => updateLink("socialLinks", "facebook", "visible", v)}
+                  label="Visibile ai clienti"
+                />
+              </div>
+              <input
+                style={inputStyle}
+                placeholder="https://www.facebook.com/…"
+                value={facebook.url}
+                onChange={(e) => updateLink("socialLinks", "facebook", "url", e.target.value)}
+              />
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={labelStyle}><ShoppingBag size={11} style={{ verticalAlign: -1, marginRight: 4 }} />Link shop online</span>
+                <Toggle
+                  t={t}
+                  checked={shop.visible === true}
+                  onChange={(v) => updateLink("socialLinks", "shop", "visible", v)}
+                  label="Visibile ai clienti"
+                />
+              </div>
+              <input
+                style={inputStyle}
+                placeholder="https://…"
+                value={shop.url}
+                onChange={(e) => updateLink("socialLinks", "shop", "url", e.target.value)}
+              />
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 12, lineHeight: 1.4 }}>
+            I pulsanti compaiono nel piè di pagina del menù, insieme a quelli delle recensioni, solo quando sono attivi e hanno un link impostato.
           </div>
         </div>
 

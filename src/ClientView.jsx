@@ -2,7 +2,7 @@
 // leggero: nessun import di Firebase Authentication, nessun codice del
 // pannello di gestione — solo React e Firestore per leggere il menù.
 import React, { useState, useEffect, useRef } from "react";
-import { X, Expand } from "lucide-react";
+import { X, Expand, ShoppingBag } from "lucide-react";
 import {
   THEMES, ital, LANGUAGES, UI_STRINGS, TRANSLATION_LANG_KEY,
   loadTranslationCache, saveTranslationCache, translateMenu,
@@ -39,10 +39,44 @@ function TripAdvisorIcon({ size = 18 }) {
   );
 }
 
+// Icona Instagram (glifo fotocamera + gradiente ufficiale del brand),
+// ricreata in SVG vettoriale.
+function InstagramIcon({ size = 18 }) {
+  const gradId = "mdp-ig-grad";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <defs>
+        <radialGradient id={gradId} cx="30%" cy="107%" r="150%">
+          <stop offset="0%" stopColor="#fdf497" />
+          <stop offset="5%" stopColor="#fdf497" />
+          <stop offset="45%" stopColor="#fd5949" />
+          <stop offset="60%" stopColor="#d6249f" />
+          <stop offset="90%" stopColor="#285AEB" />
+        </radialGradient>
+      </defs>
+      <rect x="2" y="2" width="20" height="20" rx="6" fill={`url(#${gradId})`} />
+      <rect x="6.5" y="6.5" width="11" height="11" rx="3.2" fill="none" stroke="#fff" strokeWidth="1.6" />
+      <circle cx="12" cy="12" r="3.4" fill="none" stroke="#fff" strokeWidth="1.6" />
+      <circle cx="16.4" cy="7.6" r="1" fill="#fff" />
+    </svg>
+  );
+}
+
+// Icona Facebook ("f" bianca su cerchio blu ufficiale del brand).
+function FacebookIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="#1877F2" />
+      <path fill="#fff" d="M13.5 21v-7.2h2.4l.36-2.8h-2.76V9.1c0-.81.22-1.36 1.39-1.36h1.48V5.23A20 20 0 0 0 13.9 5.1c-1.98 0-3.34 1.21-3.34 3.43v1.47H8.1v2.8h2.46V21h2.94z" />
+    </svg>
+  );
+}
+
 // Pulsante a due zone (badge col logo + pannello colorato col testo), sullo
 // stile dei bottoni "Lascia una recensione" più comuni: testo vero (non
 // incorporato in un'immagine), quindi tradotto insieme al resto del menù.
-function ReviewButton({ href, icon, bg, children }) {
+// Riutilizzato anche per i pulsanti social e per il collegamento allo shop.
+function LinkButton({ href, icon, bg, children }) {
   return (
     <a
       href={href}
@@ -119,9 +153,12 @@ export default function ClientView({ menu, onGoAdmin }) {
     .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false) }))
     .filter((c) => c.items.length > 0);
 
-  // menu.reviewLinks può mancare nei menù salvati prima dell'introduzione di questa funzione.
+  // menu.reviewLinks/socialLinks possono mancare nei menù salvati prima dell'introduzione di questi campi.
   const google = menu.reviewLinks?.google || { url: "", visible: false };
   const tripadvisor = menu.reviewLinks?.tripadvisor || { url: "", visible: false };
+  const instagram = menu.socialLinks?.instagram || { url: "", visible: false };
+  const facebook = menu.socialLinks?.facebook || { url: "", visible: false };
+  const shop = menu.socialLinks?.shop || { url: "", visible: false };
 
   const [active, setActive] = useState(visibleCategories[0]?.id);
   const refs = useRef({});
@@ -331,17 +368,33 @@ export default function ClientView({ menu, onGoAdmin }) {
           © 2026 {displayMenu.restaurantName}
         </div>
 
-        {(google.visible && google.url) || (tripadvisor.visible && tripadvisor.url) ? (
+        {(google.visible && google.url) || (tripadvisor.visible && tripadvisor.url) ||
+        (instagram.visible && instagram.url) || (facebook.visible && facebook.url) || (shop.visible && shop.url) ? (
           <div style={{ display: "flex", justifyContent: "center", gap: 12, flexWrap: "wrap", marginTop: 22 }}>
             {google.visible && google.url && (
-              <ReviewButton href={google.url} icon={<GoogleGIcon />} bg="#4285F4">
+              <LinkButton href={google.url} icon={<GoogleGIcon />} bg="#4285F4">
                 {ui.reviewGoogle}
-              </ReviewButton>
+              </LinkButton>
             )}
             {tripadvisor.visible && tripadvisor.url && (
-              <ReviewButton href={tripadvisor.url} icon={<TripAdvisorIcon />} bg="#00AF87">
+              <LinkButton href={tripadvisor.url} icon={<TripAdvisorIcon />} bg="#00AF87">
                 {ui.reviewTripadvisor}
-              </ReviewButton>
+              </LinkButton>
+            )}
+            {instagram.visible && instagram.url && (
+              <LinkButton href={instagram.url} icon={<InstagramIcon />} bg="#C13584">
+                {ui.linkInstagram}
+              </LinkButton>
+            )}
+            {facebook.visible && facebook.url && (
+              <LinkButton href={facebook.url} icon={<FacebookIcon />} bg="#1877F2">
+                {ui.linkFacebook}
+              </LinkButton>
+            )}
+            {shop.visible && shop.url && (
+              <LinkButton href={shop.url} icon={<ShoppingBag size={18} color={t.primary} />} bg={t.primary}>
+                {ui.linkShop}
+              </LinkButton>
             )}
           </div>
         ) : null}

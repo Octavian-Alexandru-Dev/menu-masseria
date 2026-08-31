@@ -53,6 +53,11 @@ export const DEFAULT_MENU = {
     google: { url: "https://search.google.com/local/writereview?placeid=ChIJ2fN-wtETFRMR6-lHkqwbrD0", visible: true },
     tripadvisor: { url: "https://www.tripadvisor.it/Restaurant_Review-g2282898-d4770660-Reviews-Masseria_della_Piana-Rosarno_Province_of_Reggio_Calabria_Calabria.html", visible: true },
   },
+  socialLinks: {
+    instagram: { url: "", visible: false },
+    facebook: { url: "", visible: false },
+    shop: { url: "", visible: false },
+  },
   categories: [
     {
       id: "cat-menu", name: "I Nostri Menù", subtitle: "Le nostre combinazioni", visible: true,
@@ -191,11 +196,11 @@ export const LANGUAGES = [
 
 // Testi fissi dell'interfaccia: tradotti a mano, non richiedono chiamate API.
 export const UI_STRINGS = {
-  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", translating: "Traduzione in corso…", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", closeZoom: "Chiudi" },
-  en: { onRequest: "On request", manageMenu: "Menu management", translating: "Translating…", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", closeZoom: "Close" },
-  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", translating: "Traduciendo…", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", closeZoom: "Cerrar" },
-  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", translating: "Wird übersetzt…", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", closeZoom: "Schließen" },
-  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", translating: "Traduction en cours…", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", closeZoom: "Fermer" },
+  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", translating: "Traduzione in corso…", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", linkInstagram: "Seguici su Instagram", linkFacebook: "Seguici su Facebook", linkShop: "Vai al nostro shop online", closeZoom: "Chiudi" },
+  en: { onRequest: "On request", manageMenu: "Menu management", translating: "Translating…", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", linkInstagram: "Follow us on Instagram", linkFacebook: "Follow us on Facebook", linkShop: "Visit our online shop", closeZoom: "Close" },
+  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", translating: "Traduciendo…", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", linkInstagram: "Síguenos en Instagram", linkFacebook: "Síguenos en Facebook", linkShop: "Visita nuestra tienda online", closeZoom: "Cerrar" },
+  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", translating: "Wird übersetzt…", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", linkInstagram: "Folge uns auf Instagram", linkFacebook: "Folge uns auf Facebook", linkShop: "Besuche unseren Online-Shop", closeZoom: "Schließen" },
+  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", translating: "Traduction en cours…", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", linkInstagram: "Suivez-nous sur Instagram", linkFacebook: "Suivez-nous sur Facebook", linkShop: "Visitez notre boutique en ligne", closeZoom: "Fermer" },
 };
 
 const TRANSLATION_CACHE_KEY = "mdp-translation-cache-v1";
