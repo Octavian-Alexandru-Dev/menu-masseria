@@ -3,9 +3,9 @@
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
 import React, { useState } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag } from "lucide-react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles } from "lucide-react";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
-import { THEMES, ital, uid, GlobalStyle, Logo } from "./shared";
+import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 
 function AdminLogin({ onBack, theme }) {
@@ -96,11 +96,20 @@ function AdminLogin({ onBack, theme }) {
 /* ============================== ADMIN DASHBOARD ============================== */
 function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogout, onPreview, onReset }) {
   const t = THEMES[menu.theme] || THEMES.rustica;
-  const [openCats, setOpenCats] = useState(() => new Set(menu.categories.map((c) => c.id)));
+  const [openCats, setOpenCats] = useState(() => new Set());
   const [confirmDelete, setConfirmDelete] = useState(null); // {type:'cat'|'item', catId, itemId}
   const [resetConfirm, setResetConfirm] = useState(false);
   const [uploadingItem, setUploadingItem] = useState(null); // id della voce con upload in corso
   const [uploadErrors, setUploadErrors] = useState({}); // { [itemId]: messaggio }
+  const [lang, setLang] = useState("it"); // lingua correntemente mostrata/editata nell'editor
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
+  const [confirmDeleteTranslation, setConfirmDeleteTranslation] = useState(false);
+
+  const changeLang = (code) => {
+    setLang(code);
+    setConfirmDeleteTranslation(false);
+  };
 
   const toggleCat = (id) => {
     setOpenCats((prev) => {
@@ -144,6 +153,78 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           : c
       ),
     }));
+  };
+
+  // Aggiorna un campo tradotto (lingua correntemente selezionata, mai l'italiano).
+  const updateTranslationField = (field, value) => {
+    setMenu((m) => ({
+      ...m,
+      translations: { ...m.translations, [lang]: { ...(m.translations?.[lang] || {}), [field]: value } },
+    }));
+  };
+
+  const updateTranslationCategory = (catId, field, value) => {
+    setMenu((m) => {
+      const langData = m.translations?.[lang] || {};
+      const categories = langData.categories || {};
+      const cat = categories[catId] || {};
+      return {
+        ...m,
+        translations: {
+          ...m.translations,
+          [lang]: { ...langData, categories: { ...categories, [catId]: { ...cat, [field]: value } } },
+        },
+      };
+    });
+  };
+
+  const updateTranslationItem = (catId, itemId, field, value) => {
+    setMenu((m) => {
+      const langData = m.translations?.[lang] || {};
+      const categories = langData.categories || {};
+      const cat = categories[catId] || {};
+      const items = cat.items || {};
+      const item = items[itemId] || {};
+      return {
+        ...m,
+        translations: {
+          ...m.translations,
+          [lang]: {
+            ...langData,
+            categories: {
+              ...categories,
+              [catId]: { ...cat, items: { ...items, [itemId]: { ...item, [field]: value } } },
+            },
+          },
+        },
+      };
+    });
+  };
+
+  const handleGenerateTranslation = async () => {
+    setGenerating(true);
+    setGenerateError("");
+    try {
+      const updated = await generateMissingTranslations(menu, lang, menu.translations?.[lang]);
+      setMenu((m) => ({ ...m, translations: { ...m.translations, [lang]: updated } }));
+    } catch (err) {
+      setGenerateError("Generazione non riuscita. Riprova.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Elimina l'intera bozza di traduzione della lingua corrente (in modo che si
+  // possa rigenerare da capo con "Genera traduzione automatica"). Non tocca
+  // l'italiano: il pulsante è disponibile solo quando lang !== "it".
+  const handleDeleteTranslation = () => {
+    setMenu((m) => {
+      if (!m.translations || !(lang in m.translations)) return m;
+      const next = { ...m.translations };
+      delete next[lang];
+      return { ...m, translations: next };
+    });
+    setConfirmDeleteTranslation(false);
   };
 
   const handleImageUpload = async (catId, itemId, file) => {
@@ -266,6 +347,10 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
             <div style={{ gridColumn: "1 / -1" }}>
               <span style={labelStyle}>Frase di apertura</span>
               <input style={inputStyle} value={menu.tagline} onChange={(e) => updateField("tagline", e.target.value)} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <span style={labelStyle}>Nota a piè di pagina</span>
+              <input style={inputStyle} value={menu.footerNote || ""} onChange={(e) => updateField("footerNote", e.target.value)} />
             </div>
           </div>
 
@@ -401,8 +486,68 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           </div>
         </div>
 
-        {/* Categories */}
-        {menu.categories.map((cat) => {
+        {/* Selettore lingua: sceglie se sotto si edita il testo italiano (sorgente,
+            struttura completa) o la traduzione di una lingua (solo testo). */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: t.inkSoft }}>
+            <Languages size={13} /> Lingua:
+          </span>
+          {LANGUAGES.map((l) => {
+            const missing = l.code === "it" ? 0 : countMissingTranslations(menu, menu.translations?.[l.code]);
+            const hasTranslation = l.code === "it" || !!menu.translations?.[l.code];
+            return (
+              <button
+                key={l.code}
+                onClick={() => changeLang(l.code)}
+                className="mdp-btn"
+                style={{
+                  border: `1px solid ${t.line}`,
+                  background: lang === l.code ? t.primary : "transparent",
+                  color: lang === l.code ? t.bg : t.inkSoft,
+                  borderRadius: 20, padding: "5px 12px", fontSize: 12, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 5,
+                }}
+              >
+                {l.label}
+                {hasTranslation && missing > 0 && (
+                  <span style={{
+                    fontSize: 9.5, minWidth: 14, height: 14, borderRadius: 8, padding: "0 4px",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    background: lang === l.code ? t.bg : t.accent2, color: lang === l.code ? t.primary : "#fff",
+                  }}>
+                    {missing}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {lang !== "it" && (
+          <TranslationEditor
+            t={t}
+            menu={menu}
+            lang={lang}
+            translation={menu.translations?.[lang]}
+            generating={generating}
+            generateError={generateError}
+            onGenerate={handleGenerateTranslation}
+            confirmDelete={confirmDeleteTranslation}
+            onRequestDelete={() => setConfirmDeleteTranslation(true)}
+            onCancelDelete={() => setConfirmDeleteTranslation(false)}
+            onConfirmDelete={handleDeleteTranslation}
+            updateTranslationField={updateTranslationField}
+            updateTranslationCategory={updateTranslationCategory}
+            updateTranslationItem={updateTranslationItem}
+            inputStyle={inputStyle}
+            labelStyle={labelStyle}
+          />
+        )}
+
+        {/* Categories (testo sorgente in italiano + struttura: aggiungere/eliminare
+            voci, caricare foto, riordinare la visibilità — tutto ciò che le
+            traduzioni condividono per riferimento tramite id) */}
+        {lang === "it" && menu.categories.map((cat) => {
           const isOpen = openCats.has(cat.id);
           const catDelete = confirmDelete?.type === "cat" && confirmDelete.catId === cat.id;
           return (
@@ -540,9 +685,11 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           );
         })}
 
-        <button onClick={addCategory} className="mdp-btn" style={{ ...btnPrimary(t), width: "100%", justifyContent: "center" }}>
-          <Plus size={14} /> Aggiungi categoria
-        </button>
+        {lang === "it" && (
+          <button onClick={addCategory} className="mdp-btn" style={{ ...btnPrimary(t), width: "100%", justifyContent: "center" }}>
+            <Plus size={14} /> Aggiungi categoria
+          </button>
+        )}
 
         <div style={{ marginTop: 30, textAlign: "center" }}>
           <button
@@ -554,6 +701,136 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Editor di una lingua di traduzione: stessa struttura dell'editor italiano
+// (identità, categorie, voci), ma solo testo — niente prezzo, foto, visibilità
+// o aggiunta/eliminazione: quelle sono decisioni strutturali che valgono per
+// tutte le lingue insieme e si prendono nella scheda "IT". Se la lingua non ha
+// ancora nessuna traduzione salvata, mostra solo il pulsante di generazione.
+function TranslationEditor({
+  t, menu, lang, translation, generating, generateError, onGenerate,
+  confirmDelete, onRequestDelete, onCancelDelete, onConfirmDelete,
+  updateTranslationField, updateTranslationCategory, updateTranslationItem,
+  inputStyle, labelStyle,
+}) {
+  const langLabel = (LANGUAGES.find((l) => l.code === lang) || {}).label || lang.toUpperCase();
+  const missing = countMissingTranslations(menu, translation);
+
+  if (!translation) {
+    return (
+      <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 24, marginBottom: 24, textAlign: "center" }}>
+        <div style={{ fontSize: 13, color: t.inkSoft, marginBottom: 14 }}>
+          Nessuna traduzione {langLabel} presente per questo menù.
+        </div>
+        <button onClick={onGenerate} disabled={generating} className="mdp-btn" style={{ ...btnPrimary(t), margin: "0 auto" }}>
+          <Sparkles size={13} /> {generating ? "Generazione…" : `Genera traduzione automatica (${langLabel})`}
+        </button>
+        {generateError && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", color: t.accent2, fontSize: 12.5, marginTop: 12 }}>
+            <AlertCircle size={14} /> {generateError}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <button
+          onClick={confirmDelete ? onConfirmDelete : onRequestDelete}
+          onBlur={onCancelDelete}
+          className="mdp-btn"
+          style={{ ...btnGhost(t), color: t.accent2, fontSize: 11.5 }}
+        >
+          <Trash2 size={12} /> {confirmDelete ? `Conferma eliminazione traduzione ${langLabel}` : `Elimina traduzione ${langLabel}`}
+        </button>
+      </div>
+      {missing > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap",
+          background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16,
+        }}>
+          <span style={{ fontSize: 12.5, color: t.inkSoft }}>
+            {missing} {missing === 1 ? "voce non ancora tradotta" : "voci non ancora tradotte"} in {langLabel}.
+          </span>
+          <button onClick={onGenerate} disabled={generating} className="mdp-btn" style={btnGhost(t)}>
+            <Sparkles size={12} /> {generating ? "Generazione…" : "Genera traduzione mancante"}
+          </button>
+        </div>
+      )}
+      {generateError && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: 12.5, marginBottom: 16 }}>
+          <AlertCircle size={14} /> {generateError}
+        </div>
+      )}
+
+      <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginBottom: 24 }}>
+        <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
+          Identità del locale — {langLabel}
+        </div>
+        <div style={{ display: "grid", gap: 14 }}>
+          <div>
+            <span style={labelStyle}>Nome del ristorante</span>
+            <input style={inputStyle} placeholder={menu.restaurantName} value={translation.restaurantName ?? ""} onChange={(e) => updateTranslationField("restaurantName", e.target.value)} />
+          </div>
+          <div>
+            <span style={labelStyle}>Frase di apertura</span>
+            <input style={inputStyle} placeholder={menu.tagline} value={translation.tagline ?? ""} onChange={(e) => updateTranslationField("tagline", e.target.value)} />
+          </div>
+          <div>
+            <span style={labelStyle}>Nota a piè di pagina</span>
+            <input style={inputStyle} placeholder={menu.footerNote} value={translation.footerNote ?? ""} onChange={(e) => updateTranslationField("footerNote", e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      {menu.categories.map((cat) => {
+        const tCat = translation.categories?.[cat.id] || {};
+        return (
+          <div key={cat.id} style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", marginBottom: 14 }}>
+              <div>
+                <span style={labelStyle}>Nome categoria</span>
+                <input style={inputStyle} placeholder={cat.name} value={tCat.name ?? ""} onChange={(e) => updateTranslationCategory(cat.id, "name", e.target.value)} />
+              </div>
+              <div>
+                <span style={labelStyle}>Sottotitolo</span>
+                <input style={inputStyle} placeholder={cat.subtitle} value={tCat.subtitle ?? ""} onChange={(e) => updateTranslationCategory(cat.id, "subtitle", e.target.value)} />
+              </div>
+            </div>
+
+            {cat.items.map((item) => {
+              const tItem = tCat.items?.[item.id] || {};
+              return (
+                <div key={item.id} style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: 12, marginBottom: 10, background: t.bg }}>
+                  <div style={{ display: "grid", gap: 10, gridTemplateColumns: item.tag !== undefined ? "2fr 1fr" : "1fr" }}>
+                    <div>
+                      <span style={labelStyle}>Nome piatto</span>
+                      <input style={inputStyle} placeholder={item.name} value={tItem.name ?? ""} onChange={(e) => updateTranslationItem(cat.id, item.id, "name", e.target.value)} />
+                    </div>
+                    {item.tag !== undefined && (
+                      <div>
+                        <span style={labelStyle}>Etichetta</span>
+                        <input style={inputStyle} placeholder={item.tag} value={tItem.tag ?? ""} onChange={(e) => updateTranslationItem(cat.id, item.id, "tag", e.target.value)} />
+                      </div>
+                    )}
+                  </div>
+                  {item.description && (
+                    <div style={{ marginTop: 10 }}>
+                      <span style={labelStyle}>Descrizione</span>
+                      <textarea rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder={item.description} value={tItem.description ?? ""} onChange={(e) => updateTranslationItem(cat.id, item.id, "description", e.target.value)} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -620,6 +897,13 @@ export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveErro
       setAuthReady(true);
     });
     return unsubscribe;
+  }, []);
+
+  // Si arriva qui dal link "Gestione menù" in fondo alla pagina pubblica:
+  // senza questo reset, il pannello Admin comparirebbe a metà pagina invece
+  // che dall'inizio.
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
   }, []);
 
   if (!authReady) {

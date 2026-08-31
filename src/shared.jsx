@@ -196,35 +196,18 @@ export const LANGUAGES = [
 
 // Testi fissi dell'interfaccia: tradotti a mano, non richiedono chiamate API.
 export const UI_STRINGS = {
-  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", translating: "Traduzione in corso…", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", linkInstagram: "Seguici su Instagram", linkFacebook: "Seguici su Facebook", linkShop: "Vai al nostro shop online", closeZoom: "Chiudi" },
-  en: { onRequest: "On request", manageMenu: "Menu management", translating: "Translating…", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", linkInstagram: "Follow us on Instagram", linkFacebook: "Follow us on Facebook", linkShop: "Visit our online shop", closeZoom: "Close" },
-  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", translating: "Traduciendo…", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", linkInstagram: "Síguenos en Instagram", linkFacebook: "Síguenos en Facebook", linkShop: "Visita nuestra tienda online", closeZoom: "Cerrar" },
-  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", translating: "Wird übersetzt…", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", linkInstagram: "Folge uns auf Instagram", linkFacebook: "Folge uns auf Facebook", linkShop: "Besuche unseren Online-Shop", closeZoom: "Schließen" },
-  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", translating: "Traduction en cours…", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", linkInstagram: "Suivez-nous sur Instagram", linkFacebook: "Suivez-nous sur Facebook", linkShop: "Visitez notre boutique en ligne", closeZoom: "Fermer" },
+  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", linkInstagram: "Seguici su Instagram", linkFacebook: "Seguici su Facebook", linkShop: "Vai al nostro shop online", closeZoom: "Chiudi" },
+  en: { onRequest: "On request", manageMenu: "Menu management", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", linkInstagram: "Follow us on Instagram", linkFacebook: "Follow us on Facebook", linkShop: "Visit our online shop", closeZoom: "Close" },
+  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", linkInstagram: "Síguenos en Instagram", linkFacebook: "Síguenos en Facebook", linkShop: "Visita nuestra tienda online", closeZoom: "Cerrar" },
+  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", linkInstagram: "Folge uns auf Instagram", linkFacebook: "Folge uns auf Facebook", linkShop: "Besuche unseren Online-Shop", closeZoom: "Schließen" },
+  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", linkInstagram: "Suivez-nous sur Instagram", linkFacebook: "Suivez-nous sur Facebook", linkShop: "Visitez notre boutique en ligne", closeZoom: "Fermer" },
 };
 
-const TRANSLATION_CACHE_KEY = "mdp-translation-cache-v1";
 export const TRANSLATION_LANG_KEY = "mdp-lang";
 
-export function loadTranslationCache() {
-  try {
-    const raw = localStorage.getItem(TRANSLATION_CACHE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-export function saveTranslationCache(cache) {
-  try {
-    localStorage.setItem(TRANSLATION_CACHE_KEY, JSON.stringify(cache));
-  } catch {
-    // localStorage pieno o non disponibile: pazienza, si ritraduce alla prossima visita.
-  }
-}
-
 // Traduce un singolo testo con MyMemory (API pubblica e gratuita, nessuna chiave richiesta),
-// usando una cache locale per non richiamarla due volte per lo stesso testo/lingua.
+// usando una cache di sola durata della chiamata per non richiamarla due volte per lo
+// stesso testo nello stesso batch di generazione.
 async function translateText(text, lang, cache) {
   if (!text || !text.trim() || lang === "it") return text || "";
   const key = lang + "|" + text;
@@ -259,39 +242,110 @@ async function translateBatch(texts, lang, cache, concurrency = 4) {
   return results;
 }
 
-// Traduce l'intero oggetto menù (nomi, sottotitoli, descrizioni, tag) in una lingua.
-// I prezzi non vengono mai tradotti: restano numeri, oppure "SU RICHIESTA" che viene
-// visualizzato tramite UI_STRINGS in base alla lingua scelta.
-export async function translateMenu(menu, lang, cache) {
-  if (lang === "it") return menu;
+// Costruisce, a partire dal menù sorgente (italiano) e da una traduzione parziale
+// già salvata, l'elenco dei soli campi ancora mancanti per una lingua ("jobs", con
+// una funzione "apply" per scrivere il risultato nella bozza) più la bozza stessa
+// (che contiene già intatto tutto ciò che era stato tradotto/corretto in precedenza).
+// Usata sia per generare le traduzioni mancanti, sia per mostrare all'admin quante
+// voci restano da tradurre.
+function collectMissingTranslations(menu, translation) {
+  const existing = translation || {};
+  const jobs = [];
+  const draft = {
+    restaurantName: existing.restaurantName,
+    tagline: existing.tagline,
+    footerNote: existing.footerNote,
+    categories: {},
+  };
 
-  const fields = [menu.restaurantName, menu.tagline, menu.footerNote];
+  // Un campo mai tradotto (currentValue === undefined) o riceve un job di
+  // traduzione (se c'è del testo sorgente da tradurre), oppure viene
+  // riempito subito con "" (se il sorgente è vuoto, es. descrizione non
+  // compilata) — non deve MAI restare undefined: Firestore rifiuta interi
+  // documenti che contengono un undefined annidato, quindi lasciarlo tale
+  // farebbe fallire ogni salvataggio successivo alla generazione.
+  const track = (sourceText, currentValue, apply) => {
+    if (currentValue !== undefined) return;
+    if (sourceText && sourceText.trim()) {
+      jobs.push({ text: sourceText, apply });
+    } else {
+      apply("");
+    }
+  };
+
+  track(menu.restaurantName, draft.restaurantName, (v) => { draft.restaurantName = v; });
+  track(menu.tagline, draft.tagline, (v) => { draft.tagline = v; });
+  track(menu.footerNote, draft.footerNote, (v) => { draft.footerNote = v; });
+
   menu.categories.forEach((cat) => {
-    fields.push(cat.name, cat.subtitle);
+    const existingCat = existing.categories?.[cat.id] || {};
+    const draftCat = { name: existingCat.name, subtitle: existingCat.subtitle, items: {} };
+    track(cat.name, draftCat.name, (v) => { draftCat.name = v; });
+    track(cat.subtitle, draftCat.subtitle, (v) => { draftCat.subtitle = v; });
+
     cat.items.forEach((item) => {
-      fields.push(item.name, item.description || "", item.tag || "");
+      const existingItem = existingCat.items?.[item.id] || {};
+      const draftItem = { name: existingItem.name, description: existingItem.description, tag: existingItem.tag };
+      track(item.name, draftItem.name, (v) => { draftItem.name = v; });
+      track(item.description || "", draftItem.description, (v) => { draftItem.description = v; });
+      track(item.tag || "", draftItem.tag, (v) => { draftItem.tag = v; });
+      draftCat.items[item.id] = draftItem;
     });
+
+    draft.categories[cat.id] = draftCat;
   });
 
-  const translated = await translateBatch(fields, lang, cache);
+  return { draft, jobs };
+}
 
-  let idx = 0;
-  const next = { ...menu };
-  next.restaurantName = translated[idx++];
-  next.tagline = translated[idx++];
-  next.footerNote = translated[idx++];
-  next.categories = menu.categories.map((cat) => {
-    const name = translated[idx++];
-    const subtitle = translated[idx++];
-    const items = cat.items.map((item) => {
-      const iname = translated[idx++];
-      const idesc = translated[idx++];
-      const itag = translated[idx++];
-      return { ...item, name: iname, description: idesc, tag: itag };
-    });
-    return { ...cat, name, subtitle, items };
-  });
-  return next;
+// Quante voci restano da tradurre per una lingua (0 = traduzione completa).
+export function countMissingTranslations(menu, translation) {
+  return collectMissingTranslations(menu, translation).jobs.length;
+}
+
+// Genera (via MyMemory) solo le traduzioni mancanti per una lingua, senza mai
+// toccare un campo già tradotto/corretto a mano dall'admin. Va chiamata esplicitamente
+// dal pannello Admin (mai lato cliente): il risultato è pensato per essere rivisto
+// dall'admin e poi salvato dentro `menu.translations[lang]`.
+export async function generateMissingTranslations(menu, lang, translation) {
+  const { draft, jobs } = collectMissingTranslations(menu, translation);
+  if (lang === "it" || jobs.length === 0) return draft;
+  const cache = {};
+  const translated = await translateBatch(jobs.map((j) => j.text), lang, cache);
+  jobs.forEach((job, i) => job.apply(translated[i]));
+  return draft;
+}
+
+// Sovrappone al menù sorgente (italiano) la traduzione salvata per una lingua,
+// ricadendo sul testo italiano campo per campo dove manca (voce non ancora
+// tradotta, o lingua senza alcuna traduzione generata). Pura e sincrona: nessuna
+// chiamata di rete — il cliente sceglie solo quale testo, già scaricato insieme
+// al resto del menù, visualizzare.
+export function applyTranslation(menu, translation) {
+  if (!translation) return menu;
+  return {
+    ...menu,
+    restaurantName: translation.restaurantName ?? menu.restaurantName,
+    tagline: translation.tagline ?? menu.tagline,
+    footerNote: translation.footerNote ?? menu.footerNote,
+    categories: menu.categories.map((cat) => {
+      const tc = translation.categories?.[cat.id];
+      return {
+        ...cat,
+        name: tc?.name ?? cat.name,
+        subtitle: tc?.subtitle ?? cat.subtitle,
+        items: cat.items.map((item) => {
+          const ti = tc?.items?.[item.id];
+          return {
+            ...item,
+            name: ti?.name ?? item.name,
+            description: ti?.description ?? item.description,
+            tag: ti?.tag ?? item.tag,
+          };
+        }),
+      };
+    }),
+  };
 }
 
 // Logo caricato dall'utente (Fattoria della Piana), incorporato come immagine.

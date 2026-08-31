@@ -1,11 +1,11 @@
 // Vista pubblica del menù (quella che vedono i clienti). File volutamente
 // leggero: nessun import di Firebase Authentication, nessun codice del
 // pannello di gestione — solo React e Firestore per leggere il menù.
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { X, Expand, ShoppingBag } from "lucide-react";
 import {
   THEMES, ital, LANGUAGES, UI_STRINGS, TRANSLATION_LANG_KEY,
-  loadTranslationCache, saveTranslationCache, translateMenu,
+  applyTranslation,
   GlobalStyle, BranchDivider, Logo,
 } from "./shared";
 import { optimizedImageUrl } from "./cloudinary";
@@ -118,10 +118,15 @@ export default function ClientView({ menu, onGoAdmin }) {
       return "it";
     }
   });
-  const [displayMenu, setDisplayMenu] = useState(menu);
-  const [translating, setTranslating] = useState(false);
-  const cacheRef = useRef(loadTranslationCache());
   const ui = UI_STRINGS[lang] || UI_STRINGS.it;
+
+  // Nessuna chiamata di rete al cambio lingua: la traduzione (se generata
+  // dall'admin) è già scaricata insieme al resto del menù, dentro
+  // `menu.translations`. Si legge soltanto quale testo mostrare.
+  const displayMenu = useMemo(
+    () => (lang === "it" ? menu : applyTranslation(menu, menu.translations?.[lang])),
+    [menu, lang]
+  );
 
   useEffect(() => {
     try {
@@ -129,23 +134,7 @@ export default function ClientView({ menu, onGoAdmin }) {
     } catch {
       // ignore
     }
-    if (lang === "it") {
-      setDisplayMenu(menu);
-      setTranslating(false);
-      return;
-    }
-    let cancelled = false;
-    setTranslating(true);
-    translateMenu(menu, lang, cacheRef.current).then((result) => {
-      if (cancelled) return;
-      setDisplayMenu(result);
-      setTranslating(false);
-      saveTranslationCache(cacheRef.current);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [lang, menu]);
+  }, [lang]);
 
   // Solo le categorie visibili, e al loro interno solo i piatti visibili.
   const visibleCategories = displayMenu.categories
@@ -226,12 +215,6 @@ export default function ClientView({ menu, onGoAdmin }) {
           </button>
         ))}
       </div>
-      {translating && (
-        <div style={{ textAlign: "center", fontSize: 11.5, color: t.inkSoft, marginTop: 8, fontStyle: ital(t) }}>
-          {ui.translating}
-        </div>
-      )}
-
       {/* Hero */}
       <header style={{ padding: "24px 20px 40px", textAlign: "center", position: "relative" }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
