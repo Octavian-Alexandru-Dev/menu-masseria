@@ -3,10 +3,43 @@
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
 import React, { useState } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles } from "lucide-react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer } from "lucide-react";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
-import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations } from "./shared";
+import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
+
+// Legge e valida un file .json scelto per l'importazione: usato sia dal
+// pannello Admin normale ("Importa JSON") sia dalla schermata di bootstrap
+// quando il documento del menù non esiste ancora su Firestore. Controlla
+// solo la forma minima necessaria a non mandare in crash l'editor o a
+// salvare dati corrotti — non valida ogni singolo campo.
+function parseMenuJsonFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) { reject(new Error("Nessun file selezionato.")); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+          throw new Error("Il file non ha la struttura di un menù valido.");
+        }
+        if (!Array.isArray(data.categories)) {
+          throw new Error("Il file non ha la struttura di un menù valido (manca 'categories').");
+        }
+        for (const cat of data.categories) {
+          if (!cat || !Array.isArray(cat.items)) {
+            throw new Error("Una categoria nel file non ha un elenco di voci ('items') valido.");
+          }
+        }
+        resolve(data);
+      } catch (err) {
+        reject(err instanceof SyntaxError ? new Error("Il file non è un JSON valido.") : err);
+      }
+    };
+    reader.onerror = () => reject(new Error("Impossibile leggere il file."));
+    reader.readAsText(file);
+  });
+}
 
 function AdminLogin({ onBack, theme }) {
   const t = THEMES[theme] || THEMES.rustica;
@@ -93,18 +126,84 @@ function AdminLogin({ onBack, theme }) {
   );
 }
 
+// Mostrata dopo il login quando il documento del menù non esiste ancora su
+// Firestore (prima configurazione, o database ripristinato): non c'è più un
+// menù di esempio da caricare al suo posto (rimosso volutamente), quindi
+// l'unico modo di procedere è importare un backup JSON esportato in
+// precedenza da questo stesso pannello.
+function AdminBootstrap({ onImport, onExit, importError }) {
+  const t = THEMES.rustica;
+  return (
+    <div className="mdp-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 20, minHeight: "100vh" }}>
+      <GlobalStyle t={t} />
+      <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: "32px 28px", width: "100%", maxWidth: 420, textAlign: "center", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" }}>
+        <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: 20, fontWeight: 600, color: t.primary, marginBottom: 10 }}>
+          Nessun menù trovato
+        </div>
+        <div style={{ fontSize: 13, color: t.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
+          Il documento del menù non esiste ancora su Firestore. Importa un backup JSON per iniziare — potrai rivedere tutto prima di salvarlo.
+        </div>
+        <label className="mdp-btn" style={{ ...btnPrimary(t), cursor: "pointer", margin: "0 auto", width: "fit-content" }}>
+          <Upload size={13} /> Importa da JSON
+          <input
+            type="file" accept="application/json" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; onImport(f); }}
+          />
+        </label>
+        {importError && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", color: t.accent2, fontSize: 12.5, marginTop: 14 }}>
+            <AlertCircle size={14} /> {importError}
+          </div>
+        )}
+        <button onClick={onExit} className="mdp-btn" style={{ width: "100%", marginTop: 16, padding: "9px 0", background: "none", border: "none", color: t.inkSoft, fontSize: 12.5, cursor: "pointer" }}>
+          ← Torna al menù
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ============================== ADMIN DASHBOARD ============================== */
-function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogout, onPreview, onReset }) {
+function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogout, onPreview, onUndo, canUndo }) {
   const t = THEMES[menu.theme] || THEMES.rustica;
   const [openCats, setOpenCats] = useState(() => new Set());
   const [confirmDelete, setConfirmDelete] = useState(null); // {type:'cat'|'item', catId, itemId}
-  const [resetConfirm, setResetConfirm] = useState(false);
   const [uploadingItem, setUploadingItem] = useState(null); // id della voce con upload in corso
   const [uploadErrors, setUploadErrors] = useState({}); // { [itemId]: messaggio }
   const [lang, setLang] = useState("it"); // lingua correntemente mostrata/editata nell'editor
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [confirmDeleteTranslation, setConfirmDeleteTranslation] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [pdfLang, setPdfLang] = useState("it");
+  const [pdfImages, setPdfImages] = useState(false);
+  const [pdfError, setPdfError] = useState("");
+  // Opzioni di impaginazione/contenuto del PDF, lasciate all'amministratore
+  // che stampa (non c'è un unico layout giusto per tutti: dipende da quante
+  // pagine si vogliono, se serve un menù senza prezzi per un evento, ecc.).
+  // Di default una categoria può continuare su una nuova pagina se non entra
+  // tutta in quella corrente (le voci che entrano restano al loro posto,
+  // niente spazio bianco lasciato apposta). Attivando questa opzione si
+  // torna al comportamento "una categoria non si spezza mai": se non entra
+  // tutta, salta per intero alla pagina dopo, lasciando eventualmente spazio
+  // vuoto in quella precedente.
+  const [pdfAvoidCategorySplit, setPdfAvoidCategorySplit] = useState(false);
+  const [pdfColumns, setPdfColumns] = useState(1); // 1 o 2 colonne per le voci di ogni categoria
+  const [pdfPaperSize, setPdfPaperSize] = useState("A4");
+  const [pdfShowPrices, setPdfShowPrices] = useState(true);
+  const [pdfShowTags, setPdfShowTags] = useState(true);
+  const [pdfShowSubtitles, setPdfShowSubtitles] = useState(true);
+  const [pdfShowFooter, setPdfShowFooter] = useState(true); // nota a piè di pagina + contatti social
+  const [pdfShowDate, setPdfShowDate] = useState(false);
+  const [pdfExcludedCats, setPdfExcludedCats] = useState(() => new Set()); // categorie deselezionate per l'export
+
+  const togglePdfCat = (catId) => {
+    setPdfExcludedCats((prev) => {
+      const next = new Set(prev);
+      next.has(catId) ? next.delete(catId) : next.add(catId);
+      return next;
+    });
+  };
 
   const changeLang = (code) => {
     setLang(code);
@@ -227,6 +326,83 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     setConfirmDeleteTranslation(false);
   };
 
+  const handleExportJson = () => {
+    const blob = new Blob([JSON.stringify(menu, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `menu-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportJsonFile = (file) => {
+    if (!file) return;
+    setImportError("");
+    parseMenuJsonFile(file)
+      .then((data) => setMenu(data))
+      .catch((err) => setImportError(err.message || "File non valido."));
+  };
+
+  // Apre in una nuova scheda l'anteprima di stampa (src/PrintMenu.jsx) con
+  // solo le voci visibili ai clienti, nella lingua e con le immagini scelte
+  // qui. Il menù viene passato tramite sessionStorage (condiviso con la
+  // nuova scheda perché aperta via window.open dalla stessa origine) invece
+  // che rileggendolo da Firestore, così riflette anche modifiche non ancora
+  // salvate.
+  const handleExportPdf = () => {
+    const translated = pdfLang === "it" ? menu : applyTranslation(menu, menu.translations?.[pdfLang]);
+    const categories = translated.categories
+      .filter((c) => c.visible !== false && !pdfExcludedCats.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        subtitle: pdfShowSubtitles ? c.subtitle : "",
+        items: c.items
+          .filter((it) => it.visible !== false)
+          .map((it) => ({
+            id: it.id,
+            name: it.name,
+            price: pdfShowPrices ? it.price : "",
+            tag: pdfShowTags ? (it.tag || "") : "",
+            description: it.description || "",
+            image: pdfImages ? (it.image || "") : "",
+          })),
+      }))
+      .filter((c) => c.items.length > 0);
+
+    const payload = {
+      restaurantName: translated.restaurantName,
+      tagline: translated.tagline,
+      location: menu.location,
+      footerNote: pdfShowFooter ? translated.footerNote : "",
+      theme: menu.theme,
+      lang: pdfLang,
+      socialLinks: pdfShowFooter ? menu.socialLinks : null,
+      includeImages: pdfImages,
+      avoidCategorySplit: pdfAvoidCategorySplit,
+      columns: pdfColumns,
+      paperSize: pdfPaperSize,
+      generatedDate: pdfShowDate ? new Date().toLocaleDateString(pdfLang === "it" ? "it-IT" : pdfLang) : "",
+      categories,
+    };
+
+    setPdfError("");
+    if (categories.length === 0) {
+      setPdfError("Nessuna voce da stampare con le opzioni scelte (controlla le categorie selezionate).");
+      return;
+    }
+    try {
+      sessionStorage.setItem("mdp-print-payload", JSON.stringify(payload));
+    } catch (err) {
+      setPdfError("Impossibile preparare l'anteprima di stampa (memoria del browser piena).");
+      return;
+    }
+    window.open(window.location.pathname + "?print=1", "_blank");
+  };
+
   const handleImageUpload = async (catId, itemId, file) => {
     if (!file) return;
     setUploadingItem(itemId);
@@ -302,6 +478,15 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            className="mdp-btn"
+            style={{ ...btnGhost(t), opacity: canUndo ? 1 : 0.5, cursor: canUndo ? "pointer" : "default" }}
+            title="Annulla l'ultima modifica"
+          >
+            <RotateCcw size={13} /> Annulla
+          </button>
           <button onClick={onPreview} className="mdp-btn" style={btnGhost(t)}>
             <Eye size={13} /> Anteprima
           </button>
@@ -691,14 +876,114 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           </button>
         )}
 
-        <div style={{ marginTop: 30, textAlign: "center" }}>
-          <button
-            onClick={() => (resetConfirm ? (onReset(), setResetConfirm(false)) : setResetConfirm(true))}
-            className="mdp-btn"
-            style={{ ...btnGhost(t), color: t.accent2, margin: "0 auto" }}
-          >
-            <RotateCcw size={13} /> {resetConfirm ? "Conferma ripristino menù predefinito" : "Ripristina menù predefinito"}
+        {/* Esportazione/importazione JSON (backup manuale) e versione
+            stampabile in PDF (tramite la finestra di stampa del browser,
+            vedi src/PrintMenu.jsx). */}
+        <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginTop: 24 }}>
+          <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
+            Esportazione e backup
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={handleExportJson} className="mdp-btn" style={btnGhost(t)}>
+              <Download size={13} /> Esporta JSON
+            </button>
+            <label className="mdp-btn" style={{ ...btnGhost(t), cursor: "pointer" }}>
+              <Upload size={13} /> Importa JSON
+              <input
+                type="file" accept="application/json" style={{ display: "none" }}
+                onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; handleImportJsonFile(f); }}
+              />
+            </label>
+          </div>
+          {importError && (
+            <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: 12.5, marginTop: 10 }}>
+              <AlertCircle size={14} /> {importError}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 10, lineHeight: 1.4 }}>
+            L'importazione sostituisce il menù nell'editor (non salva subito): rivedi le modifiche e premi "Salva modifiche" quando sei pronto.
+          </div>
+
+          <hr className="mdp-hairline" style={{ margin: "18px 0" }} />
+
+          <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, marginBottom: 14 }}>
+            Versione stampabile (PDF)
+          </div>
+
+          <PdfOptionsGroup title="Contenuto" t={t}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: t.inkSoft }}>
+              Lingua:
+              <select
+                value={pdfLang}
+                onChange={(e) => setPdfLang(e.target.value)}
+                style={{ ...inputStyle, width: "auto", padding: "5px 8px" }}
+              >
+                {LANGUAGES.filter((l) => l.code === "it" || !!menu.translations?.[l.code]).map((l) => (
+                  <option key={l.code} value={l.code}>{l.label}</option>
+                ))}
+              </select>
+            </label>
+            <Toggle t={t} checked={pdfImages} onChange={setPdfImages} label="Immagini dei piatti" />
+            <Toggle t={t} checked={pdfShowPrices} onChange={setPdfShowPrices} label="Prezzi" />
+            <Toggle t={t} checked={pdfShowTags} onChange={setPdfShowTags} label="Etichette (es. ROSSO)" />
+            <Toggle t={t} checked={pdfShowSubtitles} onChange={setPdfShowSubtitles} label="Sottotitoli categoria" />
+            <Toggle t={t} checked={pdfShowFooter} onChange={setPdfShowFooter} label="Nota e contatti in fondo" />
+            <Toggle t={t} checked={pdfShowDate} onChange={setPdfShowDate} label="Data di generazione" />
+          </PdfOptionsGroup>
+
+          <PdfOptionsGroup title="Impaginazione" t={t}>
+            <Toggle
+              t={t} checked={pdfAvoidCategorySplit} onChange={setPdfAvoidCategorySplit}
+              label="Non spezzare una categoria tra due pagine"
+            />
+            <PdfPillGroup
+              t={t} label="Colonne"
+              options={[{ value: 1, label: "1 colonna" }, { value: 2, label: "2 colonne" }]}
+              value={pdfColumns} onChange={setPdfColumns}
+            />
+            <PdfPillGroup
+              t={t} label="Formato"
+              options={[{ value: "A4", label: "A4" }, { value: "Letter", label: "Letter" }]}
+              value={pdfPaperSize} onChange={setPdfPaperSize}
+            />
+          </PdfOptionsGroup>
+
+          <PdfOptionsGroup title="Categorie da includere" t={t}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {menu.categories.filter((c) => c.visible !== false).map((cat) => {
+                const included = !pdfExcludedCats.has(cat.id);
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => togglePdfCat(cat.id)}
+                    className="mdp-btn"
+                    style={{
+                      border: `1px solid ${t.line}`,
+                      background: included ? t.primary : "transparent",
+                      color: included ? t.bg : t.inkSoft,
+                      borderRadius: 20, padding: "4px 11px", fontSize: 11.5, cursor: "pointer",
+                    }}
+                  >
+                    {cat.name || "Senza nome"}
+                  </button>
+                );
+              })}
+            </div>
+          </PdfOptionsGroup>
+
+          <button onClick={handleExportPdf} className="mdp-btn" style={{ ...btnPrimary(t), marginTop: 6 }}>
+            <Printer size={13} /> Esporta PDF / Stampa
           </button>
+          {pdfError && (
+            <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: 12.5, marginTop: 10 }}>
+              <AlertCircle size={14} /> {pdfError}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 10, lineHeight: 1.4 }}>
+            Si apre una scheda con l'anteprima di stampa: usa "Salva come PDF" nella finestra di stampa del browser per ottenere un file.
+          </div>
         </div>
       </div>
     </div>
@@ -835,6 +1120,51 @@ function TranslationEditor({
   );
 }
 
+// Piccolo raggruppamento con etichetta per le opzioni di esportazione PDF
+// (Contenuto / Impaginazione / Categorie da includere): stessa idea visiva
+// delle sezioni della pagina, ma più compatta perché sono tutte nella stessa
+// card "Esportazione e backup".
+function PdfOptionsGroup({ title, t, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", color: t.secondary, marginBottom: 8 }}>
+        {title}
+      </div>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Selettore a pillole per una scelta esclusiva tra poche opzioni (colonne,
+// formato carta): stesso stile pill già usato per il selettore di lingua.
+function PdfPillGroup({ t, label, options, value, onChange }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: t.inkSoft }}>
+      {label}:
+      <span style={{ display: "flex", gap: 4 }}>
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className="mdp-btn"
+            style={{
+              border: `1px solid ${t.line}`,
+              background: value === opt.value ? t.primary : "transparent",
+              color: value === opt.value ? t.bg : t.inkSoft,
+              borderRadius: 20, padding: "3px 10px", fontSize: 11.5, cursor: "pointer",
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </span>
+    </label>
+  );
+}
+
 function Toggle({ t, checked, onChange, label }) {
   // Un solo elemento interattivo (l'input) copre l'intera area del cursore;
   // gli span decorativi sotto sono puramente visivi (pointer-events: none),
@@ -887,9 +1217,10 @@ function btnGhost(t) {
 /* ============================== ADMIN (login + pannello) ============================== */
 // Componente unico esportato: gestisce da sé lo stato di accesso (login/logout)
 // e mostra il modulo di accesso o il pannello di gestione a seconda dei casi.
-export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onReset }) {
+export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo }) {
   const [authed, setAuthed] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState("");
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
@@ -915,7 +1246,22 @@ export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveErro
   }
 
   if (!authed) {
-    return <AdminLogin onBack={onExit} theme={menu.theme} />;
+    return <AdminLogin onBack={onExit} theme={menu?.theme} />;
+  }
+
+  // Il documento non esiste ancora su Firestore (vedi MenuApp.jsx): niente
+  // menù di esempio da mostrare al suo posto, solo un modo di importarne uno.
+  if (!menu) {
+    return (
+      <AdminBootstrap
+        importError={bootstrapError}
+        onExit={() => { signOut(auth); onExit(); }}
+        onImport={(file) => {
+          setBootstrapError("");
+          parseMenuJsonFile(file).then(setMenu).catch((err) => setBootstrapError(err.message || "File non valido."));
+        }}
+      />
+    );
   }
 
   return (
@@ -928,7 +1274,8 @@ export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveErro
       saveError={saveError}
       onLogout={() => { signOut(auth); onExit(); }}
       onPreview={onExit}
-      onReset={onReset}
+      onUndo={onUndo}
+      canUndo={canUndo}
     />
   );
 }

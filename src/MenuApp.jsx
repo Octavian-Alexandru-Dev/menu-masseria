@@ -7,19 +7,22 @@
 //  - il menù viene letto con onSnapshot + cache locale persistente
 //    (vedi firebase-db.js): una volta visto, resta salvato sul telefono e
 //    riappare all'istante anche offline, mentre si aggiorna in sottofondo;
-//  - se il primo caricamento in assoluto è lento (rete scarsa, nessuna
-//    cache ancora), dopo pochi secondi si mostra comunque il menù così com'è
-//    nell'ultimo dato noto, invece di restare bloccati su "Caricamento…".
+//  - se il primo caricamento in assoluto è lento (rete scarsa) o il
+//    documento non esiste ancora su Firestore, non c'è più un menù di
+//    esempio da mostrare al suo posto (rimosso volutamente): si resta su un
+//    messaggio esplicito finché la connessione non porta i dati veri.
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase-db";
-import { DEFAULT_MENU, MENU_DOC_PATH } from "./shared";
+import { MENU_DOC_PATH } from "./shared";
 import ClientView from "./ClientView";
 
 const Admin = lazy(() => import("./Admin"));
+const PrintMenu = lazy(() => import("./PrintMenu"));
 
 const LOAD_TIMEOUT_MS = 6000;
 const SAVE_TIMEOUT_MS = 8000;
+const MAX_UNDO_STEPS = 20;
 
 export default function App() {
   const [menu, setMenuState] = useState(null);
@@ -28,18 +31,27 @@ export default function App() {
   const [savedAt, setSavedAt] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [loadNotice, setLoadNotice] = useState(null);
+  const [undoStack, setUndoStack] = useState([]); // stati precedenti di menu, il più recente in fondo
 
   const viewRef = useRef(view);
   useEffect(() => { viewRef.current = view; }, [view]);
 
   const menuDocRef = doc(db, ...MENU_DOC_PATH);
 
+  // Scheda aperta apposta dal pannello Admin ("Esporta PDF / Stampa") solo
+  // per mostrare l'anteprima di stampa: non deve aprire una propria
+  // connessione a Firestore, legge il menù già pronto da sessionStorage
+  // (vedi PrintMenu.jsx).
+  const isPrintMode = typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("print") === "1";
+
   useEffect(() => {
+    if (isPrintMode) return;
+
     let gotAnyData = false;
     const timeoutId = setTimeout(() => {
       if (!gotAnyData) {
-        setMenuState((prev) => prev || DEFAULT_MENU);
-        setLoadNotice("Connessione lenta: mostro l'ultimo menù disponibile.");
+        setLoadNotice("Connessione lenta: il menù non è ancora arrivato. Verifica la connessione e attendi, oppure ricarica la pagina.");
       }
     }, LOAD_TIMEOUT_MS);
 
@@ -60,17 +72,18 @@ export default function App() {
           });
           setLoadNotice(null);
         } else if (!snap.metadata.fromCache) {
-          // Il documento non esiste ancora su Firestore: mostriamo il menù
-          // di default in locale. Il seeding vero avverrà al primo salvataggio
-          // dell'admin (che ha i permessi di scrittura).
-          setMenuState((prev) => prev || DEFAULT_MENU);
+          // Il documento non esiste ancora su Firestore (prima configurazione,
+          // o database ripristinato): non c'è più un menù di esempio locale
+          // da mostrare al suo posto. Va creato dal pannello Admin (login
+          // possibile anche senza menù caricato — vedi Admin.jsx), es.
+          // importando un backup JSON.
+          setLoadNotice("Nessun menù trovato su Firestore. Accedi come amministratore per crearne uno (es. importando un backup JSON).");
         }
       },
       (err) => {
         clearTimeout(timeoutId);
         console.error("[menu] onSnapshot error:", err);
-        setMenuState((prev) => prev || DEFAULT_MENU);
-        setLoadNotice("Impossibile contattare il server: mostro l'ultimo menù disponibile.");
+        setLoadNotice("Impossibile contattare il server. Verifica la connessione e riprova.");
       }
     );
 
@@ -81,9 +94,27 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Unico punto in cui lo stato menu cambia: ogni chiamata registra lo stato
+  // precedente in uno stack di annullamento (max MAX_UNDO_STEPS passi), così
+  // qualsiasi azione dell'Admin (modifica campo, generazione traduzione,
+  // importazione JSON, ...) diventa automaticamente annullabile senza dover
+  // toccare ogni singolo handler in Admin.jsx.
   const setMenu = useCallback((updater) => {
-    setMenuState((prev) => (typeof updater === "function" ? updater(prev) : updater));
+    setMenuState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (prev !== null && next !== prev) {
+        setUndoStack((stack) => [...stack, prev].slice(-MAX_UNDO_STEPS));
+      }
+      return next;
+    });
   }, []);
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack((stack) => stack.slice(0, -1));
+    setMenuState(previous);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -131,38 +162,65 @@ export default function App() {
     }
   };
 
-  const handleReset = () => setMenuState(DEFAULT_MENU);
+  if (isPrintMode) {
+    return (
+      <Suspense
+        fallback={
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#6E2A2A" }}>
+            Caricamento anteprima di stampa…
+          </div>
+        }
+      >
+        <PrintMenu />
+      </Suspense>
+    );
+  }
+
+  // Il pannello Admin può aprirsi anche senza un menù ancora caricato (vedi
+  // sopra): mostra il login comunque, e dopo il login una schermata per
+  // importare un backup JSON invece del solito editor.
+  if (view === "admin") {
+    return (
+      <Suspense
+        fallback={
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#6E2A2A" }}>
+            Caricamento gestione…
+          </div>
+        }
+      >
+        <Admin
+          menu={menu}
+          setMenu={setMenu}
+          onSave={handleSave}
+          saving={saving}
+          savedAt={savedAt}
+          saveError={saveError || loadNotice}
+          onExit={() => setView("client")}
+          onUndo={handleUndo}
+          canUndo={undoStack.length > 0}
+        />
+      </Suspense>
+    );
+  }
 
   if (!menu) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#6E2A2A" }}>
-        Caricamento menù…
+      <div style={{
+        minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center", gap: 14, fontFamily: "sans-serif", color: "#6E2A2A", padding: 24, textAlign: "center",
+      }}>
+        <div>{loadNotice || "Caricamento menù…"}</div>
+        {loadNotice && (
+          <button
+            onClick={() => window.location.reload()}
+            style={{ padding: "8px 16px", border: "1px solid #6E2A2A", borderRadius: 6, background: "none", color: "#6E2A2A", cursor: "pointer", fontSize: 13 }}
+          >
+            Ricarica pagina
+          </button>
+        )}
       </div>
     );
   }
 
-  if (view === "client") {
-    return <ClientView menu={menu} onGoAdmin={() => setView("admin")} />;
-  }
-
-  return (
-    <Suspense
-      fallback={
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#6E2A2A" }}>
-          Caricamento gestione…
-        </div>
-      }
-    >
-      <Admin
-        menu={menu}
-        setMenu={setMenu}
-        onSave={handleSave}
-        saving={saving}
-        savedAt={savedAt}
-        saveError={saveError || loadNotice}
-        onExit={() => setView("client")}
-        onReset={handleReset}
-      />
-    </Suspense>
-  );
+  return <ClientView menu={menu} onGoAdmin={() => setView("admin")} />;
 }
