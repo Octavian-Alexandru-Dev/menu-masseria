@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://menu-masseria-della-pian.web.app/sitemap.xml

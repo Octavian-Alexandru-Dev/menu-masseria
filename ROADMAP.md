@@ -47,6 +47,13 @@ rileggere per intero.
   categorie da includere. Stile allineato al tema del menù digitale
   (colori, font, logo, fregio decorativo). `src/PrintMenu.jsx`,
   `src/Admin.jsx` (card "Esportazione e backup" → "Versione stampabile").
+- **SEO e discoverability.** `meta description`, Open Graph e Twitter Card,
+  dato strutturato JSON-LD `schema.org/Restaurant` (indirizzo, link social)
+  in `index.html`; `robots.txt` e `sitemap.xml` in `public/`. URL di
+  produzione, indirizzo e social sono hardcoded (non derivabili dal codice,
+  vedi commit) — da tenere aggiornati a mano se cambiano. Se in futuro si
+  aggiunge un dominio personalizzato o si cambiano indirizzo/social, va
+  aggiornato anche qui.
 
 ---
 
@@ -116,38 +123,6 @@ scrivere codice:**
 **Raccomandazione:** questa voce va discussa e progettata (anche solo in una
 sessione di planning, non implementazione) prima di scrivere codice — le
 decisioni sopra cambiano parecchio la complessità finale.
-
----
-
-## 3. 🔲 SEO e discoverability
-
-**File coinvolti:** `index.html` (oggi ha solo `<title>`), `public/`
-(mancano `robots.txt`, `sitemap.xml`), nessun structured data.
-
-**Stato attuale:** nessuna `meta description`, nessun tag Open Graph
-(quindi condividendo il link su WhatsApp/Facebook/Instagram non compare né
-immagine né descrizione — proprio i canali social che il footer del menù
-promuove già, vedi i pulsanti social in `src/ClientView.jsx`), nessun
-`robots.txt`/`sitemap.xml`, nessun dato strutturato `schema.org`
-(`Restaurant`/`Menu`) che aiuterebbe Google a mostrare il menù direttamente
-nei risultati di ricerca locale.
-
-**Perché conta:** per un locale che vive di traffico "Google/social → sito",
-è probabilmente il miglioramento con più ritorno per lo sforzo più basso di
-tutta questa lista — sono quasi tutte modifiche statiche, senza logica
-applicativa da scrivere.
-
-**Cosa aggiungere:**
-- `meta description` e `og:title`/`og:description`/`og:image`/`og:type` in
-  `index.html` (l'immagine OG può riusare `public/logo.jpg` o una foto del
-  locale, dimensioni consigliate 1200×630).
-- `robots.txt` e `sitemap.xml` in `public/`.
-- Dato strutturato JSON-LD `schema.org/Restaurant` (nome, indirizzo, link
-  social) e, se conviene mantenerlo aggiornato senza troppo sforzo,
-  `schema.org/Menu`/`MenuItem` per i piatti principali.
-- `lang` dinamico su `<html>` se in futuro si vuole servire contenuto
-  multilingua anche ai motori di ricerca (oggi è fisso `lang="it"`, coerente
-  col fatto che oggi la traduzione è solo client-side).
 
 ---
 
