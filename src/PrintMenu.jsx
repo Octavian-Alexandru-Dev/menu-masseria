@@ -11,7 +11,7 @@
 // sessionStorage del chiamante nella nuova scheda — non serve un'altra
 // richiesta a Firestore, e riflette anche modifiche non ancora salvate.
 import React, { useEffect, useState } from "react";
-import { THEMES, ital, Logo, BranchDivider, UI_STRINGS } from "./shared";
+import { THEMES, ital, Logo, BranchDivider, UI_STRINGS, FALLBACK_STYLE, TYPE } from "./shared";
 import { optimizedImageUrl } from "./cloudinary";
 
 const STORAGE_KEY = "mdp-print-payload";
@@ -61,7 +61,7 @@ export default function PrintMenu() {
 
   if (!payload) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", padding: 24, textAlign: "center", color: "#5B4A34" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", ...FALLBACK_STYLE }}>
         Nessun menù da stampare. Apri questa pagina dal pulsante "Esporta PDF / Stampa" nel pannello Admin.
       </div>
     );
@@ -182,10 +182,10 @@ function PrintStyle({ t, paperSize }) {
       .mdp-print-toolbar {
         position: sticky; top: 0; z-index: 10;
         display: flex; align-items: center; justify-content: space-between;
-        padding: 10px 20px; background: #1c1c1c; color: #fff; font-size: 13px;
+        padding: 10px 20px; background: #1c1c1c; color: #fff; font-size: ${TYPE.body}px;
       }
       .mdp-print-toolbar button {
-        font-family: inherit; font-size: 12.5px; padding: 6px 14px; border-radius: 6px;
+        font-family: inherit; font-size: ${TYPE.smallPlus}px; padding: 6px 14px; border-radius: 6px;
         border: 1px solid rgba(255,255,255,0.3); background: transparent; color: #fff; cursor: pointer; margin-left: 8px;
       }
       .mdp-print-toolbar button:hover { background: rgba(255,255,255,0.12); }
@@ -203,9 +203,9 @@ function PrintStyle({ t, paperSize }) {
         font-family: ${t.fontDisplay}; font-style: ${ital(t)}; font-weight: 600;
         font-size: 30px; color: ${t.ink};
       }
-      .mdp-print-tagline { font-size: 13px; color: ${t.inkSoft}; margin-top: 8px; }
+      .mdp-print-tagline { font-size: ${TYPE.body}px; color: ${t.inkSoft}; margin-top: 8px; }
       .mdp-print-location {
-        font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase;
+        font-size: ${TYPE.tinyPlus}px; letter-spacing: 1.5px; text-transform: uppercase;
         color: ${t.secondary}; margin-top: 8px;
       }
       .mdp-print-divider { display: flex; justify-content: center; margin-top: 16px; }
@@ -224,19 +224,19 @@ function PrintStyle({ t, paperSize }) {
       .mdp-print-cat-avoid-split { break-inside: avoid; }
       .mdp-print-cat-head { text-align: center; margin-bottom: 14px; break-inside: avoid; break-after: avoid; }
       .mdp-print-cat-sub {
-        font-size: 10px; letter-spacing: 1.8px; text-transform: uppercase;
+        font-size: ${TYPE.tiny}px; letter-spacing: 1.8px; text-transform: uppercase;
         color: ${t.secondary}; margin-bottom: 3px;
       }
       .mdp-print-cat-name {
         font-family: ${t.fontDisplay}; font-style: ${ital(t)}; font-weight: 600;
-        font-size: 20px; color: ${t.primary};
+        font-size: ${TYPE.heading}px; color: ${t.primary};
       }
 
       .mdp-print-item { display: flex; gap: 10px; padding: 7px 0; break-inside: avoid; }
       .mdp-print-item-img { width: 46px; height: 46px; border-radius: 6px; object-fit: cover; flex-shrink: 0; background: ${t.bgAlt}; }
       .mdp-print-item-body { flex: 1; min-width: 0; }
       .mdp-print-item-row { display: flex; align-items: baseline; gap: 4px; }
-      .mdp-print-item-name { font-size: 13.5px; font-weight: 500; color: ${t.ink}; min-width: 0; overflow-wrap: break-word; }
+      .mdp-print-item-name { font-size: ${TYPE.bodyPlus}px; font-weight: 500; color: ${t.ink}; min-width: 0; overflow-wrap: break-word; }
       .mdp-print-item-tag {
         font-size: 8.5px; font-weight: 600; letter-spacing: 0.5px; color: ${t.bg};
         background: ${t.secondary}; border-radius: 20px; padding: 1px 7px; margin-left: 6px; white-space: nowrap;
@@ -245,17 +245,17 @@ function PrintStyle({ t, paperSize }) {
       .mdp-print-leader { flex: 1; border-bottom: 1.5px dotted ${t.line}; margin: 0 5px 3px; min-width: 12px; }
       .mdp-print-item-price {
         font-family: ${t.fontDisplay}; font-style: ${ital(t)}; font-weight: 600;
-        font-size: 14px; color: ${t.accent}; white-space: nowrap;
+        font-size: ${TYPE.bodyLg}px; color: ${t.accent}; white-space: nowrap;
       }
-      .mdp-print-item-desc { font-size: 11px; font-style: italic; color: ${t.inkSoft}; margin-top: 2px; line-height: 1.4; }
+      .mdp-print-item-desc { font-size: ${TYPE.label}px; font-style: italic; color: ${t.inkSoft}; margin-top: 2px; line-height: 1.4; }
 
       .mdp-print-footer {
         margin-top: 32px; padding-top: 16px; border-top: 1px solid ${t.line};
-        text-align: center; font-size: 10.5px; color: ${t.inkSoft};
+        text-align: center; font-size: ${TYPE.tinyPlus}px; color: ${t.inkSoft};
       }
       .mdp-print-footer-note { font-style: italic; margin-bottom: 4px; }
       .mdp-print-footer-social span { margin: 0 8px; }
-      .mdp-print-footer-date { margin-top: 8px; font-size: 9.5px; opacity: 0.75; }
+      .mdp-print-footer-date { margin-top: 8px; font-size: ${TYPE.micro}px; opacity: 0.75; }
 
       @media print {
         .no-print { display: none !important; }

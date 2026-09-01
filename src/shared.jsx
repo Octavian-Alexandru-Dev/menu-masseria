@@ -42,6 +42,24 @@ export const THEMES = {
 // True for themes with an italic display font (Fraunces); false renders upright (Roboto).
 export const ital = (t) => (t.italic === false ? "normal" : "italic");
 
+/* ============================== TYPE / SPACING SCALE ==============================
+   Nomi per le dimensioni di font e spaziatura già in uso in ClientView/Admin/
+   PrintMenu. Ogni valore qui sotto è un pixel già usato da qualche parte oggi:
+   questo raggruppa sotto un nome, non cambia nessuna dimensione visibile. */
+export const TYPE = {
+  micro: 9.5, tiny: 10, tinyPlus: 10.5, label: 11, labelPlus: 11.5,
+  small: 12, smallPlus: 12.5, body: 13, bodyPlus: 13.5, bodyLg: 14,
+  lead: 15, itemName: 16, subhead: 17, heading: 20, modalTitle: 22,
+  display: 26, hero: "clamp(30px, 7vw, 52px)",
+};
+
+export const SPACE = { xxs: 4, xs: 6, sm: 8, smPlus: 10, md: 12, mdPlus: 14, lg: 16, lgPlus: 18, xl: 20, xlPlus: 22, xxl: 24 };
+
+// Usato solo dalle schermate di caricamento/errore che compaiono PRIMA che
+// menu.theme sia noto (MenuApp.jsx, Admin.jsx, PrintMenu.jsx): non possono
+// usare un token di THEMES, serve un neutro leggibile su tutti e 4 gli sfondi.
+export const FALLBACK_STYLE = { color: "#3A3A3A", fontFamily: "'Work Sans', sans-serif", background: "#F7F5F1" };
+
 // Il documento Firestore che contiene l'intero menù.
 export const MENU_DOC_PATH = ["menu", "data"];
 
@@ -230,10 +248,19 @@ export function GlobalStyle({ t }) {
       .mdp-scrollbar::-webkit-scrollbar { height: 6px; }
       .mdp-scrollbar::-webkit-scrollbar-thumb { background: ${t.line}; border-radius: 3px; }
       .mdp-tab { transition: color .2s ease, border-color .2s ease; white-space: nowrap; }
+      .mdp-tab:hover { color: ${t.primary}; }
       .mdp-row { transition: background .2s ease; }
       .mdp-row:hover { background: ${t.bgAlt}; }
-      .mdp-btn { transition: transform .15s ease, opacity .15s ease; }
-      .mdp-btn:active { transform: scale(0.97); }
+      .mdp-btn { transition: transform .15s ease, filter .15s ease; }
+      .mdp-btn:hover:not(:disabled) { filter: brightness(1.08); }
+      .mdp-btn:active:not(:disabled) { transform: scale(0.97); filter: brightness(0.94); }
+      .mdp-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+      .mdp-btn:focus-visible, .mdp-tab:focus-visible, .mdp-row:focus-visible,
+      input:focus-visible, textarea:focus-visible, select:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px ${t.bg}, 0 0 0 4px ${t.accent};
+      }
+      .mdp-toggle:focus-within { box-shadow: 0 0 0 2px ${t.bg}, 0 0 0 4px ${t.accent}; border-radius: 22px; }
       .mdp-fade-in { animation: mdpFade .5s ease both; }
       @keyframes mdpFade { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform:none;} }
       .mdp-modal-backdrop { animation: mdpBackdropIn .2s ease both; }

@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { X, Expand, ShoppingBag } from "lucide-react";
 import {
   THEMES, ital, LANGUAGES, UI_STRINGS, TRANSLATION_LANG_KEY,
-  applyTranslation,
+  applyTranslation, TYPE, SPACE,
   GlobalStyle, BranchDivider, Logo,
 } from "./shared";
 import { optimizedImageUrl } from "./cloudinary";
@@ -98,7 +98,7 @@ function LinkButton({ href, icon, bg, children }) {
       <span
         style={{
           background: bg, color: "#fff", display: "flex", alignItems: "center",
-          padding: "9px 16px", fontSize: 12.5, fontWeight: 600, letterSpacing: 0.2, whiteSpace: "nowrap",
+          padding: "9px 16px", fontSize: TYPE.smallPlus, fontWeight: 600, letterSpacing: 0.2, whiteSpace: "nowrap",
         }}
       >
         {children}
@@ -182,7 +182,7 @@ export default function ClientView({ menu, onGoAdmin }) {
   const renderPrice = (price) => {
     const isRequest = /richiesta/i.test(price || "");
     return (
-      <span className="mdp-display" style={{ fontStyle: ital(t), fontWeight: 600, color: t.accent, fontSize: isRequest ? 13 : 17, letterSpacing: isRequest ? 1 : 0 }}>
+      <span className="mdp-display" style={{ fontStyle: ital(t), fontWeight: 600, color: t.accent, fontSize: isRequest ? TYPE.body : TYPE.subhead, letterSpacing: isRequest ? 1 : 0 }}>
         {isRequest ? ui.onRequest : `€ ${price}`}
       </span>
     );
@@ -205,7 +205,7 @@ export default function ClientView({ menu, onGoAdmin }) {
               color: lang === l.code ? t.card : t.inkSoft,
               borderRadius: 20,
               padding: "4px 12px",
-              fontSize: 11.5,
+              fontSize: TYPE.labelPlus,
               letterSpacing: 0.5,
               cursor: "pointer",
               fontFamily: t.fontBody,
@@ -220,13 +220,13 @@ export default function ClientView({ menu, onGoAdmin }) {
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
           <Logo width={190} />
         </div>
-        <div className="mdp-display" style={{ fontSize: "clamp(30px,7vw,52px)", fontStyle: ital(t), fontWeight: 600, lineHeight: 1.05 }}>
+        <div className="mdp-display" style={{ fontSize: TYPE.hero, fontStyle: ital(t), fontWeight: 600, lineHeight: 1.05 }}>
           {displayMenu.restaurantName}
         </div>
-        <div style={{ marginTop: 12, fontSize: 15, color: t.inkSoft, maxWidth: 440, marginInline: "auto" }}>
+        <div style={{ marginTop: 12, fontSize: TYPE.lead, color: t.inkSoft, maxWidth: 440, marginInline: "auto" }}>
           {displayMenu.tagline}
         </div>
-        <div style={{ marginTop: 10, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: t.secondary }}>
+        <div style={{ marginTop: 10, fontSize: TYPE.label, letterSpacing: 2, textTransform: "uppercase", color: t.secondary }}>
           {menu.location}
         </div>
         <div style={{ display: "flex", justifyContent: "center", marginTop: 20 }}>
@@ -250,7 +250,7 @@ export default function ClientView({ menu, onGoAdmin }) {
             className="mdp-tab"
             style={{
               background: "none", border: "none", cursor: "pointer",
-              fontFamily: t.fontBody, fontSize: 12.5, letterSpacing: 1,
+              fontFamily: t.fontBody, fontSize: TYPE.smallPlus, letterSpacing: 1,
               textTransform: "uppercase", paddingBottom: 6,
               color: active === c.id ? t.primary : t.inkSoft,
               borderBottom: active === c.id ? `2px solid ${t.accent}` : "2px solid transparent",
@@ -270,10 +270,10 @@ export default function ClientView({ menu, onGoAdmin }) {
             style={{ paddingTop: 44, scrollMarginTop: 60 }}
             className="mdp-fade-in"
           >
-            <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: t.secondary, marginBottom: 4, textAlign: "center" }}>
+            <div style={{ fontSize: TYPE.label, letterSpacing: 2, textTransform: "uppercase", color: t.secondary, marginBottom: 4, textAlign: "center" }}>
               {cat.subtitle}
             </div>
-            <div className="mdp-display" style={{ fontSize: 26, fontStyle: ital(t), fontWeight: 600, color: t.primary, textAlign: "center" }}>
+            <div className="mdp-display" style={{ fontSize: TYPE.display, fontStyle: ital(t), fontWeight: 600, color: t.primary, textAlign: "center" }}>
               {cat.name}
             </div>
             <div style={{ margin: "10px 0 20px", display: "flex", justifyContent: "center" }}>
@@ -291,7 +291,7 @@ export default function ClientView({ menu, onGoAdmin }) {
                   tabIndex={hasImage ? 0 : undefined}
                   onClick={hasImage ? () => setZoomedItemId(item.id) : undefined}
                   onKeyDown={hasImage ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoomedItemId(item.id); } } : undefined}
-                  style={{ padding: "12px 8px", borderRadius: 6, display: "flex", gap: 14, cursor: hasImage ? "pointer" : "default", outline: "none" }}
+                  style={{ padding: `${SPACE.md}px ${SPACE.sm}px`, borderRadius: 6, display: "flex", gap: 14, cursor: hasImage ? "pointer" : "default" }}
                 >
                   {hasImage && (
                     <div style={{ position: "relative", flexShrink: 0 }}>
@@ -313,10 +313,10 @@ export default function ClientView({ menu, onGoAdmin }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 16, fontWeight: 500 }}>{item.name}</span>
+                        <span style={{ fontSize: TYPE.itemName, fontWeight: 500 }}>{item.name}</span>
                         {item.tag && (
                           <span style={{
-                            fontSize: 9.5, letterSpacing: 1, textTransform: "uppercase",
+                            fontSize: TYPE.micro, letterSpacing: 1, textTransform: "uppercase",
                             color: t.bg, background: t.secondary, padding: "2px 7px", borderRadius: 20,
                           }}>
                             {item.tag}
@@ -327,7 +327,7 @@ export default function ClientView({ menu, onGoAdmin }) {
                       {renderPrice(item.price)}
                     </div>
                     {item.description && (
-                      <div style={{ fontSize: 13, color: t.inkSoft, fontStyle: ital(t), marginTop: 4, maxWidth: 560 }}>
+                      <div style={{ fontSize: TYPE.body, color: t.inkSoft, fontStyle: ital(t), marginTop: 4, maxWidth: 560 }}>
                         {item.description}
                       </div>
                     )}
@@ -341,13 +341,13 @@ export default function ClientView({ menu, onGoAdmin }) {
       </main>
 
       <footer style={{ textAlign: "center", padding: "30px 20px 40px", borderTop: `1px solid ${t.line}` }}>
-        <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: 15, color: t.primary }}>
+        <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.lead, color: t.primary }}>
           {displayMenu.restaurantName}
         </div>
-        <div style={{ fontSize: 11.5, color: t.inkSoft, marginTop: 4 }}>
+        <div style={{ fontSize: TYPE.labelPlus, color: t.inkSoft, marginTop: 4 }}>
           {menu.location} · {displayMenu.footerNote}
         </div>
-        <div style={{ fontSize: 10.5, color: t.inkSoft, opacity: 0.6, marginTop: 14 }}>
+        <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft, opacity: 0.6, marginTop: 14 }}>
           © 2026 {displayMenu.restaurantName}
         </div>
 
@@ -387,7 +387,7 @@ export default function ClientView({ menu, onGoAdmin }) {
           className="mdp-btn"
           style={{
             marginTop: 22, background: "none", border: "none", cursor: "pointer",
-            fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft, opacity: 0.55,
+            fontSize: TYPE.tinyPlus, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft, opacity: 0.55,
           }}
         >
           {ui.manageMenu}
@@ -434,12 +434,12 @@ export default function ClientView({ menu, onGoAdmin }) {
             </div>
             <div style={{ padding: "20px 22px 24px" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                <span className="mdp-display" style={{ fontStyle: ital(t), fontSize: 22, fontWeight: 600, color: t.primary }}>
+                <span className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.modalTitle, fontWeight: 600, color: t.primary }}>
                   {zoomedItem.name}
                 </span>
                 {zoomedItem.tag && (
                   <span style={{
-                    fontSize: 10, letterSpacing: 1, textTransform: "uppercase",
+                    fontSize: TYPE.tiny, letterSpacing: 1, textTransform: "uppercase",
                     color: t.bg, background: t.secondary, padding: "3px 9px", borderRadius: 20,
                   }}>
                     {zoomedItem.tag}
@@ -450,7 +450,7 @@ export default function ClientView({ menu, onGoAdmin }) {
                 {renderPrice(zoomedItem.price)}
               </div>
               {zoomedItem.description && (
-                <div style={{ fontSize: 14, color: t.inkSoft, fontStyle: ital(t), lineHeight: 1.5 }}>
+                <div style={{ fontSize: TYPE.bodyLg, color: t.inkSoft, fontStyle: ital(t), lineHeight: 1.5 }}>
                   {zoomedItem.description}
                 </div>
               )}

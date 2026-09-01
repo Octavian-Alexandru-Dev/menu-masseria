@@ -5,7 +5,7 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer } from "lucide-react";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
-import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation } from "./shared";
+import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation, FALLBACK_STYLE, TYPE } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 
 // Legge e valida un file .json scelto per l'importazione: usato sia dal
@@ -76,40 +76,40 @@ function AdminLogin({ onBack, theme }) {
     <div className="mdp-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <GlobalStyle t={t} />
       <form onSubmit={submit} style={{
-        background: t.card, border: `1px solid ${t.line}`, borderRadius: 10,
+        ...cardStyle(t),
         padding: "36px 30px", width: "100%", maxWidth: 340, boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
       }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
           <Logo width={140} />
         </div>
-        <div className="mdp-display" style={{ textAlign: "center", fontStyle: ital(t), fontSize: 22, fontWeight: 600, color: t.primary }}>
+        <div className="mdp-display" style={{ textAlign: "center", fontStyle: ital(t), fontSize: TYPE.modalTitle, fontWeight: 600, color: t.primary }}>
           Gestione menù
         </div>
-        <div style={{ textAlign: "center", fontSize: 12.5, color: t.inkSoft, marginTop: 6, marginBottom: 22 }}>
+        <div style={{ textAlign: "center", fontSize: TYPE.smallPlus, color: t.inkSoft, marginTop: 6, marginBottom: 22 }}>
           Accedi per modificare il menù di Masseria della Piana
         </div>
 
-        <label style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Email</label>
+        <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Email</label>
         <input
           type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus
-          style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 16, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: 14 }}
+          style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 16, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg }}
         />
-        <label style={{ fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Password</label>
+        <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Password</label>
         <input
           type="password" value={pass} onChange={(e) => setPass(e.target.value)}
-          style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 8, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: 14 }}
+          style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 8, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg }}
         />
 
         {error && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: 12.5, marginTop: 8 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginTop: 8 }}>
             <AlertCircle size={14} /> {error}
           </div>
         )}
 
         <button type="submit" disabled={busy} className="mdp-btn" style={{
           width: "100%", marginTop: 18, padding: "11px 0", background: t.primary, color: t.bg,
-          border: "none", borderRadius: 6, fontSize: 13.5, letterSpacing: 1, textTransform: "uppercase",
-          cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1,
+          border: "none", borderRadius: 6, fontSize: TYPE.bodyPlus, letterSpacing: 1, textTransform: "uppercase",
+          cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         }}>
           <Lock size={14} /> {busy ? "Accesso…" : "Accedi"}
@@ -117,7 +117,7 @@ function AdminLogin({ onBack, theme }) {
 
         <button type="button" onClick={onBack} className="mdp-btn" style={{
           width: "100%", marginTop: 10, padding: "9px 0", background: "none",
-          border: "none", color: t.inkSoft, fontSize: 12.5, cursor: "pointer",
+          border: "none", color: t.inkSoft, fontSize: TYPE.smallPlus, cursor: "pointer",
         }}>
           ← Torna al menù
         </button>
@@ -136,11 +136,11 @@ function AdminBootstrap({ onImport, onExit, importError }) {
   return (
     <div className="mdp-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 20, minHeight: "100vh" }}>
       <GlobalStyle t={t} />
-      <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: "32px 28px", width: "100%", maxWidth: 420, textAlign: "center", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" }}>
-        <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: 20, fontWeight: 600, color: t.primary, marginBottom: 10 }}>
+      <div style={{ ...cardStyle(t), padding: "32px 28px", width: "100%", maxWidth: 420, textAlign: "center", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" }}>
+        <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary, marginBottom: 10 }}>
           Nessun menù trovato
         </div>
-        <div style={{ fontSize: 13, color: t.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
+        <div style={{ fontSize: TYPE.body, color: t.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
           Il documento del menù non esiste ancora su Firestore. Importa un backup JSON per iniziare — potrai rivedere tutto prima di salvarlo.
         </div>
         <label className="mdp-btn" style={{ ...btnPrimary(t), cursor: "pointer", margin: "0 auto", width: "fit-content" }}>
@@ -151,11 +151,11 @@ function AdminBootstrap({ onImport, onExit, importError }) {
           />
         </label>
         {importError && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", color: t.accent2, fontSize: 12.5, marginTop: 14 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginTop: 14 }}>
             <AlertCircle size={14} /> {importError}
           </div>
         )}
-        <button onClick={onExit} className="mdp-btn" style={{ width: "100%", marginTop: 16, padding: "9px 0", background: "none", border: "none", color: t.inkSoft, fontSize: 12.5, cursor: "pointer" }}>
+        <button onClick={onExit} className="mdp-btn" style={{ width: "100%", marginTop: 16, padding: "9px 0", background: "none", border: "none", color: t.inkSoft, fontSize: TYPE.smallPlus, cursor: "pointer" }}>
           ← Torna al menù
         </button>
       </div>
@@ -457,9 +457,9 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
 
   const inputStyle = {
     width: "100%", padding: "8px 10px", border: `1px solid ${t.line}`, borderRadius: 6,
-    background: t.bg, color: t.ink, fontSize: 13.5,
+    background: t.bg, color: t.ink, fontSize: TYPE.bodyPlus,
   };
-  const labelStyle = { fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, display: "block", marginBottom: 4 };
+  const labelStyle = { fontSize: TYPE.tiny, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, display: "block", marginBottom: 4 };
 
   return (
     <div className="mdp-root">
@@ -473,8 +473,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Logo width={56} />
           <div>
-            <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: 17, fontWeight: 600 }}>Gestione menù</div>
-            <div style={{ fontSize: 10.5, color: t.inkSoft }}>{menu.restaurantName}</div>
+            <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.subhead, fontWeight: 600 }}>Gestione menù</div>
+            <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft }}>{menu.restaurantName}</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -482,7 +482,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
             onClick={onUndo}
             disabled={!canUndo}
             className="mdp-btn"
-            style={{ ...btnGhost(t), opacity: canUndo ? 1 : 0.5, cursor: canUndo ? "pointer" : "default" }}
+            style={btnGhost(t)}
             title="Annulla l'ultima modifica"
           >
             <RotateCcw size={13} /> Annulla
@@ -502,7 +502,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
  {(savedAt || saveError) && (
         <div style={{
           padding: saveError ? "12px 20px" : "8px 20px",
-          fontSize: saveError ? 13 : 12,
+          fontSize: saveError ? TYPE.body : TYPE.small,
           display: "flex", alignItems: "flex-start", gap: 8,
           color: saveError ? "#fff" : t.secondary,
           background: saveError ? t.accent2 : "transparent",
@@ -516,8 +516,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
 
       <div style={{ maxWidth: 780, margin: "0 auto", padding: "24px 20px 100px" }}>
         {/* Identity + theme */}
-        <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginBottom: 24 }}>
-          <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
+        <div style={{ ...cardStyle(t), marginBottom: 24 }}>
+          <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
             Identità del locale
           </div>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
@@ -555,7 +555,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                   }}
                 >
                   <span style={{ width: 14, height: 14, borderRadius: "50%", background: th.primary, display: "inline-block" }} />
-                  <span style={{ fontSize: 12, color: th.ink }}>{th.name}</span>
+                  <span style={{ fontSize: TYPE.small, color: th.ink }}>{th.name}</span>
                 </button>
               ))}
             </div>
@@ -563,8 +563,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
         </div>
 
         {/* Recensioni */}
-        <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginBottom: 24 }}>
-          <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ ...cardStyle(t), marginBottom: 24 }}>
+          <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
             <Star size={13} /> Pulsanti recensioni
           </div>
           <div style={{ display: "grid", gap: 18 }}>
@@ -603,14 +603,14 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
               />
             </div>
           </div>
-          <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 12, lineHeight: 1.4 }}>
+          <div style={{ fontSize: TYPE.label, color: t.inkSoft, marginTop: 12, lineHeight: 1.4 }}>
             I pulsanti compaiono nel piè di pagina del menù solo quando sono attivi e hanno un link impostato.
           </div>
         </div>
 
         {/* Social e shop */}
-        <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginBottom: 24 }}>
-          <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ ...cardStyle(t), marginBottom: 24 }}>
+          <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
             <ShoppingBag size={13} /> Social e shop online
           </div>
           <div style={{ display: "grid", gap: 18 }}>
@@ -666,7 +666,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
               />
             </div>
           </div>
-          <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 12, lineHeight: 1.4 }}>
+          <div style={{ fontSize: TYPE.label, color: t.inkSoft, marginTop: 12, lineHeight: 1.4 }}>
             I pulsanti compaiono nel piè di pagina del menù, insieme a quelli delle recensioni, solo quando sono attivi e hanno un link impostato.
           </div>
         </div>
@@ -674,7 +674,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
         {/* Selettore lingua: sceglie se sotto si edita il testo italiano (sorgente,
             struttura completa) o la traduzione di una lingua (solo testo). */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: t.inkSoft }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: TYPE.label, color: t.inkSoft }}>
             <Languages size={13} /> Lingua:
           </span>
           {LANGUAGES.map((l) => {
@@ -689,14 +689,14 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                   border: `1px solid ${t.line}`,
                   background: lang === l.code ? t.primary : "transparent",
                   color: lang === l.code ? t.bg : t.inkSoft,
-                  borderRadius: 20, padding: "5px 12px", fontSize: 12, cursor: "pointer",
+                  borderRadius: 20, padding: "5px 12px", fontSize: TYPE.small, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 5,
                 }}
               >
                 {l.label}
                 {hasTranslation && missing > 0 && (
                   <span style={{
-                    fontSize: 9.5, minWidth: 14, height: 14, borderRadius: 8, padding: "0 4px",
+                    fontSize: TYPE.micro, minWidth: 14, height: 14, borderRadius: 8, padding: "0 4px",
                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                     background: lang === l.code ? t.bg : t.accent2, color: lang === l.code ? t.primary : "#fff",
                   }}>
@@ -736,13 +736,13 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           const isOpen = openCats.has(cat.id);
           const catDelete = confirmDelete?.type === "cat" && confirmDelete.catId === cat.id;
           return (
-            <div key={cat.id} style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, marginBottom: 16, overflow: "hidden", opacity: cat.visible === false ? 0.6 : 1 }}>
+            <div key={cat.id} style={{ ...cardStyle(t), padding: 0, marginBottom: 16, overflow: "hidden", opacity: cat.visible === false ? 0.6 : 1 }}>
               <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: "pointer" }} onClick={() => toggleCat(cat.id)}>
                   {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   <div style={{ flex: 1 }}>
-                    <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: 16, fontWeight: 600 }}>{cat.name || "Senza nome"}</div>
-                    <div style={{ fontSize: 11, color: t.inkSoft }}>{cat.items.length} voci {cat.visible === false && "· nascosta ai clienti"}</div>
+                    <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.itemName, fontWeight: 600 }}>{cat.name || "Senza nome"}</div>
+                    <div style={{ fontSize: TYPE.label, color: t.inkSoft }}>{cat.items.length} voci {cat.visible === false && "· nascosta ai clienti"}</div>
                   </div>
                 </div>
                 <Toggle
@@ -754,7 +754,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                 <button
                   onClick={(e) => { e.stopPropagation(); catDelete ? removeCategory(cat.id) : setConfirmDelete({ type: "cat", catId: cat.id }); }}
                   className="mdp-btn"
-                  style={{ ...btnGhost(t), color: t.accent2, fontSize: 11 }}
+                  style={{ ...btnDanger(t), fontSize: TYPE.label }}
+                  aria-label={catDelete ? "Conferma eliminazione categoria" : "Elimina categoria"}
                 >
                   <Trash2 size={13} /> {catDelete ? "Conferma?" : ""}
                 </button>
@@ -782,7 +783,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                           {item.image ? (
                             <img src={optimizedImageUrl(item.image, { width: 112 })} alt={item.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain", background: t.bgAlt, border: `1px solid ${t.line}`, flexShrink: 0 }} />
                           ) : (
-                            <div style={{ width: 56, height: 56, borderRadius: 8, border: `1px dashed ${t.line}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: t.inkSoft, textAlign: "center" }}>
+                            <div style={{ width: 56, height: 56, borderRadius: 8, border: `1px dashed ${t.line}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: TYPE.micro, color: t.inkSoft, textAlign: "center" }}>
                               nessuna foto
                             </div>
                           )}
@@ -810,14 +811,14 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                                   type="button"
                                   onClick={() => updateItem(cat.id, item.id, "image", "")}
                                   className="mdp-btn"
-                                  style={{ ...btnGhost(t), color: t.accent2 }}
+                                  style={btnDanger(t)}
                                 >
                                   <ImageOff size={12} /> Rimuovi
                                 </button>
                               )}
                             </div>
                             {uploadErrors[item.id] && (
-                              <div style={{ display: "flex", gap: 5, alignItems: "center", color: t.accent2, fontSize: 11.5, marginTop: 6 }}>
+                              <div style={{ display: "flex", gap: 5, alignItems: "center", color: t.accent2, fontSize: TYPE.labelPlus, marginTop: 6 }}>
                                 <AlertCircle size={12} /> {uploadErrors[item.id]}
                               </div>
                             )}
@@ -852,7 +853,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                           <button
                             onClick={() => (itDelete ? removeItem(cat.id, item.id) : setConfirmDelete({ type: "item", itemId: item.id, catId: cat.id }))}
                             className="mdp-btn"
-                            style={{ ...btnGhost(t), color: t.accent2 }}
+                            style={btnDanger(t)}
                           >
                             <Trash2 size={12} /> {itDelete ? "Conferma eliminazione" : "Elimina voce"}
                           </button>
@@ -879,8 +880,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
         {/* Esportazione/importazione JSON (backup manuale) e versione
             stampabile in PDF (tramite la finestra di stampa del browser,
             vedi src/PrintMenu.jsx). */}
-        <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginTop: 24 }}>
-          <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
+        <div style={{ ...cardStyle(t), marginTop: 24 }}>
+          <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
             Esportazione e backup
           </div>
 
@@ -897,22 +898,22 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
             </label>
           </div>
           {importError && (
-            <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: 12.5, marginTop: 10 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginTop: 10 }}>
               <AlertCircle size={14} /> {importError}
             </div>
           )}
-          <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 10, lineHeight: 1.4 }}>
+          <div style={{ fontSize: TYPE.label, color: t.inkSoft, marginTop: 10, lineHeight: 1.4 }}>
             L'importazione sostituisce il menù nell'editor (non salva subito): rivedi le modifiche e premi "Salva modifiche" quando sei pronto.
           </div>
 
           <hr className="mdp-hairline" style={{ margin: "18px 0" }} />
 
-          <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, marginBottom: 14 }}>
+          <div style={{ fontSize: TYPE.label, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, marginBottom: 14 }}>
             Versione stampabile (PDF)
           </div>
 
           <PdfOptionsGroup title="Contenuto" t={t}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: t.inkSoft }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, color: t.inkSoft }}>
               Lingua:
               <select
                 value={pdfLang}
@@ -963,7 +964,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                       border: `1px solid ${t.line}`,
                       background: included ? t.primary : "transparent",
                       color: included ? t.bg : t.inkSoft,
-                      borderRadius: 20, padding: "4px 11px", fontSize: 11.5, cursor: "pointer",
+                      borderRadius: 20, padding: "4px 11px", fontSize: TYPE.labelPlus, cursor: "pointer",
                     }}
                   >
                     {cat.name || "Senza nome"}
@@ -977,11 +978,11 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
             <Printer size={13} /> Esporta PDF / Stampa
           </button>
           {pdfError && (
-            <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: 12.5, marginTop: 10 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginTop: 10 }}>
               <AlertCircle size={14} /> {pdfError}
             </div>
           )}
-          <div style={{ fontSize: 11, color: t.inkSoft, marginTop: 10, lineHeight: 1.4 }}>
+          <div style={{ fontSize: TYPE.label, color: t.inkSoft, marginTop: 10, lineHeight: 1.4 }}>
             Si apre una scheda con l'anteprima di stampa: usa "Salva come PDF" nella finestra di stampa del browser per ottenere un file.
           </div>
         </div>
@@ -1006,15 +1007,15 @@ function TranslationEditor({
 
   if (!translation) {
     return (
-      <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 24, marginBottom: 24, textAlign: "center" }}>
-        <div style={{ fontSize: 13, color: t.inkSoft, marginBottom: 14 }}>
+      <div style={{ ...cardStyle(t), padding: 24, marginBottom: 24, textAlign: "center" }}>
+        <div style={{ fontSize: TYPE.body, color: t.inkSoft, marginBottom: 14 }}>
           Nessuna traduzione {langLabel} presente per questo menù.
         </div>
         <button onClick={onGenerate} disabled={generating} className="mdp-btn" style={{ ...btnPrimary(t), margin: "0 auto" }}>
           <Sparkles size={13} /> {generating ? "Generazione…" : `Genera traduzione automatica (${langLabel})`}
         </button>
         {generateError && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", color: t.accent2, fontSize: 12.5, marginTop: 12 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginTop: 12 }}>
             <AlertCircle size={14} /> {generateError}
           </div>
         )}
@@ -1029,7 +1030,7 @@ function TranslationEditor({
           onClick={confirmDelete ? onConfirmDelete : onRequestDelete}
           onBlur={onCancelDelete}
           className="mdp-btn"
-          style={{ ...btnGhost(t), color: t.accent2, fontSize: 11.5 }}
+          style={{ ...btnDanger(t), fontSize: TYPE.labelPlus }}
         >
           <Trash2 size={12} /> {confirmDelete ? `Conferma eliminazione traduzione ${langLabel}` : `Elimina traduzione ${langLabel}`}
         </button>
@@ -1037,9 +1038,9 @@ function TranslationEditor({
       {missing > 0 && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap",
-          background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16,
+          ...cardStyle(t), padding: "12px 16px", marginBottom: 16,
         }}>
-          <span style={{ fontSize: 12.5, color: t.inkSoft }}>
+          <span style={{ fontSize: TYPE.smallPlus, color: t.inkSoft }}>
             {missing} {missing === 1 ? "voce non ancora tradotta" : "voci non ancora tradotte"} in {langLabel}.
           </span>
           <button onClick={onGenerate} disabled={generating} className="mdp-btn" style={btnGhost(t)}>
@@ -1048,13 +1049,13 @@ function TranslationEditor({
         </div>
       )}
       {generateError && (
-        <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: 12.5, marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginBottom: 16 }}>
           <AlertCircle size={14} /> {generateError}
         </div>
       )}
 
-      <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20, marginBottom: 24 }}>
-        <div style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
+      <div style={{ ...cardStyle(t), marginBottom: 24 }}>
+        <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
           Identità del locale — {langLabel}
         </div>
         <div style={{ display: "grid", gap: 14 }}>
@@ -1076,7 +1077,7 @@ function TranslationEditor({
       {menu.categories.map((cat) => {
         const tCat = translation.categories?.[cat.id] || {};
         return (
-          <div key={cat.id} style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 16, marginBottom: 16 }}>
+          <div key={cat.id} style={{ ...cardStyle(t), padding: 16, marginBottom: 16 }}>
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", marginBottom: 14 }}>
               <div>
                 <span style={labelStyle}>Nome categoria</span>
@@ -1127,7 +1128,7 @@ function TranslationEditor({
 function PdfOptionsGroup({ title, t, children }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase", color: t.secondary, marginBottom: 8 }}>
+      <div style={{ fontSize: TYPE.tiny, letterSpacing: 0.8, textTransform: "uppercase", color: t.secondary, marginBottom: 8 }}>
         {title}
       </div>
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
@@ -1141,7 +1142,7 @@ function PdfOptionsGroup({ title, t, children }) {
 // formato carta): stesso stile pill già usato per il selettore di lingua.
 function PdfPillGroup({ t, label, options, value, onChange }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: t.inkSoft }}>
+    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, color: t.inkSoft }}>
       {label}:
       <span style={{ display: "flex", gap: 4 }}>
         {options.map((opt) => (
@@ -1154,7 +1155,7 @@ function PdfPillGroup({ t, label, options, value, onChange }) {
               border: `1px solid ${t.line}`,
               background: value === opt.value ? t.primary : "transparent",
               color: value === opt.value ? t.bg : t.inkSoft,
-              borderRadius: 20, padding: "3px 10px", fontSize: 11.5, cursor: "pointer",
+              borderRadius: 20, padding: "3px 10px", fontSize: TYPE.labelPlus, cursor: "pointer",
             }}
           >
             {opt.label}
@@ -1170,8 +1171,8 @@ function Toggle({ t, checked, onChange, label }) {
   // gli span decorativi sotto sono puramente visivi (pointer-events: none),
   // così il click viene gestito una volta sola in modo affidabile.
   return (
-    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer", color: t.inkSoft }}>
-      <span style={{ position: "relative", width: 36, height: 21, flexShrink: 0, display: "inline-block" }}>
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: TYPE.smallPlus, cursor: "pointer", color: t.inkSoft }}>
+      <span className="mdp-toggle" style={{ position: "relative", width: 36, height: 21, flexShrink: 0, display: "inline-block" }}>
         <span
           style={{
             position: "absolute", inset: 0, borderRadius: 22, pointerEvents: "none",
@@ -1203,15 +1204,21 @@ function btnPrimary(t) {
   return {
     display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px",
     background: t.primary, color: t.bg, border: "none", borderRadius: 6,
-    fontSize: 12.5, letterSpacing: 0.5, cursor: "pointer",
+    fontSize: TYPE.smallPlus, letterSpacing: 0.5, cursor: "pointer",
   };
 }
 function btnGhost(t) {
   return {
     display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px",
     background: "none", color: t.ink, border: `1px solid ${t.line}`, borderRadius: 6,
-    fontSize: 12.5, cursor: "pointer",
+    fontSize: TYPE.smallPlus, cursor: "pointer",
   };
+}
+function btnDanger(t) {
+  return { ...btnGhost(t), color: t.accent2 };
+}
+function cardStyle(t) {
+  return { background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20 };
 }
 
 /* ============================== ADMIN (login + pannello) ============================== */
@@ -1239,7 +1246,7 @@ export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveErro
 
   if (!authReady) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#6E2A2A" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...FALLBACK_STYLE }}>
         Caricamento…
       </div>
     );

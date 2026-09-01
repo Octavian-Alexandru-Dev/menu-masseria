@@ -14,7 +14,7 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase-db";
-import { MENU_DOC_PATH } from "./shared";
+import { MENU_DOC_PATH, FALLBACK_STYLE } from "./shared";
 import ClientView from "./ClientView";
 
 const Admin = lazy(() => import("./Admin"));
@@ -166,7 +166,7 @@ export default function App() {
     return (
       <Suspense
         fallback={
-          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#6E2A2A" }}>
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...FALLBACK_STYLE }}>
             Caricamento anteprima di stampa…
           </div>
         }
@@ -183,7 +183,7 @@ export default function App() {
     return (
       <Suspense
         fallback={
-          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#6E2A2A" }}>
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...FALLBACK_STYLE }}>
             Caricamento gestione…
           </div>
         }
@@ -207,13 +207,13 @@ export default function App() {
     return (
       <div style={{
         minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "center", gap: 14, fontFamily: "sans-serif", color: "#6E2A2A", padding: 24, textAlign: "center",
+        justifyContent: "center", gap: 14, padding: 24, textAlign: "center", ...FALLBACK_STYLE,
       }}>
         <div>{loadNotice || "Caricamento menù…"}</div>
         {loadNotice && (
           <button
             onClick={() => window.location.reload()}
-            style={{ padding: "8px 16px", border: "1px solid #6E2A2A", borderRadius: 6, background: "none", color: "#6E2A2A", cursor: "pointer", fontSize: 13 }}
+            style={{ padding: "8px 16px", border: `1px solid ${FALLBACK_STYLE.color}`, borderRadius: 6, background: "none", color: FALLBACK_STYLE.color, cursor: "pointer", fontSize: 13 }}
           >
             Ricarica pagina
           </button>
