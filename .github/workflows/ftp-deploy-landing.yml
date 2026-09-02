@@ -6,12 +6,25 @@ on:
       - main
     paths:
       - "landing_page/**"
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Diagnose FTP host reachability
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+        run: |
+          echo "Runner outbound IP:"
+          curl -s --max-time 10 https://ifconfig.me || true
+          echo
+          for port in 21 22 990; do
+            echo "--- Testing $FTP_HOST:$port ---"
+            timeout 8 bash -c "cat < /dev/null > /dev/tcp/$FTP_HOST/$port" && echo "OPEN" || echo "CLOSED/FILTERED"
+          done
 
       - name: Upload landing_page/ via FTPS
         env:
