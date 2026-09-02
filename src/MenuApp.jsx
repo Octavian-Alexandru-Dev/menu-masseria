@@ -9,8 +9,10 @@
 //    riappare all'istante anche offline, mentre si aggiorna in sottofondo;
 //  - se il primo caricamento in assoluto è lento (rete scarsa) o il
 //    documento non esiste ancora su Firestore, non c'è più un menù di
-//    esempio da mostrare al suo posto (rimosso volutamente): si resta su un
-//    messaggio esplicito finché la connessione non porta i dati veri.
+//    esempio da mostrare al suo posto (rimosso volutamente): si mostra uno
+//    spinner e si tenta la connessione fino a MAX_LOAD_ATTEMPTS volte
+//    (ogni tentativo ha il suo timeout); solo dopo l'ultimo tentativo
+//    fallito si resta su un messaggio esplicito con un pulsante di reload.
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase-db";
@@ -20,7 +22,8 @@ import ClientView from "./ClientView";
 const Admin = lazy(() => import("./Admin"));
 const PrintMenu = lazy(() => import("./PrintMenu"));
 
-const LOAD_TIMEOUT_MS = 6000;
+const LOAD_ATTEMPT_TIMEOUT_MS = 5000; // timeout di ciascun tentativo
+const MAX_LOAD_ATTEMPTS = 3; // numero di tentativi automatici prima del messaggio finale
 const SAVE_TIMEOUT_MS = 8000;
 const MAX_UNDO_STEPS = 20;
 
@@ -31,6 +34,7 @@ export default function App() {
   const [savedAt, setSavedAt] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [loadNotice, setLoadNotice] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(1);
   const [undoStack, setUndoStack] = useState([]); // stati precedenti di menu, il più recente in fondo
 
   const viewRef = useRef(view);
@@ -48,46 +52,71 @@ export default function App() {
   useEffect(() => {
     if (isPrintMode) return;
 
-    let gotAnyData = false;
-    const timeoutId = setTimeout(() => {
-      if (!gotAnyData) {
-        setLoadNotice("Connessione lenta: il menù non è ancora arrivato. Verifica la connessione e attendi, oppure ricarica la pagina.");
-      }
-    }, LOAD_TIMEOUT_MS);
+    let cancelled = false;
+    let unsubscribe = () => {};
+    let timeoutId = null;
 
-    const unsubscribe = onSnapshot(
-      menuDocRef,
-      (snap) => {
-        gotAnyData = true;
-        clearTimeout(timeoutId);
-        if (snap.exists()) {
-          const loaded = snap.data();
-          if (loaded && loaded.theme === "cirò") loaded.theme = "ciro";
-          // Se sei in Gestione menù, NON sovrascriviamo le modifiche in corso
-          // con un aggiornamento in arrivo dal server o dalla cache.
-          setMenuState((prev) => {
-            if (!prev) return loaded;
-            if (viewRef.current === "admin") return prev;
-            return loaded;
-          });
-          setLoadNotice(null);
-        } else if (!snap.metadata.fromCache) {
-          // Il documento non esiste ancora su Firestore (prima configurazione,
-          // o database ripristinato): non c'è più un menù di esempio locale
-          // da mostrare al suo posto. Va creato dal pannello Admin (login
-          // possibile anche senza menù caricato — vedi Admin.jsx), es.
-          // importando un backup JSON.
-          setLoadNotice("Nessun menù trovato su Firestore. Accedi come amministratore per crearne uno (es. importando un backup JSON).");
+    // Ogni tentativo apre una propria sottoscrizione onSnapshot con un
+    // timeout dedicato: se scade senza dati, chiude la sottoscrizione e ne
+    // apre una nuova (fino a MAX_LOAD_ATTEMPTS volte). Solo dopo l'ultimo
+    // tentativo fallito mostriamo il messaggio esplicito con reload manuale.
+    const subscribe = (attempt) => {
+      let gotAnyData = false;
+      setLoadAttempt(attempt);
+
+      timeoutId = setTimeout(() => {
+        if (gotAnyData || cancelled) return;
+        unsubscribe();
+        if (attempt < MAX_LOAD_ATTEMPTS) {
+          subscribe(attempt + 1);
+        } else {
+          setLoadNotice("Connessione lenta: il menù non è ancora arrivato dopo diversi tentativi. Verifica la connessione, oppure ricarica la pagina.");
         }
-      },
-      (err) => {
-        clearTimeout(timeoutId);
-        console.error("[menu] onSnapshot error:", err);
-        setLoadNotice("Impossibile contattare il server. Verifica la connessione e riprova.");
-      }
-    );
+      }, LOAD_ATTEMPT_TIMEOUT_MS);
+
+      unsubscribe = onSnapshot(
+        menuDocRef,
+        (snap) => {
+          gotAnyData = true;
+          clearTimeout(timeoutId);
+          if (snap.exists()) {
+            const loaded = snap.data();
+            if (loaded && loaded.theme === "cirò") loaded.theme = "ciro";
+            // Se sei in Gestione menù, NON sovrascriviamo le modifiche in corso
+            // con un aggiornamento in arrivo dal server o dalla cache.
+            setMenuState((prev) => {
+              if (!prev) return loaded;
+              if (viewRef.current === "admin") return prev;
+              return loaded;
+            });
+            setLoadNotice(null);
+          } else if (!snap.metadata.fromCache) {
+            // Il documento non esiste ancora su Firestore (prima configurazione,
+            // o database ripristinato): non c'è più un menù di esempio locale
+            // da mostrare al suo posto. Va creato dal pannello Admin (login
+            // possibile anche senza menù caricato — vedi Admin.jsx), es.
+            // importando un backup JSON. Non ha senso ritentare in questo caso.
+            setLoadNotice("Nessun menù trovato su Firestore. Accedi come amministratore per crearne uno (es. importando un backup JSON).");
+          }
+        },
+        (err) => {
+          clearTimeout(timeoutId);
+          console.error(`[menu] onSnapshot error (tentativo ${attempt}/${MAX_LOAD_ATTEMPTS}):`, err);
+          if (cancelled) return;
+          if (attempt < MAX_LOAD_ATTEMPTS) {
+            unsubscribe();
+            subscribe(attempt + 1);
+          } else {
+            setLoadNotice("Impossibile contattare il server dopo diversi tentativi. Verifica la connessione e riprova.");
+          }
+        }
+      );
+    };
+
+    subscribe(1);
 
     return () => {
+      cancelled = true;
       clearTimeout(timeoutId);
       unsubscribe();
     };
@@ -209,7 +238,24 @@ export default function App() {
         minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center", gap: 14, padding: 24, textAlign: "center", ...FALLBACK_STYLE,
       }}>
-        <div>{loadNotice || "Caricamento menù…"}</div>
+        {!loadNotice && (
+          <>
+            <style>{`@keyframes mdpLoadSpin { to { transform: rotate(360deg); } }`}</style>
+            <div
+              aria-hidden="true"
+              style={{
+                width: 34, height: 34, borderRadius: "50%",
+                border: `3px solid ${FALLBACK_STYLE.color}33`,
+                borderTopColor: FALLBACK_STYLE.color,
+                animation: "mdpLoadSpin .8s linear infinite",
+              }}
+            />
+          </>
+        )}
+        <div role="status">
+          {loadNotice
+            || (loadAttempt > 1 ? `Nuovo tentativo di connessione… (${loadAttempt}/${MAX_LOAD_ATTEMPTS})` : "Caricamento menù…")}
+        </div>
         {loadNotice && (
           <button
             onClick={() => window.location.reload()}
