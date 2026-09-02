@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://masseria-della-piana.it/sitemap.xml

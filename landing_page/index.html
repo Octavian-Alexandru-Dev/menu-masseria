@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <meta name="theme-color" content="#1A1A1A">
+
+    <title>Masseria della Piana | Ristorante Agriturismo a Candidoni, Reggio Calabria</title>
+    <meta name="description" content="Masseria della Piana, il ristorante di Fattoria della Piana a Candidoni (RC): cucina calabrese di km 0, prodotti dell'azienda agricola. Scopri il menù, gli orari e come prenotare.">
+    <link rel="canonical" href="https://masseria-della-piana.it/">
+
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="restaurant">
+    <meta property="og:site_name" content="Masseria della Piana">
+    <meta property="og:title" content="Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)">
+    <meta property="og:description" content="Cucina calabrese di km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana.">
+    <meta property="og:image" content="https://masseria-della-piana.it/logo.jpg">
+    <meta property="og:url" content="https://masseria-della-piana.it/">
+    <meta property="og:locale" content="it_IT">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)">
+    <meta name="twitter:description" content="Cucina calabrese di km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana.">
+    <meta name="twitter:image" content="https://masseria-della-piana.it/logo.jpg">
+
+    <!-- schema.org/Restaurant -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Restaurant",
+      "name": "Masseria della Piana",
+      "image": "https://masseria-della-piana.it/logo.jpg",
+      "url": "https://masseria-della-piana.it/",
+      "telephone": "+39 348 100 0710",
+      "servesCuisine": ["Calabrese", "Italiana", "Mediterranea"],
+      "acceptsReservations": "True",
+      "menu": "https://menu-masseria-della-pian.web.app/",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Contrada Sovereto",
+        "addressLocality": "Candidoni",
+        "addressRegion": "RC",
+        "postalCode": "89020",
+        "addressCountry": "IT"
+      },
+      "openingHoursSpecification": [
+        {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+          "opens": "12:00",
+          "closes": "15:00"
+        },
+        {
+          "@type": "OpeningHoursSpecification",
+          "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+          "opens": "19:00",
+          "closes": "23:00",
+          "description": "Cena su prenotazione"
+        }
+      ],
+      "sameAs": [
+        "https://www.instagram.com/fattoriadellapiana/",
+        "https://www.facebook.com/FattoriaDellaPiana",
+        "https://www.tripadvisor.com/Restaurant_Review-g2282898-d4770660-Reviews-Masseria_della_Piana-Rosarno_Province_of_Reggio_Calabria_Calabria.html",
+        "https://share.google/jSPlEA4RyoXxJrFNq"
+      ]
+    }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #FFFFFF;
+            --bg-alt: #F5F5F4;
+            --card: #FFFFFF;
+            --ink: #1A1A1A;
+            --ink-soft: #6B6B6B;
+            --primary: #1A1A1A;
+            --secondary: #8A8A8A;
+            --accent: #B5602F;
+            --whatsapp: #25D366;
+            --line: rgba(0, 0, 0, 0.12);
+        }
+        * { box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            line-height: 1.5;
+        }
+        .wrap {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 0 20px 64px;
+        }
+        a { color: inherit; }
+
+        /* Hero */
+        header.hero {
+            text-align: center;
+            padding: 48px 20px 8px;
+        }
+        header.hero img.logo {
+            width: 190px;
+            height: auto;
+            display: block;
+            margin: 0 auto 20px;
+        }
+        h1 {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 700;
+            font-size: clamp(26px, 6.5vw, 36px);
+            margin: 0 0 10px;
+            color: var(--primary);
+            letter-spacing: -0.3px;
+        }
+        p.tagline {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 400;
+            font-size: 16px;
+            color: var(--ink-soft);
+            max-width: 460px;
+            margin: 0 auto 22px;
+        }
+        .divider { display: block; margin: 0 auto 28px; }
+
+        /* Buttons */
+        .cta-group { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            text-decoration: none;
+            padding: 15px 20px;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Roboto', sans-serif;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+            transition: transform .15s ease, filter .15s ease;
+        }
+        .btn:hover { transform: translateY(-2px); filter: brightness(1.05); }
+        .btn:active { transform: translateY(0) scale(0.98); filter: brightness(0.96); }
+        .btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+        }
+        .btn-primary { background: var(--primary); color: #FFFFFF; }
+        .btn-whatsapp { background: var(--whatsapp); color: #fff; }
+        .btn svg { flex-shrink: 0; }
+
+        /* Sections */
+        main { margin-top: 36px; }
+        section.intro {
+            text-align: center;
+            padding: 0 8px;
+            margin-bottom: 8px;
+        }
+        section.intro p {
+            font-size: 15px;
+            color: var(--ink-soft);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 24px 26px;
+            border-radius: 16px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+            margin-top: 28px;
+            border: 1px solid var(--line);
+        }
+        .card h2 {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            margin: 0 0 16px;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+        .card h2 svg { flex-shrink: 0; }
+
+        /* Hours */
+        ul.hours-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        ul.hours-list li {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 14.5px;
+            padding: 8px 0;
+            border-bottom: 1px dashed var(--line);
+        }
+        ul.hours-list li:last-child { border-bottom: none; }
+        ul.hours-list li span:first-child { color: var(--ink-soft); }
+        ul.hours-list li strong { color: var(--primary); font-weight: 600; text-align: right; }
+        p.hours-note {
+            font-size: 13px;
+            color: var(--ink-soft);
+            margin: 14px 0 0;
+            padding-top: 12px;
+            border-top: 1px dashed var(--line);
+        }
+
+        /* Booking form */
+        p.form-note {
+            font-size: 14px;
+            color: var(--ink-soft);
+            margin: -6px 0 18px;
+        }
+        .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+        .field-row { display: flex; gap: 12px; }
+        .field-row .field { flex: 1; min-width: 0; }
+        label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink-soft);
+        }
+        input, textarea {
+            font-family: 'Roboto', sans-serif;
+            font-size: 15px;
+            padding: 11px 13px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: var(--bg);
+            color: var(--ink);
+            width: 100%;
+        }
+        textarea { resize: vertical; min-height: 70px; }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(181, 96, 47, 0.15);
+        }
+        .booking-form .btn { width: 100%; border: none; cursor: pointer; margin-top: 6px; }
+        p.form-disclaimer {
+            font-size: 12.5px;
+            color: var(--ink-soft);
+            margin: 12px 0 0;
+            text-align: center;
+        }
+
+        /* Contacts */
+        .contact-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 15px;
+            margin-bottom: 14px;
+        }
+        .contact-row:last-of-type { margin-bottom: 0; }
+        .contact-row svg { flex-shrink: 0; margin-top: 2px; }
+        .contact-row a { text-decoration: none; font-weight: 600; color: var(--primary); }
+        .contact-row a:hover { text-decoration: underline; }
+
+        .map-container {
+            position: relative;
+            padding-bottom: 62%;
+            height: 0;
+            overflow: hidden;
+            border-radius: 10px;
+            margin-top: 18px;
+            border: 1px solid var(--line);
+        }
+        .map-container iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        /* Social / review row */
+        .social-title {
+            text-align: center;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--ink-soft);
+            margin: 40px 0 16px;
+        }
+        .social-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: stretch;
+            border-radius: 999px;
+            overflow: hidden;
+            text-decoration: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+            transition: transform .15s ease, filter .15s ease;
+        }
+        .pill:hover { transform: translateY(-2px); filter: brightness(1.05); }
+        .pill:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+        }
+        .pill .badge {
+            background: #fff;
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+        }
+        .pill .label {
+            color: #fff;
+            display: flex;
+            align-items: center;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        /* Repeat CTA */
+        .repeat-cta {
+            text-align: center;
+            margin-top: 44px;
+            padding: 30px 24px;
+            border-radius: 16px;
+            background: var(--bg-alt);
+        }
+        .repeat-cta p {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 500;
+            font-size: 16px;
+            color: var(--ink);
+            margin: 0 0 16px;
+        }
+        .repeat-cta .btn { display: inline-flex; }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px 10px;
+            font-size: 12.5px;
+            color: var(--ink-soft);
+        }
+        footer a { color: var(--ink-soft); text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+    <header class="hero">
+        <picture>
+            <source srcset="logo.webp" type="image/webp">
+            <img class="logo" src="logo.jpg" alt="Masseria della Piana" width="400" height="218" loading="eager">
+        </picture>
+        <h1>Masseria della Piana</h1>
+        <p class="tagline">Cucina calabrese di km 0 nella Piana di Gioia Tauro</p>
+
+        <svg class="divider" width="180" height="18" viewBox="0 0 180 18" fill="none" aria-hidden="true">
+            <path d="M2 9 H178" stroke="#B5602F" stroke-width="1" opacity="0.55"/>
+            <path d="M90 9 C 84 2, 74 2, 70 9 C 74 16, 84 16, 90 9 Z" fill="#B5602F" opacity="0.9"/>
+            <circle cx="60" cy="9" r="2" fill="#B5602F" opacity="0.7"/>
+            <circle cx="120" cy="9" r="2" fill="#B5602F" opacity="0.7"/>
+        </svg>
+
+        <div class="cta-group">
+            <a href="https://menu-masseria-della-pian.web.app/" class="btn btn-primary">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 4.5C4 3.67 4.67 3 5.5 3H16a3 3 0 0 1 3 3v14.5a.5.5 0 0 1-.79.41L16 19H5.5A1.5 1.5 0 0 1 4 17.5V4.5Z" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8h7M8 11.5h7M8 15h4" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/></svg>
+                Sfoglia il Menù Digitale
+            </a>
+            <a href="https://wa.me/393481000710?text=Ciao!%20Vorrei%20informazioni%20per%20prenotare%20un%20tavolo." target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.3A9 9 0 1 0 12 3Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.3 8.6c.2-.5.4-.5.6-.5h.5c.2 0 .4 0 .5.4.2.5.7 1.6.7 1.8.1.1.1.3 0 .4-.1.2-.2.3-.3.4-.1.2-.3.3-.4.4-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6-.1.2-.2.7-.8.9-1 .2-.3.4-.2.6-.1l1.7.8c.2.1.3.2.4.3.1.2.1.9-.2 1.4-.3.6-1.5 1.2-2.1 1.2-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1 0-1.5.8-2.2 1-2.5Z" fill="#fff"/></svg>
+                Scrivici su WhatsApp
+            </a>
+        </div>
+    </header>
+
+    <div class="wrap">
+        <main>
+            <section class="intro">
+                <p>Nel cuore della Piana di Gioia Tauro, la Masseria della Piana è il ristorante di Fattoria della Piana: piatti della tradizione calabrese preparati con i prodotti della nostra azienda agricola, in un ambiente rustico e accogliente tra Candidoni e Reggio Calabria.</p>
+            </section>
+
+            <section class="card">
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="#1A1A1A" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="#1A1A1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Orari di Apertura
+                </h2>
+                <ul class="hours-list">
+                    <li><span>Tutti i giorni — Pranzo</span><strong>12:00 – 15:00</strong></li>
+                    <li><span>Tutti i giorni — Cena (su prenotazione)</span><strong>19:00 – 23:00</strong></li>
+                </ul>
+                <p class="hours-note">La prenotazione, anche a pranzo, è comunque sempre consigliata per motivi organizzativi.</p>
+            </section>
+
+            <section class="card" id="prenota">
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#1A1A1A" stroke-width="1.6"/><path d="M4 9h16M8 3v4M16 3v4" stroke="#1A1A1A" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    Prenota un Tavolo
+                </h2>
+                <p class="form-note">Compila il modulo: si aprirà WhatsApp con la richiesta già scritta, dovrai solo inviarla. La prenotazione dovrà essere confermata da noi: la conferma ti arriverà su WhatsApp al numero indicato.</p>
+                <form id="booking-form" class="booking-form">
+                    <div class="field">
+                        <label for="b-name">Nome e cognome</label>
+                        <input type="text" id="b-name" name="name" autocomplete="name" required>
+                    </div>
+                    <div class="field">
+                        <label for="b-phone">Numero di telefono</label>
+                        <input type="tel" id="b-phone" name="phone" autocomplete="tel" placeholder="+39 …" required>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="b-date">Data</label>
+                            <input type="date" id="b-date" name="date" required>
+                        </div>
+                        <div class="field">
+                            <label for="b-time">Ora</label>
+                            <input type="time" id="b-time" name="time" required>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="b-people">Numero di persone</label>
+                        <input type="number" id="b-people" name="people" min="1" max="50" required>
+                    </div>
+                    <div class="field">
+                        <label for="b-notes">Note (allergie, richieste particolari)</label>
+                        <textarea id="b-notes" name="notes" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-whatsapp">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.3A9 9 0 1 0 12 3Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.3 8.6c.2-.5.4-.5.6-.5h.5c.2 0 .4 0 .5.4.2.5.7 1.6.7 1.8.1.1.1.3 0 .4-.1.2-.2.3-.3.4-.1.2-.3.3-.4.4-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6-.1.2-.2.7-.8.9-1 .2-.3.4-.2.6-.1l1.7.8c.2.1.3.2.4.3.1.2.1.9-.2 1.4-.3.6-1.5 1.2-2.1 1.2-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1 0-1.5.8-2.2 1-2.5Z" fill="#fff"/></svg>
+                        Invia richiesta su WhatsApp
+                    </button>
+                </form>
+                <p class="form-disclaimer">Inviando il modulo la richiesta non è ancora confermata: ti risponderemo su WhatsApp per confermare disponibilità e orario.</p>
+            </section>
+
+            <section class="card">
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-6.5 7-11.5a7 7 0 0 0-14 0C5 14.5 12 21 12 21Z" stroke="#1A1A1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="2.3" stroke="#1A1A1A" stroke-width="1.6"/></svg>
+                    Dove Siamo &amp; Contatti
+                </h2>
+
+                <div class="contact-row">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="margin-top:1px"><path d="M12 21s7-6.5 7-11.5a7 7 0 0 0-14 0C5 14.5 12 21 12 21Z" stroke="#6B6B6B" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="2.3" stroke="#6B6B6B" stroke-width="1.6"/></svg>
+                    <span>Contrada Sovereto, 89020 Candidoni (RC)</span>
+                </div>
+                <div class="contact-row">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5c0-.6.4-1 1-1h2.2c.5 0 .9.3 1 .8l.8 3a1 1 0 0 1-.3 1L7.4 10c1 2 2.6 3.6 4.6 4.6l1.2-1.3a1 1 0 0 1 1-.3l3 .8c.5.1.8.5.8 1V17c0 .6-.4 1-1 1h-1C9.6 18 4 12.4 4 6V5Z" stroke="#6B6B6B" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                    <a href="tel:+393481000710">+39 348 100 0710</a>
+                </div>
+
+                <div class="map-container">
+                    <iframe
+                        src="https://www.google.com/maps?q=Masseria+della+Piana%2C+Contrada+Sovereto%2C+89020+Candidoni+RC&output=embed"
+                        title="Mappa: Masseria della Piana, Contrada Sovereto, Candidoni (RC)"
+                        allowfullscreen
+                        loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade">
+                    </iframe>
+                </div>
+            </section>
+
+            <p class="social-title">Seguici e lascia una recensione</p>
+            <div class="social-row">
+                <a href="https://share.google/jSPlEA4RyoXxJrFNq" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Lascia una recensione su Google">
+                    <span class="badge">
+                        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+                    </span>
+                    <span class="label" style="background:#4285F4">Google</span>
+                </a>
+                <a href="https://www.tripadvisor.com/Restaurant_Review-g2282898-d4770660-Reviews-Masseria_della_Piana-Rosarno_Province_of_Reggio_Calabria_Calabria.html" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Lascia una recensione su TripAdvisor">
+                    <span class="badge">
+                        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#00AF87" d="M12 8.3c-1.7-1.6-4.2-2.2-6.6-1.6C6.5 5.8 8 5.3 9.7 5.3h4.6c1.7 0 3.2.5 4.3 1.4-2.4-.6-4.9 0-6.6 1.6z"/><circle cx="12" cy="13" r="10.2" fill="none" stroke="#00AF87" stroke-width="1.6"/><circle cx="6.8" cy="13" r="4" fill="#fff" stroke="#00AF87" stroke-width="1.4"/><circle cx="17.2" cy="13" r="4" fill="#fff" stroke="#00AF87" stroke-width="1.4"/><circle cx="6.8" cy="13" r="1.5" fill="#00AF87"/><circle cx="17.2" cy="13" r="1.5" fill="#00AF87"/></svg>
+                    </span>
+                    <span class="label" style="background:#00AF87">TripAdvisor</span>
+                </a>
+                <a href="https://www.instagram.com/fattoriadellapiana/" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Seguici su Instagram">
+                    <span class="badge">
+                        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="ig-grad" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="5%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig-grad)"/><rect x="6.5" y="6.5" width="11" height="11" rx="3.2" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="12" cy="12" r="3.4" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="16.4" cy="7.6" r="1" fill="#fff"/></svg>
+                    </span>
+                    <span class="label" style="background:#C13584">Instagram</span>
+                </a>
+                <a href="https://www.facebook.com/FattoriaDellaPiana" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Seguici su Facebook">
+                    <span class="badge">
+                        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#1877F2"/><path fill="#fff" d="M13.5 21v-7.2h2.4l.36-2.8h-2.76V9.1c0-.81.22-1.36 1.39-1.36h1.48V5.23A20 20 0 0 0 13.9 5.1c-1.98 0-3.34 1.21-3.34 3.43v1.47H8.1v2.8h2.46V21h2.94z"/></svg>
+                    </span>
+                    <span class="label" style="background:#1877F2">Facebook</span>
+                </a>
+            </div>
+
+            <div class="repeat-cta">
+                <p>Pronto a scoprire i nostri piatti?</p>
+                <a href="https://menu-masseria-della-pian.web.app/" class="btn btn-primary">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 4.5C4 3.67 4.67 3 5.5 3H16a3 3 0 0 1 3 3v14.5a.5.5 0 0 1-.79.41L16 19H5.5A1.5 1.5 0 0 1 4 17.5V4.5Z" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8h7M8 11.5h7M8 15h4" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    Vai al Menù
+                </a>
+            </div>
+        </main>
+
+        <footer>
+            <p>© 2026 Masseria della Piana — Fattoria della Piana, Candidoni (RC)</p>
+        </footer>
+    </div>
+
+    <script>
+        (function () {
+            var form = document.getElementById('booking-form');
+            if (!form) return;
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var name = form.name.value.trim();
+                var phone = form.phone.value.trim();
+                var date = form.date.value;
+                var time = form.time.value;
+                var people = form.people.value.trim();
+                var notes = form.notes.value.trim();
+
+                var dateFormatted = date ? date.split('-').reverse().join('/') : '';
+
+                var lines = [
+                    'Richiesta di prenotazione — Masseria della Piana',
+                    'Nome: ' + name,
+                    'Telefono: ' + phone,
+                    'Data: ' + dateFormatted,
+                    'Ora: ' + time,
+                    'Persone: ' + people
+                ];
+                if (notes) lines.push('Note: ' + notes);
+
+                var message = lines.join('\n');
+                window.location.href = 'https://wa.me/393481000710?text=' + encodeURIComponent(message);
+            });
+        })();
+    </script>
+
+</body>
+</html>
