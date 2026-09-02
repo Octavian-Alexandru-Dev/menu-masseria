@@ -7,18 +7,21 @@
     <meta name="theme-color" content="#1A1A1A">
 
     <title>Masseria della Piana | Ristorante Agriturismo a Candidoni, Reggio Calabria</title>
-    <meta name="description" content="Masseria della Piana, il ristorante di Fattoria della Piana a Candidoni (RC): cucina calabrese di km 0, prodotti dell'azienda agricola. Scopri il menù, gli orari e come prenotare.">
+    <meta name="description" content="Masseria della Piana, il ristorante di Fattoria della Piana a Candidoni (RC): cucina calabrese a km 0, prodotti dell'azienda agricola. Scopri il menù, gli orari e come prenotare.">
     <link rel="canonical" href="https://masseria-della-piana.it/">
 
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 
     <!-- Open Graph -->
-    <meta property="og:type" content="restaurant">
+    <meta property="og:type" content="website">
     <meta property="og:site_name" content="Masseria della Piana">
     <meta property="og:title" content="Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)">
     <meta property="og:description" content="Cucina calabrese a km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana.">
     <meta property="og:image" content="https://masseria-della-piana.it/logo.jpg">
+    <meta property="og:image:width" content="400">
+    <meta property="og:image:height" content="218">
+    <meta property="og:image:alt" content="Logo Masseria della Piana">
     <meta property="og:url" content="https://masseria-della-piana.it/">
     <meta property="og:locale" content="it_IT">
 
@@ -27,6 +30,7 @@
     <meta name="twitter:title" content="Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)">
     <meta name="twitter:description" content="Cucina calabrese a km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana.">
     <meta name="twitter:image" content="https://masseria-della-piana.it/logo.jpg">
+    <meta name="twitter:image:alt" content="Logo Masseria della Piana">
 
     <!-- schema.org/Restaurant -->
     <script type="application/ld+json">
@@ -38,8 +42,9 @@
       "url": "https://masseria-della-piana.it/",
       "telephone": "+39 348 100 0710",
       "servesCuisine": ["Calabrese", "Italiana", "Mediterranea"],
-      "acceptsReservations": "True",
+      "acceptsReservations": true,
       "menu": "https://menu-masseria-della-pian.web.app/",
+      "hasMap": "https://www.google.com/maps?cid=4443957360310348267",
       "address": {
         "@type": "PostalAddress",
         "streetAddress": "Contrada Sovereto",
@@ -48,11 +53,16 @@
         "postalCode": "89020",
         "addressCountry": "IT"
       },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 38.51934113911269,
+        "longitude": 15.974246583930857
+      },
       "openingHoursSpecification": [
         {
           "@type": "OpeningHoursSpecification",
           "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-          "opens": "12:00",
+          "opens": "12:30",
           "closes": "15:00"
         },
         {
@@ -60,7 +70,7 @@
           "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
           "opens": "19:00",
           "closes": "23:00",
-          "description": "Cena su prenotazione"
+          "description": "Cena aperta solo su prenotazione, subordinata al numero di richieste ricevute"
         }
       ],
       "sameAs": [
@@ -88,6 +98,7 @@
             --accent: #B5602F;
             --whatsapp: #25D366;
             --line: rgba(0, 0, 0, 0.12);
+            --danger: #C0392B;
         }
         * { box-sizing: border-box; }
         html { -webkit-text-size-adjust: 100%; }
@@ -233,7 +244,9 @@
             font-weight: 600;
             color: var(--ink-soft);
         }
-        input, textarea {
+        input, select, textarea {
+            -webkit-appearance: none;
+            appearance: none;
             font-family: 'Roboto', sans-serif;
             font-size: 15px;
             padding: 11px 13px;
@@ -242,12 +255,32 @@
             background: var(--bg);
             color: var(--ink);
             width: 100%;
+            min-height: 46px;
         }
         textarea { resize: vertical; min-height: 70px; }
-        input:focus, textarea:focus {
+        select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%236B6B6B' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 13px center;
+            padding-right: 36px;
+        }
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(181, 96, 47, 0.15);
+        }
+        input.invalid, select.invalid, textarea.invalid {
+            border-color: var(--danger);
+        }
+        input.invalid:focus, select.invalid:focus, textarea.invalid:focus {
+            border-color: var(--danger);
+            box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.15);
+        }
+        .field-error {
+            display: block;
+            min-height: 15px;
+            font-size: 12.5px;
+            color: var(--danger);
         }
         .booking-form .btn { width: 100%; border: none; cursor: pointer; margin-top: 6px; }
         p.form-disclaimer {
@@ -390,7 +423,7 @@
     <div class="wrap">
         <main>
             <section class="intro">
-                <p>Nel cuore della Piana di Gioia Tauro, la Masseria della Piana è il ristorante di Fattoria della Piana: piatti della tradizione calabrese preparati con i prodotti della nostra azienda agricola, in un ambiente rustico e accogliente tra Candidoni e Reggio Calabria.</p>
+                <p>La Masseria della Piana è il ristorante di Fattoria della Piana, nel cuore della Piana di Gioia Tauro. Cuciniamo la tradizione calabrese con i prodotti della nostra azienda agricola, in un ambiente rustico e accogliente a Candidoni, a pochi minuti dall'uuscita autostradale di Rosarno.</p>
             </section>
 
             <section class="card">
@@ -399,10 +432,10 @@
                     Orari di Apertura
                 </h2>
                 <ul class="hours-list">
-                    <li><span>Tutti i giorni — Pranzo</span><strong>12:00 – 15:00</strong></li>
-                    <li><span>Tutti i giorni — Cena (su prenotazione)</span><strong>19:00 – 23:00</strong></li>
+                    <li><span>Pranzo — tutti i giorni</span><strong>12:30 – 15:00</strong></li>
+                    <li><span>Cena — solo su prenotazione</span><strong>19:00 – 23:00</strong></li>
                 </ul>
-                <p class="hours-note">La prenotazione, anche a pranzo, è comunque sempre consigliata per motivi organizzativi.</p>
+                <p class="hours-note">A pranzo la prenotazione è sempre consigliata. La sera il locale resta chiuso e apre solo quando le prenotazioni ricevute sono sufficienti: prenota con anticipo per sapere se la cena sarà disponibile.</p>
             </section>
 
             <section class="card" id="prenota">
@@ -410,29 +443,64 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#1A1A1A" stroke-width="1.6"/><path d="M4 9h16M8 3v4M16 3v4" stroke="#1A1A1A" stroke-width="1.6" stroke-linecap="round"/></svg>
                     Prenota un Tavolo
                 </h2>
-                <p class="form-note">Compila il modulo: si aprirà WhatsApp con la richiesta già scritta, dovrai solo inviarla. La prenotazione dovrà essere confermata da noi: la conferma ti arriverà su WhatsApp al numero indicato.</p>
-                <form id="booking-form" class="booking-form">
+                <p class="form-note">Compila il modulo: si aprirà WhatsApp con il messaggio già scritto, dovrai solo inviarlo.</p>
+                <form id="booking-form" class="booking-form" novalidate>
                     <div class="field">
                         <label for="b-name">Nome e cognome</label>
                         <input type="text" id="b-name" name="name" autocomplete="name" required>
+                        <small class="field-error" id="b-name-error" role="alert"></small>
                     </div>
                     <div class="field">
                         <label for="b-phone">Numero di telefono</label>
                         <input type="tel" id="b-phone" name="phone" autocomplete="tel" placeholder="+39 312 345 6789" required>
+                        <small class="field-error" id="b-phone-error" role="alert"></small>
                     </div>
                     <div class="field-row">
                         <div class="field">
                             <label for="b-date">Data</label>
                             <input type="date" id="b-date" name="date" required>
+                            <small class="field-error" id="b-date-error" role="alert"></small>
                         </div>
                         <div class="field">
                             <label for="b-time">Ora</label>
-                            <input type="time" id="b-time" name="time" required>
+                            <select id="b-time" name="time" required>
+                                <option value="" disabled selected>Seleziona un orario</option>
+                                <optgroup label="Pranzo">
+                                    <option value="12:30">12:30</option>
+                                    <option value="12:45">12:45</option>
+                                    <option value="13:00">13:00</option>
+                                    <option value="13:15">13:15</option>
+                                    <option value="13:30">13:30</option>
+                                    <option value="13:45">13:45</option>
+                                    <option value="14:00">14:00</option>
+                                    <option value="14:15">14:15</option>
+                                    <option value="14:30">14:30</option>
+                                </optgroup>
+                                <optgroup label="Cena">
+                                    <option value="19:00">19:00</option>
+                                    <option value="19:15">19:15</option>
+                                    <option value="19:30">19:30</option>
+                                    <option value="19:45">19:45</option>
+                                    <option value="20:00">20:00</option>
+                                    <option value="20:15">20:15</option>
+                                    <option value="20:30">20:30</option>
+                                    <option value="20:45">20:45</option>
+                                    <option value="21:00">21:00</option>
+                                    <option value="21:15">21:15</option>
+                                    <option value="21:30">21:30</option>
+                                    <option value="21:45">21:45</option>
+                                    <option value="22:00">22:00</option>
+                                    <option value="22:15">22:15</option>
+                                    <option value="22:30">22:30</option>
+                                </optgroup>
+                            </select>
+                            <small class="field-error" id="b-time-error" role="alert"></small>
                         </div>
                     </div>
                     <div class="field">
-                        <label for="b-people">Numero di persone</label>
-                        <input type="number" id="b-people" name="people" min="1" max="50" required>
+                        <label for="b-people">Numero di persone (max 70)</label>
+                        <input type="number" id="b-people" name="people" min="1" max="70" required>
+                        <small class="field-error" id="b-people-error" role="alert"></small>
                     </div>
                     <div class="field">
                         <label for="b-notes">Note (allergie, richieste particolari)</label>
@@ -443,7 +511,7 @@
                         Invia richiesta su WhatsApp
                     </button>
                 </form>
-                <p class="form-disclaimer">Inviando il modulo la richiesta non è ancora confermata: ti risponderemo su WhatsApp per confermare disponibilità e orario.</p>
+                <p class="form-disclaimer">La richiesta non è confermata finché non ti rispondiamo su WhatsApp con disponibilità e orario.</p>
             </section>
 
             <section class="card">
@@ -454,7 +522,7 @@
 
                 <div class="contact-row">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="margin-top:1px"><path d="M12 21s7-6.5 7-11.5a7 7 0 0 0-14 0C5 14.5 12 21 12 21Z" stroke="#6B6B6B" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="2.3" stroke="#6B6B6B" stroke-width="1.6"/></svg>
-                    <span>Contrada Sovereto, 89020 Candidoni (RC)</span>
+                    <a href="https://www.google.com/maps?cid=4443957360310348267" target="_blank" rel="noopener noreferrer">Contrada Sovereto, 89020 Candidoni (RC)</a>
                 </div>
                 <div class="contact-row">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5c0-.6.4-1 1-1h2.2c.5 0 .9.3 1 .8l.8 3a1 1 0 0 1-.3 1L7.4 10c1 2 2.6 3.6 4.6 4.6l1.2-1.3a1 1 0 0 1 1-.3l3 .8c.5.1.8.5.8 1V17c0 .6-.4 1-1 1h-1C9.6 18 4 12.4 4 6V5Z" stroke="#6B6B6B" stroke-width="1.6" stroke-linejoin="round"/></svg>
@@ -463,7 +531,7 @@
 
                 <div class="map-container">
                     <iframe
-                        src="https://www.google.com/maps?q=Masseria+della+Piana%2C+Contrada+Sovereto%2C+89020+Candidoni+RC&output=embed"
+                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3121.6341358834625!2d15.971639476741545!3d38.51914807180725!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x131513d1c27ef3d9%3A0x3dac1bac9247e9eb!2sMasseria%20della%20Piana!5e0!3m2!1sit!2sit!4v1788370237457!5m2!1sit!2sit"
                         title="Mappa: Masseria della Piana, Contrada Sovereto, Candidoni (RC)"
                         allowfullscreen
                         loading="lazy"
@@ -510,16 +578,79 @@
         </main>
 
         <footer>
-            <p>© 2026 Masseria della Piana — Fattoria della Piana, Candidoni (RC)</p>
+            <p>© <span id="year">2026</span> Masseria della Piana — Fattoria della Piana, Candidoni (RC)</p>
         </footer>
     </div>
 
     <script>
         (function () {
+            var yearEl = document.getElementById('year');
+            if (yearEl) yearEl.textContent = new Date().getFullYear();
+
             var form = document.getElementById('booking-form');
             if (!form) return;
+
+            var MAX_PEOPLE = 70;
+
+            function setFieldError(input, message) {
+                var errorEl = document.getElementById(input.id + '-error');
+                if (errorEl) errorEl.textContent = message || '';
+                input.classList.toggle('invalid', !!message);
+                if (message) {
+                    input.setAttribute('aria-invalid', 'true');
+                } else {
+                    input.removeAttribute('aria-invalid');
+                }
+            }
+
+            function validateForm() {
+                var valid = true;
+
+                if (!form.name.value.trim()) {
+                    setFieldError(form.name, 'Inserisci il tuo nome e cognome.');
+                    valid = false;
+                } else {
+                    setFieldError(form.name, '');
+                }
+
+                var phoneDigits = form.phone.value.trim().replace(/[\s().-]/g, '');
+                if (!/^\+?\d{8,15}$/.test(phoneDigits)) {
+                    setFieldError(form.phone, 'Inserisci un numero di telefono valido (es. +39 312 345 6789).');
+                    valid = false;
+                } else {
+                    setFieldError(form.phone, '');
+                }
+
+                if (!form.date.value) {
+                    setFieldError(form.date, 'Seleziona una data.');
+                    valid = false;
+                } else {
+                    setFieldError(form.date, '');
+                }
+
+                if (!form.time.value) {
+                    setFieldError(form.time, 'Seleziona un orario.');
+                    valid = false;
+                } else {
+                    setFieldError(form.time, '');
+                }
+
+                var peopleValue = form.people.value.trim();
+                var peopleNum = Number(peopleValue);
+                if (!/^\d+$/.test(peopleValue) || peopleNum < 1 || peopleNum > MAX_PEOPLE) {
+                    setFieldError(form.people, 'Inserisci un numero di persone tra 1 e ' + MAX_PEOPLE + '.');
+                    valid = false;
+                } else {
+                    setFieldError(form.people, '');
+                }
+
+                return valid;
+            }
+
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
+                if (!validateForm()) return;
+
                 var name = form.name.value.trim();
                 var phone = form.phone.value.trim();
                 var date = form.date.value;

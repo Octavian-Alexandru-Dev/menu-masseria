@@ -178,6 +178,73 @@ con l'email e la password create al punto 2 ("Attiva l'accesso admin").
 
 ---
 
+## 8. Pubblicare la landing page (`landing_page/`)
+
+La landing page (la pagina che spiega il ristorante e rimanda al menù) è
+separata dal resto del sito: vive nella cartella `landing_page/` e viene
+pubblicata non su Firebase ma via FTP sull'hosting Tophost del dominio
+`masseria-della-piana.it`.
+
+### Pubblicazione automatica
+
+Ogni volta che fai `git push` su `main` e i commit inviati modificano
+qualcosa dentro `landing_page/`, un hook Git locale (`.githooks/pre-push`)
+esegue automaticamente `scripts/ftp-deploy-landing.sh`, che carica tutti i
+file della cartella sul server Tophost. Non serve fare nient'altro: basta
+salvare le modifiche, committarle e pushare come al solito.
+
+Vedrai nel terminale, durante il push, righe come:
+
+```
+pre-push: landing_page/ è cambiata, eseguo il deploy FTP...
+FTP deploy: carico index.html
+...
+FTP deploy: landing_page/ pubblicata su ftp.masseria-della-piana.it.
+```
+
+Se non modifichi nulla dentro `landing_page/`, l'hook non fa nulla (push
+normale, senza upload).
+
+### Pubblicare senza fare push
+
+Se vuoi ricaricare la landing page sul server senza creare un commit/push
+(ad esempio per ritestare una modifica non ancora committata), lancia lo
+script direttamente dal terminale, dalla cartella del progetto:
+
+```
+./scripts/ftp-deploy-landing.sh
+```
+
+Carica sempre lo stato attuale dei file su disco in `landing_page/` (non
+serve che siano committati).
+
+### Configurazione necessaria (una sola volta per computer)
+
+L'hook automatico e lo script leggono le credenziali FTP dal file
+`.ftp-credentials` nella cartella principale del progetto — un file privato,
+**mai** caricato su GitHub (è escluso tramite `.gitignore`). Se lavori da un
+computer nuovo dove questo file non esiste, crealo così:
+
+```
+FTP_HOST='ftp.masseria-della-piana.it'
+FTP_USERNAME='masseria-della-piana.it'
+FTP_PASSWORD='la-password-ftp-di-tophost'
+FTP_REMOTE_DIR='/htdocs'
+```
+
+E attiva l'hook automatico sul push (va fatto una sola volta per ciascun
+computer):
+
+```
+git config core.hooksPath .githooks
+```
+
+Senza questo comando, il push funziona normalmente ma non pubblica
+automaticamente la landing page — resta comunque possibile lanciare lo
+script a mano come descritto sopra.
+
+---
+
 ## Domande frequenti
 
 **Posso aggiungere altri utenti che possono modificare il menù?**
