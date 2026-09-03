@@ -151,6 +151,8 @@ export default function ClientView({ menu, onGoAdmin }) {
 
   const [active, setActive] = useState(visibleCategories[0]?.id);
   const refs = useRef({});
+  const navRef = useRef(null);
+  const tabRefs = useRef({});
 
   // Voce ingrandita (per id, non per riferimento): così se la traduzione
   // finisce di caricare mentre la schermata è aperta, il testo mostrato resta
@@ -178,6 +180,50 @@ export default function ClientView({ menu, onGoAdmin }) {
     setActive(id);
     refs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // Scroll-spy: mentre l'utente scorre la pagina, individua quale sezione
+  // si trova appena sotto la nav sticky e la marca come attiva, così la
+  // barra orizzontale segue la lettura invece di restare bloccata sulla
+  // prima categoria.
+  const categoryIds = visibleCategories.map((c) => c.id).join("|");
+  useEffect(() => {
+    const ids = categoryIds ? categoryIds.split("|") : [];
+    if (ids.length === 0) return;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const threshold = (navRef.current?.offsetHeight || 0) + 8;
+        let currentId = ids[0];
+        for (const id of ids) {
+          const el = refs.current[id];
+          if (el && el.getBoundingClientRect().top <= threshold) {
+            currentId = id;
+          }
+        }
+        setActive((prev) => (prev === currentId ? prev : currentId));
+        ticking = false;
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [categoryIds]);
+
+  // Tiene la voce attiva visibile nella barra orizzontale, scorrendola
+  // dolcemente in vista quando finisce fuori dai bordi.
+  useEffect(() => {
+    const nav = navRef.current;
+    const btn = tabRefs.current[active];
+    if (!nav || !btn) return;
+    const navRect = nav.getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    if (btnRect.left < navRect.left || btnRect.right > navRect.right) {
+      const target = btn.offsetLeft - nav.clientWidth / 2 + btn.offsetWidth / 2;
+      nav.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+    }
+  }, [active]);
 
   const renderPrice = (price) => {
     const isRequest = /richiesta/i.test(price || "");
@@ -236,6 +282,7 @@ export default function ClientView({ menu, onGoAdmin }) {
 
       {/* Sticky nav */}
       <nav
+        ref={navRef}
         className="mdp-scrollbar"
         style={{
           position: "sticky", top: 0, zIndex: 10, background: t.bg,
@@ -246,6 +293,7 @@ export default function ClientView({ menu, onGoAdmin }) {
         {visibleCategories.map((c) => (
           <button
             key={c.id}
+            ref={(el) => (tabRefs.current[c.id] = el)}
             onClick={() => scrollTo(c.id)}
             className="mdp-tab"
             style={{
