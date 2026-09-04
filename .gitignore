@@ -8,3 +8,4 @@ blob-report
 *.DS_Store
 menu-????-??-??.json
 .ftp-credentials
+scratch/

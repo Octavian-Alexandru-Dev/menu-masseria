@@ -3,7 +3,7 @@
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
 import React, { useState } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer } from "lucide-react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X } from "lucide-react";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation, FALLBACK_STYLE, TYPE } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
@@ -39,6 +39,39 @@ function parseMenuJsonFile(file) {
     reader.onerror = () => reject(new Error("Impossibile leggere il file."));
     reader.readAsText(file);
   });
+}
+
+// Rimuove da tutte le lingue salvate la traduzione di una voce (o, se itemId
+// è omesso, dell'intera categoria) appena eliminata dal menù italiano —
+// altrimenti resterebbe come dato orfano in `menu.translations`, mai più
+// letto da nessuno (applyTranslation scorre solo le categorie/voci ancora
+// presenti) ma comunque salvato ad ogni "Salva".
+function pruneTranslations(translations, catId, itemId) {
+  if (!translations) return translations;
+  let changed = false;
+  const next = {};
+  for (const [langCode, langData] of Object.entries(translations)) {
+    const cat = langData?.categories?.[catId];
+    if (!cat) {
+      next[langCode] = langData;
+      continue;
+    }
+    if (itemId) {
+      if (!cat.items || !(itemId in cat.items)) {
+        next[langCode] = langData;
+        continue;
+      }
+      const items = { ...cat.items };
+      delete items[itemId];
+      next[langCode] = { ...langData, categories: { ...langData.categories, [catId]: { ...cat, items } } };
+    } else {
+      const categories = { ...langData.categories };
+      delete categories[catId];
+      next[langCode] = { ...langData, categories };
+    }
+    changed = true;
+  }
+  return changed ? next : translations;
 }
 
 function AdminLogin({ onBack, theme }) {
@@ -171,6 +204,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   const [uploadingItem, setUploadingItem] = useState(null); // id della voce con upload in corso
   const [uploadErrors, setUploadErrors] = useState({}); // { [itemId]: messaggio }
   const [lang, setLang] = useState("it"); // lingua correntemente mostrata/editata nell'editor
+  const [newItemId, setNewItemId] = useState(null); // ultima voce aggiunta: mostra l'avviso "traduzione mancante" finché non si passa a un'altra lingua o si chiude a mano
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [confirmDeleteTranslation, setConfirmDeleteTranslation] = useState(false);
@@ -208,6 +242,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   const changeLang = (code) => {
     setLang(code);
     setConfirmDeleteTranslation(false);
+    setNewItemId(null);
   };
 
   const toggleCat = (id) => {
@@ -418,14 +453,16 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   };
 
   const addItem = (catId) => {
+    const id = uid();
     setMenu((m) => ({
       ...m,
       categories: m.categories.map((c) =>
         c.id === catId
-          ? { ...c, items: [...c.items, { id: uid(), name: "Nuova voce", price: "0,00", description: "", image: "", visible: true }] }
+          ? { ...c, items: [...c.items, { id, name: "Nuova voce", price: "0,00", description: "", image: "", visible: true }] }
           : c
       ),
     }));
+    setNewItemId(id);
   };
 
   const removeItem = (catId, itemId) => {
@@ -434,8 +471,10 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
       categories: m.categories.map((c) =>
         c.id === catId ? { ...c, items: c.items.filter((it) => it.id !== itemId) } : c
       ),
+      translations: pruneTranslations(m.translations, catId, itemId),
     }));
     setConfirmDelete(null);
+    setNewItemId((prev) => (prev === itemId ? null : prev));
   };
 
   const addCategory = () => {
@@ -445,7 +484,11 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   };
 
   const removeCategory = (catId) => {
-    setMenu((m) => ({ ...m, categories: m.categories.filter((c) => c.id !== catId) }));
+    setMenu((m) => ({
+      ...m,
+      categories: m.categories.filter((c) => c.id !== catId),
+      translations: pruneTranslations(m.translations, catId),
+    }));
     setConfirmDelete(null);
   };
 
@@ -736,7 +779,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           const isOpen = openCats.has(cat.id);
           const catDelete = confirmDelete?.type === "cat" && confirmDelete.catId === cat.id;
           return (
-            <div key={cat.id} style={{ ...cardStyle(t), padding: 0, marginBottom: 16, overflow: "hidden", opacity: cat.visible === false ? 0.6 : 1 }}>
+            <div key={cat.id} style={{ ...cardStyle(t), background: t.bgAlt, padding: 0, marginBottom: 16, overflow: "hidden", opacity: cat.visible === false ? 0.6 : 1 }}>
               <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: "pointer" }} onClick={() => toggleCat(cat.id)}>
                   {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -778,7 +821,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                   {cat.items.map((item) => {
                     const itDelete = confirmDelete?.type === "item" && confirmDelete.itemId === item.id;
                     return (
-                      <div key={item.id} style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: 12, marginBottom: 10, background: t.bg, opacity: item.visible === false ? 0.6 : 1 }}>
+                      <React.Fragment key={item.id}>
+                      <div style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: 12, marginBottom: 10, background: t.bg, opacity: item.visible === false ? 0.6 : 1 }}>
                         <div style={{ display: "flex", gap: 12, marginBottom: 10, alignItems: "flex-start" }}>
                           {item.image ? (
                             <img src={optimizedImageUrl(item.image, { width: 112 })} alt={item.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain", background: t.bgAlt, border: `1px solid ${t.line}`, flexShrink: 0 }} />
@@ -859,6 +903,35 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                           </button>
                         </div>
                       </div>
+                      {item.id === newItemId && (
+                        <div style={{
+                          ...cardStyle(t), borderColor: t.accent2, padding: "10px 14px", marginTop: -4, marginBottom: 10,
+                          display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap",
+                        }}>
+                          <AlertCircle size={14} color={t.accent2} style={{ flexShrink: 0, marginTop: 2 }} />
+                          <div style={{ flex: 1, minWidth: 200 }}>
+                            <div style={{ fontSize: TYPE.smallPlus, color: t.ink }}>
+                              Questa voce non ha ancora una traduzione: ai clienti che leggono il menù in un'altra lingua verrà mostrata in italiano finché non generi la traduzione.
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                              {LANGUAGES.filter((l) => l.code !== "it").map((l) => (
+                                <button key={l.code} onClick={() => changeLang(l.code)} className="mdp-btn" style={btnGhost(t)}>
+                                  <Sparkles size={12} /> Traduci in {l.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setNewItemId(null)}
+                            className="mdp-btn"
+                            aria-label="Chiudi avviso"
+                            style={{ background: "none", border: "none", cursor: "pointer", color: t.inkSoft, padding: 2 }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                      </React.Fragment>
                     );
                   })}
 
@@ -1077,7 +1150,7 @@ function TranslationEditor({
       {menu.categories.map((cat) => {
         const tCat = translation.categories?.[cat.id] || {};
         return (
-          <div key={cat.id} style={{ ...cardStyle(t), padding: 16, marginBottom: 16 }}>
+          <div key={cat.id} style={{ ...cardStyle(t), background: t.bgAlt, padding: 16, marginBottom: 16 }}>
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr", marginBottom: 14 }}>
               <div>
                 <span style={labelStyle}>Nome categoria</span>
