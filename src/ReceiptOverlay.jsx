@@ -5,6 +5,7 @@
 // turno" e Storico (OrderHistory.jsx, sola lettura: una comanda chiusa non
 // si modifica più, si può solo ristampare).
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, Printer, Pencil, Check } from "lucide-react";
 import { ital, TYPE, formatCentsAsPrice, parsePriceToCents, tableIdentity } from "./shared";
 import { itemsTotalCents, copertoTotalCents, markReceiptPrinted, removeOrderLine, confirmFinalReceipt } from "./orders";
@@ -48,22 +49,21 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
   const itemsTotal = itemsTotalCents(order);
   const coperto = copertoTotalCents(order);
   const grandTotal = itemsTotal + coperto;
+  const confirmed = Boolean(order.receipt?.confirmedAt);
+  const locked = readOnly || confirmed;
 
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(20,15,10,0.6)", zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "20px 16px", overflowY: "auto" }}>
+  return createPortal(
+    <div className="mdp-receipt-overlay" style={{ position: "fixed", inset: 0, background: "rgba(20,15,10,0.6)", zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "20px 16px", overflowY: "auto" }}>
       <style>{`
         @media print {
-          body * { visibility: hidden; }
-          .mdp-receipt-print, .mdp-receipt-print * { visibility: visible; }
+          body > *:not(.mdp-receipt-overlay) { display: none !important; }
+          .mdp-receipt-overlay { position: static !important; height: auto !important; padding: 0 !important; background: none !important; overflow: visible !important; }
           .mdp-receipt-print { position: static !important; box-shadow: none !important; height: auto !important; max-height: none !important; overflow: visible !important; }
           .mdp-receipt-noprint { display: none !important; }
         }
       `}</style>
       <div className="mdp-receipt-print" style={{ background: t.card, borderRadius: 12, padding: 24, maxWidth: 380, width: "100%", fontFamily: "'Work Sans', sans-serif" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.subhead, fontWeight: 600, color: t.primary }}>
-            {readOnly ? "Scontrino" : "Pre-scontrino"}
-          </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 14 }}>
           <button onClick={onClose} className="mdp-btn mdp-receipt-noprint" style={{ background: "none", border: "none", cursor: "pointer", color: t.inkSoft }}>
             <X size={16} />
           </button>
@@ -75,9 +75,9 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
             {tableIdentity(order).primary}{tableIdentity(order).secondary ? ` · ${tableIdentity(order).secondary}` : ""}
           </div>
           <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft }}>
-            {new Date().toLocaleDateString("it-IT")} {new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })} · {order.waiterName}
+            {new Date().toLocaleDateString("it-IT")} {new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}
           </div>
-          <div style={{ fontSize: TYPE.tinyPlus, color: "#a06a1a", fontStyle: "italic", marginTop: 4 }}>documento non fiscale</div>
+          <div style={{ fontSize: TYPE.tinyPlus, color: "#a06a1a", fontStyle: "italic", marginTop: 4 }}>Documento non fiscale</div>
         </div>
 
         <div style={{ display: "grid", gap: 6, marginBottom: 14 }}>
@@ -88,7 +88,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
                 {l.quantity}× {l.name}{l.notes ? ` (${l.notes})` : ""}
               </span>
               <span style={{ whiteSpace: "nowrap" }}>€ {formatCentsAsPrice(parsePriceToCents(l.price) * l.quantity)}</span>
-              {editing && !readOnly && (
+              {editing && !locked && (
                 <button
                   onClick={() => doRemove(l.lineId)}
                   disabled={removingId === l.lineId}
@@ -126,7 +126,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
           }}>
             <Printer size={13} /> Stampa
           </button>
-          {!readOnly && (!editing ? (
+          {!locked && (!editing ? (
             <button onClick={() => setEditing(true)} className="mdp-btn" style={{
               padding: "10px 0", background: "none", border: `1px solid ${t.line}`, borderRadius: 8,
               color: t.ink, fontSize: TYPE.smallPlus, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -146,7 +146,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
               </button>
             </>
           ))}
-          {!readOnly && (
+          {!locked && (
             <button onClick={doConfirm} disabled={busy || items.length === 0} className="mdp-btn" style={{
               padding: "11px 0", background: t.primary, color: t.bg, border: "none", borderRadius: 8,
               fontSize: TYPE.bodyPlus, fontWeight: 600, cursor: busy || items.length === 0 ? "default" : "pointer",
@@ -157,6 +157,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

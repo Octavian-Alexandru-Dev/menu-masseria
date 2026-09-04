@@ -100,7 +100,7 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
 
   const options = [
     canAdmin && { key: "admin", label: "Gestione menù", icon: ShieldCheck },
-    canWaiter && { key: "waiter", label: "Sala — Cameriere", icon: ClipboardList },
+    canWaiter && { key: "waiter", label: "Sala", icon: ClipboardList },
     canKitchen && { key: "kitchen", label: "Cucina", icon: ChefHat },
   ].filter(Boolean);
 
