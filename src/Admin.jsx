@@ -277,6 +277,21 @@ function StaffSection({ t }) {
         assegnargli un ruolo e abilitarlo su /cameriere o /cucina.
       </div>
 
+      {auth.currentUser && (
+        <button
+          type="button"
+          onClick={() => {
+            setUidInput(auth.currentUser.uid);
+            setNameInput(nameInput || auth.currentUser.email?.split("@")[0] || "Amministratore");
+            setRoleInput("admin");
+          }}
+          className="mdp-btn"
+          style={{ ...btnGhost(t), marginBottom: 16 }}
+        >
+          <Plus size={12} /> Usa il mio account (accesso admin completo)
+        </button>
+      )}
+
       {error && (
         <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginBottom: 12 }}>
           <AlertCircle size={14} /> {error}
@@ -386,6 +401,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   };
 
   const updateField = (field, value) => setMenu((m) => ({ ...m, [field]: value }));
+  const updateCoperto = (key, value) => setMenu((m) => ({ ...m, coperto: { ...(m.coperto || {}), [key]: value } }));
 
   // Aggiorna un link esterno (url o visibilità) dentro un gruppo di link del
   // menù, es. group="reviewLinks", key="google" oppure group="socialLinks", key="instagram".
@@ -733,6 +749,20 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                   <span style={{ fontSize: TYPE.small, color: th.ink }}>{th.name}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <span style={labelStyle}>Coperto (a persona, per le comande — vedi area cameriere)</span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 6 }}>
+              <div>
+                <span style={{ ...labelStyle, textTransform: "none", letterSpacing: 0 }}>Adulti</span>
+                <input style={inputStyle} placeholder="0,00" value={menu.coperto?.adults || ""} onChange={(e) => updateCoperto("adults", e.target.value)} />
+              </div>
+              <div>
+                <span style={{ ...labelStyle, textTransform: "none", letterSpacing: 0 }}>Bambini</span>
+                <input style={inputStyle} placeholder="0,00" value={menu.coperto?.children || ""} onChange={(e) => updateCoperto("children", e.target.value)} />
+              </div>
             </div>
           </div>
         </div>

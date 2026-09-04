@@ -107,7 +107,7 @@ function LinkButton({ href, icon, bg, children }) {
   );
 }
 
-export default function ClientView({ menu, onGoAdmin }) {
+export default function ClientView({ menu, onGoStaff }) {
   const t = THEMES[menu.theme] || THEMES.rustica;
 
   // Lingua scelta dal cliente, ricordata tra una visita e l'altra.
@@ -431,7 +431,7 @@ export default function ClientView({ menu, onGoAdmin }) {
         ) : null}
 
         <button
-          onClick={onGoAdmin}
+          onClick={onGoStaff}
           className="mdp-btn"
           style={{
             marginTop: 22, background: "none", border: "none", cursor: "pointer",

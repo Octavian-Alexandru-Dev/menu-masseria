@@ -19,7 +19,7 @@ import { db } from "./firebase-db";
 import { MENU_DOC_PATH, FALLBACK_STYLE } from "./shared";
 import ClientView from "./ClientView";
 
-const Admin = lazy(() => import("./Admin"));
+const StaffHome = lazy(() => import("./StaffHome"));
 const PrintMenu = lazy(() => import("./PrintMenu"));
 const Waiter = lazy(() => import("./Waiter"));
 const Kitchen = lazy(() => import("./Kitchen"));
@@ -31,7 +31,7 @@ const MAX_UNDO_STEPS = 20;
 
 export default function App() {
   const [menu, setMenuState] = useState(null);
-  const [view, setView] = useState("client"); // client | admin
+  const [view, setView] = useState("client"); // client | staff
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [saveError, setSaveError] = useState(null);
@@ -92,11 +92,12 @@ export default function App() {
           if (snap.exists()) {
             const loaded = snap.data();
             if (loaded && loaded.theme === "cirò") loaded.theme = "ciro";
-            // Se sei in Gestione menù, NON sovrascriviamo le modifiche in corso
-            // con un aggiornamento in arrivo dal server o dalla cache.
+            // Se sei nell'area riservata (admin/cameriere/cucina), NON
+            // sovrascriviamo eventuali modifiche in corso nell'editor con un
+            // aggiornamento in arrivo dal server o dalla cache.
             setMenuState((prev) => {
               if (!prev) return loaded;
-              if (viewRef.current === "admin") return prev;
+              if (viewRef.current === "staff") return prev;
               return loaded;
             });
             setLoadNotice(null);
@@ -230,19 +231,19 @@ export default function App() {
     );
   }
 
-  // Il pannello Admin può aprirsi anche senza un menù ancora caricato (vedi
-  // sopra): mostra il login comunque, e dopo il login una schermata per
-  // importare un backup JSON invece del solito editor.
-  if (view === "admin") {
+  // L'area riservata può aprirsi anche senza un menù ancora caricato (il
+  // pannello Admin al suo interno permette di importare un backup JSON se il
+  // documento non esiste ancora su Firestore — vedi Admin.jsx).
+  if (view === "staff") {
     return (
       <Suspense
         fallback={
           <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...FALLBACK_STYLE }}>
-            Caricamento gestione…
+            Caricamento…
           </div>
         }
       >
-        <Admin
+        <StaffHome
           menu={menu}
           setMenu={setMenu}
           onSave={handleSave}
@@ -293,5 +294,5 @@ export default function App() {
     );
   }
 
-  return <ClientView menu={menu} onGoAdmin={() => setView("admin")} />;
+  return <ClientView menu={menu} onGoStaff={() => setView("staff")} />;
 }

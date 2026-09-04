@@ -5,6 +5,7 @@
 // entrambe lazy-load), mai dal sito pubblico.
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
+  orderBy, limit, startAfter,
   arrayUnion, serverTimestamp, Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase-db";
@@ -40,10 +41,33 @@ export function subscribeOpenOrders(onChange, onError) {
   }, onError);
 }
 
-export async function openOrder({ tableNumber, adults, children, notes, waiterUid, waiterName }) {
+// Comande chiuse (manualmente o automaticamente) durante il turno di
+// servizio in corso: a differenza dello Storico, restano visibili in sala
+// senza dover cambiare schermata, e in tempo reale — un altro cameriere le
+// vede sparire dai tavoli aperti e comparire qui appena chiuse. closedAt >=
+// inizio turno + orderBy sullo stesso campo: nessun indice composito
+// necessario.
+export function subscribeShiftClosedOrders(sinceDate, onChange, onError) {
+  const q = query(
+    ordersRef(),
+    where("closedAt", ">=", Timestamp.fromDate(sinceDate)),
+    orderBy("closedAt", "desc")
+  );
+  return onSnapshot(q, (snap) => {
+    onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, onError);
+}
+
+// Il prezzo del coperto (adulti/bambini) viene fissato al momento
+// dell'apertura del tavolo, come snapshot dal menù — se in futuro il prezzo
+// cambia in Gestione menù, le comande già aperte o nello storico restano
+// coerenti con quanto effettivamente applicato quel giorno.
+export async function openOrder({ tableNumber, tableName, adults, children, notes, waiterUid, waiterName, coperto }) {
   return addDoc(ordersRef(), {
     tableNumber,
+    tableName: tableName || "",
     covers: { adults: adults || 0, children: children || 0 },
+    coperto: { adults: coperto?.adults || "0,00", children: coperto?.children || "0,00" },
     notes: notes || "",
     waiterUid,
     waiterName,
@@ -56,35 +80,42 @@ export async function openOrder({ tableNumber, adults, children, notes, waiterUi
 }
 
 // Aggiunge righe a una comanda già aperta. Ogni riga arriva già completa
-// (snapshot di nome/prezzo, portata, note, quantità — vedi buildOrderLine).
+// (snapshot di nome/prezzo/categoria, note, quantità — vedi buildOrderLine).
 export async function sendOrderLines(orderId, lines) {
   return updateDoc(orderRef(orderId), { items: arrayUnion(...lines) });
 }
 
-export function buildOrderLine({ lineId, menuItemId, name, price, quantity, course, notes }) {
+// La "portata" di una riga non è più una scelta manuale del cameriere (fonte
+// di errori: es. un piatto aggiunto per sbaglio sotto "Bevande"), ma la
+// categoria del menù a cui il piatto appartiene davvero — categoryId/Name
+// sono uno snapshot al momento dell'invio, coerente con nome/prezzo.
+export function buildOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes }) {
   return {
     lineId,
     menuItemId: menuItemId || null,
     name,
     price,
     quantity,
-    course,
+    categoryId: categoryId || null,
+    categoryName: categoryName || "",
     notes: notes || "",
     status: "sent",
     // arrayUnion non accetta serverTimestamp() per i singoli elementi: uso
     // un timestamp client, sufficiente per l'ordine di visualizzazione.
     sentAt: Timestamp.now(),
+    outAt: null,
   };
 }
 
-// La cucina marca come "uscita" un'intera portata di un tavolo con un solo
-// tocco (§5 punto 3 del documento). Gli array di Firestore non supportano
-// l'aggiornamento di un singolo elemento, quindi riscriviamo l'intero
-// array `items` con lo stato aggiornato solo sulle righe della portata
-// scelta che non sono già uscite.
-export async function markCourseOut(orderId, currentItems, course) {
+// La cucina marca come "uscita" un intero gruppo (una categoria del menù,
+// es. tutti gli antipasti del tavolo) con un solo tocco (§5 punto 3 del
+// documento). Gli array di Firestore non supportano l'aggiornamento di un
+// singolo elemento, quindi riscriviamo l'intero array `items` con lo stato
+// aggiornato solo sulle righe della categoria scelta che non sono già uscite.
+export async function markCategoryOut(orderId, currentItems, categoryId) {
+  const outAt = Timestamp.now();
   const updated = currentItems.map((line) =>
-    line.course === course && line.status !== "out" ? { ...line, status: "out" } : line
+    line.categoryId === categoryId && line.status !== "out" ? { ...line, status: "out", outAt } : line
   );
   return updateDoc(orderRef(orderId), { items: updated });
 }
@@ -93,11 +124,40 @@ function expireAtFromNow() {
   return Timestamp.fromMillis(Date.now() + THIRTY_DAYS_MS);
 }
 
+// Modifica i coperti di un tavolo già aperto (persone arrivate/andate via
+// dopo l'apertura — non solo al momento della creazione).
+export async function updateCovers(orderId, { adults, children }) {
+  return updateDoc(orderRef(orderId), { covers: { adults: adults || 0, children: children || 0 } });
+}
+
 export async function closeOrder(orderId) {
   return updateDoc(orderRef(orderId), {
     status: "closed",
     closedAt: serverTimestamp(),
     expireAt: expireAtFromNow(),
+  });
+}
+
+// Rimuove una riga già inviata (correzione di un errore di battitura, non
+// più recuperabile con lo "storno" — usata dal flusso pre-scontrino).
+export async function removeOrderLine(orderId, currentItems, lineId) {
+  const updated = currentItems.filter((line) => line.lineId !== lineId);
+  return updateDoc(orderRef(orderId), { items: updated });
+}
+
+// Pre-scontrino / scontrino finale (non fiscale — vedi docs, §9): il
+// cameriere genera un riepilogo stampabile via browser, può correggere la
+// comanda (righe perse, errori) e poi confermare uno stato "finale". Tutto
+// salvato sulla comanda stessa, sincronizzato in tempo reale su ogni client.
+export async function markReceiptPrinted(orderId) {
+  return updateDoc(orderRef(orderId), { "receipt.printedAt": serverTimestamp() });
+}
+
+export async function confirmFinalReceipt(orderId, order) {
+  return updateDoc(orderRef(orderId), {
+    "receipt.confirmedAt": serverTimestamp(),
+    "receipt.items": order.items || [],
+    "receipt.totalCents": orderTotalCents(order),
   });
 }
 
@@ -126,8 +186,18 @@ export async function autoCloseStaleOrders(openOrders) {
   return stale.map((o) => o.id);
 }
 
-export function orderTotalCents(order) {
+export function itemsTotalCents(order) {
   return (order.items || []).reduce((sum, line) => sum + parsePriceToCents(line.price) * line.quantity, 0);
+}
+
+export function copertoTotalCents(order) {
+  const adults = order.covers?.adults || 0;
+  const children = order.covers?.children || 0;
+  return parsePriceToCents(order.coperto?.adults) * adults + parsePriceToCents(order.coperto?.children) * children;
+}
+
+export function orderTotalCents(order) {
+  return itemsTotalCents(order) + copertoTotalCents(order);
 }
 
 // Cancellazione dopo 30 giorni (§6.1 del documento) — lato client, come la
@@ -160,4 +230,23 @@ export async function runDailyExpiredOrdersCleanup() {
   } catch (err) {
     console.error("[orders] Pulizia comande scadute fallita:", err);
   }
+}
+
+/* ============================== STORICO ============================== */
+// Comande chiuse (manualmente o automaticamente), più recenti prima. Usa
+// closedAt sia per il filtro (!= null → solo le chiuse) sia per l'ordinamento:
+// stesso campo su entrambi, quindi Firestore non richiede un indice composito
+// dedicato. Caricamento a pagine (non realtime: uno storico non ha bisogno
+// di aggiornarsi da solo) con "carica altri" tramite cursore su closedAt.
+export const HISTORY_PAGE_SIZE = 20;
+
+export async function loadClosedOrdersPage(afterClosedAt) {
+  const clauses = [where("closedAt", "!=", null), orderBy("closedAt", "desc"), limit(HISTORY_PAGE_SIZE)];
+  const q = afterClosedAt
+    ? query(ordersRef(), where("closedAt", "!=", null), orderBy("closedAt", "desc"), startAfter(afterClosedAt), limit(HISTORY_PAGE_SIZE))
+    : query(ordersRef(), ...clauses);
+  const snap = await getDocs(q);
+  const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const lastClosedAt = orders.length > 0 ? orders[orders.length - 1].closedAt : null;
+  return { orders, lastClosedAt, hasMore: orders.length === HISTORY_PAGE_SIZE };
 }

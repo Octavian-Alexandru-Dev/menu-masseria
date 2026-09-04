@@ -24,9 +24,9 @@ test("switching language keeps the page usable", async ({ page }) => {
   await expect(page.getByRole("navigation")).toBeVisible();
 });
 
-test("footer link opens the admin login screen", async ({ page }) => {
-  await page.getByRole("button", { name: /gestione menù|menu management/i }).click();
-  await expect(page.getByText(/gestione menù/i).first()).toBeVisible();
+test("footer link opens the staff login screen", async ({ page }) => {
+  await page.getByRole("button", { name: /area riservata|staff area/i }).click();
+  await expect(page.getByText(/area riservata|staff area/i).first()).toBeVisible();
   await expect(page.locator('input[type="email"]')).toBeVisible();
   await expect(page.locator('input[type="password"]')).toBeVisible();
 });

@@ -116,6 +116,7 @@ a un'unica data di scadenza.
 ```
 orders/{orderId}
   tableNumber: number          // scalare, es. 4 — nessun limite massimo configurato
+  tableName: string            // facoltativo, es. "Famiglia Rossi", "Compleanno" — aggiunto dopo il primo giro di test
   covers: { adults: number, children: number }
   notes: string                // es. allergie, richieste generali del tavolo
   waiterUid: string
@@ -124,7 +125,7 @@ orders/{orderId}
   status: "open" | "closed" | "auto_closed"
   openedAt: Timestamp
   closedAt: Timestamp | null
-  expireAt: Timestamp          // = closedAt + 30 giorni — usato dalla TTL policy (§6)
+  expireAt: Timestamp          // = closedAt + 30 giorni — usato dalla pulizia lato client (§6.1)
 
   items: [
     {
@@ -133,7 +134,8 @@ orders/{orderId}
       name: string,            // snapshot del nome al momento dell'ordine
       price: string,           // snapshot del prezzo (stesso formato "12,50" già in uso)
       quantity: number,
-      course: "antipasto" | "primo" | "secondo" | "dolce" | "bevanda",
+      categoryId: string,      // snapshot dell'id della categoria menù di appartenenza
+      categoryName: string,    // snapshot del nome della categoria (es. "Antipasti", "Primi")
       notes: string,           // es. "senza cipolla"
       status: "sent" | "preparing" | "out",
       sentAt: Timestamp
@@ -148,8 +150,18 @@ la comanda è stata inviata, la comanda già in cucina deve restare coerente
 con quello che è stato effettivamente ordinato (stesso principio di qualsiasi
 sistema di ordinazione).
 
+**Perché la categoria e non una "portata" scelta a mano**: la prima versione
+prevedeva una portata fissa (antipasto/primo/secondo/dolce/bevanda) scelta
+manualmente dal cameriere prima di aggiungere i piatti. In prova reale questo
+si è rivelato fonte di errori (es. un piatto aggiunto per sbaglio sotto
+"Bevande" con la selezione rimasta sulla portata precedente) ed era comunque
+un elenco scollegato dalle categorie vere del menù. La categoria del piatto
+(la stessa mostrata ai clienti) viene quindi presa automaticamente
+dall'articolo selezionato, senza alcuna scelta manuale: non può più esserci
+disallineamento tra cosa si clicca e come viene classificato.
+
 **Stato per riga, non per comanda intera**: la cucina segna "uscito" per
-gruppi di portata (es. tutti gli antipasti del tavolo 4), aggiornando lo
+intera categoria (es. tutti gli antipasti del tavolo 4), aggiornando lo
 `status` delle righe corrispondenti. Il cameriere vede l'aggiornamento in
 tempo reale sul proprio schermo.
 
@@ -261,10 +273,11 @@ dall'inizio, non aggiunta in un secondo momento.
 ### Area cameriere
 - Elenco tavoli con comande aperte (numero tavolo, tempo trascorso
   dall'apertura, indicatore se ci sono portate pronte da servire).
-- Apertura nuovo tavolo: numero, coperti (adulti/bambini), note.
+- Apertura nuovo tavolo: numero, nome facoltativo, coperti (adulti/bambini), note.
 - Selezione piatti: stessa struttura a categorie del menù pubblico, più
-  sezione "Fuori menù" separata; per ogni voce, quantità e portata; campo
-  note libere per riga.
+  sezione "Fuori menù" separata; la portata è sempre la categoria reale del
+  piatto cliccato (nessuna scelta manuale, vedi §4.2); per ogni voce,
+  quantità e campo note libere per riga.
 - Vista comanda del tavolo: elenco righe con stato (inviata/in
   preparazione/uscita), totale calcolato.
 - Chiusura tavolo: conferma, mostra elenco e totale finale.
@@ -320,3 +333,106 @@ con Playwright prima di considerarla completa:
 - Vista cucina per tavolo vs. per portata trasversale a tutti i tavoli — da
   decidere/affinare durante l'implementazione della Fase 1, osservando come
   viene usata.
+
+---
+
+## 12. Aggiornamenti successivi al primo giro di prova
+
+Dopo il primo giro di test reale, sono emerse alcune modifiche rispetto al
+piano iniziale (già implementate):
+
+- **Tutti i camerieri vedono e gestiscono tutti i tavoli** (nessun filtro per
+  cameriere che ha aperto il tavolo), così come tutta la cucina vede tutte le
+  comande — era già così fin dalla Fase 1, confermato esplicitamente.
+- **Nome tavolo facoltativo**, oltre al numero (es. "Famiglia Rossi").
+- **Coperti modificabili anche a tavolo già aperto** (non solo alla
+  creazione): persone che arrivano dopo o non si presentano.
+- **Orari per riga**: oltre a `sentAt` (già previsto), ogni riga registra
+  anche `outAt` (quando la cucina l'ha segnata uscita), mostrato sia nelle
+  viste live sia nello storico.
+- **Storico comande chiuse** (`src/OrderHistory.jsx`, condiviso tra area
+  cameriere e cucina): le comande chiuse non erano più consultabili da
+  nessuna parte dell'app una volta archiviate. Lo storico carica a pagine
+  (20 alla volta, "carica altre") le comande con `closedAt` valorizzato,
+  ordinate dalla più recente, raggruppate per giorno ("Oggi", "Ieri", poi
+  data). Non è realtime (un aggiornamento manuale è sufficiente per uno
+  storico) — usa `getDocs` con cursore su `closedAt`, non `onSnapshot`.
+- **Landing page unica per il personale** (`src/StaffHome.jsx`): il pulsante
+  "Area riservata" in fondo al menù pubblico (ex "Gestione menù") porta ora
+  qui invece che dritto al login di Gestione menù. Dopo l'accesso, in base al
+  ruolo (`staff/{uid}.role`) mostra solo le aree a cui l'account è abilitato:
+  un admin vede Gestione menù + Sala + Cucina (con un pulsante "Cambia area"
+  per passare dall'una all'altra), un cameriere solo Sala, un account cucina
+  solo Cucina — se c'è una sola area disponibile si entra direttamente, senza
+  scelta. `/cameriere` e `/cucina` restano comunque raggiungibili
+  direttamente (utile per un dispositivo dedicato, es. il tablet fisso in
+  cucina).
+- **Identificativo tavolo**: se è stato dato un nome, quello è
+  l'identificativo principale ovunque compaia il tavolo (elenco, dettaglio,
+  cucina, storico) e il numero passa in secondo piano; altrimenti resta il
+  solo numero (`tableIdentity()` in `shared.jsx`).
+- **Prezzo del coperto** (comune nei ristoranti italiani): configurabile in
+  Gestione menù, separato per adulti/bambini (`menu.coperto`), fatto uno
+  snapshot su ogni comanda al momento dell'apertura del tavolo (`order.coperto`)
+  — coerente con lo stesso principio già usato per nome/prezzo dei piatti: se
+  il prezzo cambia in futuro, le comande già aperte o nello storico restano
+  coerenti con quanto applicato quel giorno. Incluso nel totale
+  (`orderTotalCents` = piatti + coperto × persone), mostrato separatamente
+  ("di cui coperto…") ovunque compaia un totale.
+- **Pulizia dei dati di test**: i test Playwright ora eliminano (non solo
+  chiudono) le comande che creano — `tests/firestore-cleanup.js`. In
+  precedenza le comande di test, anche chiuse, restavano visibili per sempre
+  nello Storico comande reale (fino alla scadenza dei 30 giorni), confondendo
+  chi consultava lo storico con numeri di tavolo a 4 cifre senza senso.
+
+---
+
+## 13. Turno di servizio e pre-scontrino
+
+### 13.1 Comande chiuse visibili durante il turno
+
+Una comanda chiusa non sparisce più del tutto dalla schermata cameriere:
+resta visibile in una sezione "Chiusi nel turno" sotto l'elenco dei tavoli
+aperti, fino al cambio turno — dopo (o per i giorni precedenti) resta
+consultabile solo dallo Storico.
+
+Il turno (Pranzo/Cena) è determinato in automatico dall'orario, senza alcuna
+configurazione: prima delle 17:00 è pranzo (dalla mezzanotte), da quell'ora
+in poi è cena (`currentShiftStart()`/`currentShiftLabel()` in `shared.jsx`).
+Se gli orari reali del locale sono diversi, `SHIFT_BOUNDARY_HOUR` è l'unica
+costante da cambiare. Il calcolo avviene una volta all'apertura della
+schermata; se l'app resta aperta a cavallo del cambio turno, una ricarica
+della pagina aggiorna la sezione — stessa filosofia "pigra" già usata per la
+chiusura automatica a 24h e la pulizia dei 30 giorni.
+
+### 13.2 Pre-scontrino / scontrino finale (non fiscale)
+
+Pulsante "Pre-scontrino" nel dettaglio del tavolo: apre un riepilogo in stile
+scontrino (nome locale, tavolo, orario, cameriere, righe con prezzo, coperto,
+totale), **esplicitamente etichettato "documento non fiscale"** — non
+un'integrazione con cassa/stampante fiscale (resta fuori scopo, §1), solo un
+riepilogo stampabile via browser (`window.print()`, come già fa `PrintMenu.jsx`
+per il menù) per dare un'occhiata condivisa col tavolo prima del conto vero.
+
+- **Stampa**: usa la stampa nativa del browser; un CSS `@media print` nasconde
+  tutto il resto della pagina e i controlli non pertinenti (pulsanti di
+  modifica), lasciando solo il riepilogo.
+- **Modifica**: dopo aver generato il pre-scontrino, si possono rimuovere
+  righe sbagliate (`removeOrderLine`) — per aggiungerne di nuove si chiude il
+  riquadro e si usa "Aggiungi piatti" come al solito, poi si riapre per un
+  riepilogo aggiornato.
+- **Conferma scontrino finale**: salva sulla comanda (`order.receipt`) un
+  timestamp di stampa (`printedAt`), un timestamp di conferma (`confirmedAt`)
+  e uno snapshot delle righe/totale al momento della conferma — sincronizzato
+  in tempo reale su tutti i client, e recuperabile in futuro dallo Storico
+  (badge "scontrino confermato alle…").
+- **"Fine modifica"**: in modalità modifica si può uscire senza chiudere e
+  riaprire tutta la card (le rimozioni righe sono comunque già salvate subito
+  su Firestore ad ogni tocco, non è un "annulla" delle modifiche già fatte).
+- **Stampa anche per comande già chiuse**: lo stesso pulsante di stampa
+  (icona stampante) compare su ogni riga sia nella sezione "Chiusi nel turno"
+  sia nello Storico — apre lo stesso riquadro ma in sola lettura (`readOnly`):
+  solo "Stampa", niente "Modifica"/"Conferma" (una comanda chiusa non si
+  modifica più). Componente estratto in `src/ReceiptOverlay.jsx`, condiviso
+  tra `Waiter.jsx` e `OrderHistory.jsx` (usato sia dall'area cameriere sia
+  dall'area cucina).

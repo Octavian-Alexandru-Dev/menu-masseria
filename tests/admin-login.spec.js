@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: /gestione menù|menu management/i }).click();
+  await page.getByRole("button", { name: /area riservata|staff area/i }).click();
 });
 
 test("shows the login form with email and password fields", async ({ page }) => {

@@ -1,15 +1,22 @@
 // Area cameriere — presa comande digitale (vedi docs/comande-camerieri.md).
 // Caricato solo su /cameriere (lazy, vedi MenuApp.jsx), mai dal sito pubblico.
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Plus, Minus, X, ArrowLeft, LogOut, AlertCircle, CheckCircle2, Clock, Utensils } from "lucide-react";
-import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, COURSES, COURSE_LABEL, formatCentsAsPrice } from "./shared";
+import React, { useState, useEffect, useRef } from "react";
+import { Plus, Minus, X, ArrowLeft, LogOut, CheckCircle2, Clock, Utensils, History, Users, Receipt } from "lucide-react";
+import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableIdentity, currentShiftStart, currentShiftLabel } from "./shared";
 import {
-  subscribeOpenOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
-  autoCloseStaleOrders, orderTotalCents, runDailyExpiredOrdersCleanup,
+  subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
+  autoCloseStaleOrders, orderTotalCents, copertoTotalCents,
+  runDailyExpiredOrdersCleanup, updateCovers,
 } from "./orders";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
 } from "./staff-shared";
+import OrderHistory, { OrderRow } from "./OrderHistory";
+import ReceiptOverlay from "./ReceiptOverlay";
+
+function formatTime(ts) {
+  return ts?.toDate ? ts.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
+}
 
 const PENDING_WARNING_MS = 12_000;
 
@@ -44,16 +51,8 @@ function SyncBadge({ t, hasPendingWrites }) {
   );
 }
 
-function courseChip(t, active) {
-  return {
-    padding: "6px 14px", borderRadius: 20, fontSize: TYPE.smallPlus, cursor: "pointer",
-    border: active ? `1px solid ${t.primary}` : `1px solid ${t.line}`,
-    background: active ? t.primary : "transparent",
-    color: active ? t.card : t.inkSoft,
-  };
-}
-
-function TableList({ t, orders, onOpenNew, onOpenOrder }) {
+function TableList({ t, menu, orders, shiftClosedOrders, expandedClosedId, onToggleClosed, onOpenNew, onOpenOrder }) {
+  const [printingOrder, setPrintingOrder] = useState(null);
   const sorted = [...orders].sort((a, b) => (a.openedAt?.toMillis?.() || 0) - (b.openedAt?.toMillis?.() || 0));
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "20px 16px 100px" }}>
@@ -90,7 +89,12 @@ function TableList({ t, orders, onOpenNew, onOpenOrder }) {
               }}
             >
               <div>
-                <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink }}>Tavolo {o.tableNumber}</div>
+                <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink }}>
+                  {tableIdentity(o).primary}
+                  {tableIdentity(o).secondary && (
+                    <span style={{ fontWeight: 400, color: t.inkSoft, fontSize: TYPE.tinyPlus }}> · {tableIdentity(o).secondary}</span>
+                  )}
+                </div>
                 <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft, marginTop: 2 }}>
                   {elapsedLabel(o.openedAt)} · {total} {total === 1 ? "voce" : "voci"}
                 </div>
@@ -107,12 +111,40 @@ function TableList({ t, orders, onOpenNew, onOpenOrder }) {
           );
         })}
       </div>
+
+      {/* Tavoli chiusi durante il turno in corso (§9 del documento): non
+          spariscono del tutto dalla schermata — restano consultabili qui
+          fino al cambio di turno (poi solo dallo Storico). */}
+      {shiftClosedOrders.length > 0 && (
+        <div style={{ marginTop: 28 }}>
+          <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 8 }}>
+            Chiusi nel turno — {currentShiftLabel()}
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {shiftClosedOrders.map((o) => (
+              <OrderRow
+                key={o.id}
+                t={t}
+                order={o}
+                expanded={expandedClosedId === o.id}
+                onToggle={() => onToggleClosed(o.id)}
+                onPrint={setPrintingOrder}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {printingOrder && (
+        <ReceiptOverlay t={t} menu={menu} order={printingOrder} onClose={() => setPrintingOrder(null)} readOnly />
+      )}
     </div>
   );
 }
 
 function NewTableForm({ t, onCancel, onCreate, busy }) {
   const [tableNumber, setTableNumber] = useState("");
+  const [tableName, setTableName] = useState("");
   const [adults, setAdults] = useState("");
   const [children, setChildren] = useState("");
   const [notes, setNotes] = useState("");
@@ -131,6 +163,9 @@ function NewTableForm({ t, onCancel, onCreate, busy }) {
       <label style={labelStyle}>Numero tavolo *</label>
       <input style={inputStyle} type="number" min="1" inputMode="numeric" value={tableNumber} onChange={(e) => setTableNumber(e.target.value)} autoFocus />
 
+      <label style={labelStyle}>Nome</label>
+      <input style={inputStyle} placeholder="es. Famiglia Rossi, Compleanno…" value={tableName} onChange={(e) => setTableName(e.target.value)} />
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div>
           <label style={labelStyle}>Adulti</label>
@@ -147,7 +182,7 @@ function NewTableForm({ t, onCancel, onCreate, busy }) {
 
       <button
         disabled={!tableNumber || busy}
-        onClick={() => onCreate({ tableNumber: parseInt(tableNumber, 10), adults: parseInt(adults, 10) || 0, children: parseInt(children, 10) || 0, notes })}
+        onClick={() => onCreate({ tableNumber: parseInt(tableNumber, 10), tableName: tableName.trim(), adults: parseInt(adults, 10) || 0, children: parseInt(children, 10) || 0, notes })}
         className="mdp-btn"
         style={{
           width: "100%", marginTop: 20, padding: "12px 0", background: t.primary, color: t.bg, border: "none",
@@ -161,29 +196,73 @@ function NewTableForm({ t, onCancel, onCreate, busy }) {
   );
 }
 
+function CoversEditor({ t, order }) {
+  const [busy, setBusy] = useState(false);
+  const change = async (field, delta) => {
+    const next = {
+      adults: order.covers?.adults || 0,
+      children: order.covers?.children || 0,
+      [field]: Math.max(0, (order.covers?.[field] || 0) + delta),
+    };
+    setBusy(true);
+    try {
+      await updateCovers(order.id, next);
+    } catch (err) {
+      console.error("[waiter] Modifica coperti fallita:", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const stepperStyle = { background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 20, height: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: TYPE.tinyPlus, color: t.inkSoft, marginTop: 4 }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Users size={12} /> Adulti
+        <button disabled={busy} onClick={() => change("adults", -1)} className="mdp-btn" style={stepperStyle}><Minus size={10} /></button>
+        <span style={{ minWidth: 12, textAlign: "center", color: t.ink }}>{order.covers?.adults || 0}</span>
+        <button disabled={busy} onClick={() => change("adults", 1)} className="mdp-btn" style={stepperStyle}><Plus size={10} /></button>
+      </span>
+      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        Bambini
+        <button disabled={busy} onClick={() => change("children", -1)} className="mdp-btn" style={stepperStyle}><Minus size={10} /></button>
+        <span style={{ minWidth: 12, textAlign: "center", color: t.ink }}>{order.covers?.children || 0}</span>
+        <button disabled={busy} onClick={() => change("children", 1)} className="mdp-btn" style={stepperStyle}><Plus size={10} /></button>
+      </span>
+      {(order.coperto?.adults || order.coperto?.children) && (
+        <span style={{ color: t.inkSoft }}>
+          (coperto € {order.coperto.adults}/€ {order.coperto.children})
+        </span>
+      )}
+    </div>
+  );
+}
+
 function OrderDetail({ t, menu, order, onBack, staffName }) {
-  const [currentCourse, setCurrentCourse] = useState(COURSES[0].id);
-  const [draft, setDraft] = useState([]); // { lineId, menuItemId, name, price, course, quantity, notes }
+  const [draft, setDraft] = useState([]); // { lineId, menuItemId, name, price, categoryId, categoryName, quantity, notes }
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [closing, setClosing] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
 
   const categories = menu?.categories || [];
   const normalItems = categories
     .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false && !i.staffOnly) }))
     .filter((c) => c.items.length > 0);
-  const offMenuItems = categories.flatMap((c) => c.items.filter((i) => i.staffOnly));
+  const offMenuItems = categories.flatMap((c) => c.items.filter((i) => i.staffOnly).map((i) => ({ ...i, _categoryId: c.id, _categoryName: c.name })));
 
-  const addToDraft = (item) => {
+  // La "portata" non è più una scelta manuale (fonte di errori: un piatto
+  // finito per sbaglio sotto la categoria selezionata in quel momento), ma
+  // sempre la categoria reale del menù a cui il piatto appartiene.
+  const addToDraft = (item, categoryId, categoryName) => {
     setDraft((d) => {
-      const idx = d.findIndex((l) => l.menuItemId === item.id && l.course === currentCourse && !l.notes);
+      const idx = d.findIndex((l) => l.menuItemId === item.id && !l.notes);
       if (idx >= 0) {
         const next = [...d];
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
         return next;
       }
-      return [...d, { lineId: uid(), menuItemId: item.id, name: item.name, price: item.price, course: currentCourse, quantity: 1, notes: "" }];
+      return [...d, { lineId: uid(), menuItemId: item.id, name: item.name, price: item.price, categoryId, categoryName, quantity: 1, notes: "" }];
     });
   };
 
@@ -220,10 +299,16 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
     }
   };
 
-  const sentByCourse = COURSES.map((c) => ({
-    course: c,
-    lines: (order.items || []).filter((l) => l.course === c.id),
-  })).filter((g) => g.lines.length > 0);
+  // Raggruppa le righe già inviate per categoria reale del menù, nello
+  // stesso ordine in cui le categorie compaiono nel menù.
+  const sentByCategory = categories
+    .map((c) => ({ categoryId: c.id, categoryName: c.name, lines: (order.items || []).filter((l) => l.categoryId === c.id) }))
+    .filter((g) => g.lines.length > 0);
+  const sentCategoryIds = new Set(categories.map((c) => c.id));
+  const sentOther = (order.items || []).filter((l) => !sentCategoryIds.has(l.categoryId));
+  if (sentOther.length > 0) {
+    sentByCategory.push({ categoryId: "__other__", categoryName: sentOther[0].categoryName || "Altro", lines: sentOther });
+  }
 
   const totalCents = orderTotalCents(order) + draft.reduce((s, l) => {
     const n = parseFloat(String(l.price).replace(",", ".")) || 0;
@@ -243,26 +328,37 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
       </div>
 
       <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary }}>
-        Tavolo {order.tableNumber}
+        {tableIdentity(order).primary}
+        {tableIdentity(order).secondary && (
+          <span style={{ fontWeight: 400, fontSize: TYPE.body, color: t.inkSoft }}> · {tableIdentity(order).secondary}</span>
+        )}
       </div>
-      <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft, marginBottom: 4 }}>
-        {order.covers?.adults || 0} adulti, {order.covers?.children || 0} bambini
-        {order.notes ? ` · ${order.notes}` : ""}
+      {order.notes && (
+        <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft, marginBottom: 4 }}>{order.notes}</div>
+      )}
+      <CoversEditor t={t} order={order} />
+      <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft, marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+        <Clock size={11} /> Aperto alle {formatTime(order.openedAt) || "—"}
       </div>
 
-      {sentByCourse.length > 0 && (
+      {sentByCategory.length > 0 && (
         <div style={{ marginTop: 16, marginBottom: 20 }}>
           <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 8 }}>
             Comanda inviata
           </div>
           <div style={{ display: "grid", gap: 8 }}>
-            {sentByCourse.map(({ course, lines }) => (
-              <div key={course.id} style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: "8px 12px", background: t.card }}>
-                <div style={{ fontSize: TYPE.tinyPlus, color: t.secondary, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{course.label}</div>
+            {sentByCategory.map(({ categoryId, categoryName, lines }) => (
+              <div key={categoryId} style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: "8px 12px", background: t.card }}>
+                <div style={{ fontSize: TYPE.tinyPlus, color: t.secondary, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>{categoryName}</div>
                 {lines.map((l) => (
                   <div key={l.lineId} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: TYPE.smallPlus, padding: "3px 0" }}>
                     <span>{l.quantity}× {l.name}{l.notes ? ` (${l.notes})` : ""}</span>
-                    <span style={{ color: statusColor(l.status), fontWeight: 600, fontSize: TYPE.tinyPlus, whiteSpace: "nowrap" }}>{statusLabel(l.status)}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft }}>{formatTime(l.sentAt)}</span>
+                      <span style={{ color: statusColor(l.status), fontWeight: 600, fontSize: TYPE.tinyPlus }}>
+                        {statusLabel(l.status)}{l.outAt ? ` ${formatTime(l.outAt)}` : ""}
+                      </span>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -272,14 +368,7 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
       )}
 
       <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 8 }}>
-        Aggiungi portata
-      </div>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-        {COURSES.map((c) => (
-          <button key={c.id} onClick={() => setCurrentCourse(c.id)} className="mdp-btn" style={courseChip(t, currentCourse === c.id)}>
-            {c.label}
-          </button>
-        ))}
+        Aggiungi piatti
       </div>
 
       {normalItems.map((cat) => (
@@ -287,7 +376,7 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
           <div style={{ fontSize: TYPE.smallPlus, fontWeight: 600, color: t.ink, marginBottom: 6 }}>{cat.name}</div>
           <div style={{ display: "grid", gap: 6 }}>
             {cat.items.map((item) => (
-              <button key={item.id} onClick={() => addToDraft(item)} className="mdp-btn" style={{
+              <button key={item.id} onClick={() => addToDraft(item, cat.id, cat.name)} className="mdp-btn" style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left",
                 padding: "8px 12px", borderRadius: 6, border: `1px solid ${t.line}`, background: t.bg, cursor: "pointer",
               }}>
@@ -309,7 +398,7 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             {offMenuItems.map((item) => (
-              <button key={item.id} onClick={() => addToDraft(item)} className="mdp-btn" style={{
+              <button key={item.id} onClick={() => addToDraft(item, item._categoryId, item._categoryName)} className="mdp-btn" style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left",
                 padding: "8px 12px", borderRadius: 6, border: `1px dashed ${t.accent2}`, background: t.bg, cursor: "pointer",
               }}>
@@ -333,7 +422,7 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
             <div style={{ maxHeight: 160, overflowY: "auto", marginBottom: 10 }}>
               {draft.map((l) => (
                 <div key={l.lineId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-                  <span style={{ flex: 1, fontSize: TYPE.smallPlus }}>{l.name} <span style={{ color: t.inkSoft, fontSize: TYPE.tinyPlus }}>· {COURSE_LABEL[l.course]}</span></span>
+                  <span style={{ flex: 1, fontSize: TYPE.smallPlus }}>{l.name} <span style={{ color: t.inkSoft, fontSize: TYPE.tinyPlus }}>· {l.categoryName}</span></span>
                   <button onClick={() => changeQty(l.lineId, -1)} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 22, height: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Minus size={11} /></button>
                   <span style={{ fontSize: TYPE.smallPlus, minWidth: 14, textAlign: "center" }}>{l.quantity}</span>
                   <button onClick={() => changeQty(l.lineId, 1)} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 22, height: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Plus size={11} /></button>
@@ -364,13 +453,29 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
           padding: "12px 16px",
         }}>
           <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink }}>Totale € {formatCentsAsPrice(totalCents)}</div>
-            <button onClick={() => setConfirmClose(true)} className="mdp-btn" style={{
-              padding: "10px 16px", background: "none", border: `1px solid ${t.accent2}`, color: t.accent2,
-              borderRadius: 8, fontSize: TYPE.smallPlus, cursor: "pointer",
-            }}>
-              Chiudi tavolo
-            </button>
+            <div>
+              <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink }}>Totale € {formatCentsAsPrice(totalCents)}</div>
+              {copertoTotalCents(order) > 0 && (
+                <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft }}>
+                  di cui coperto € {formatCentsAsPrice(copertoTotalCents(order))}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setShowReceipt(true)} className="mdp-btn" style={{
+                padding: "10px 12px", background: "none", border: `1px solid ${t.line}`, color: t.ink,
+                borderRadius: 8, fontSize: TYPE.smallPlus, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <Receipt size={14} /> Pre-scontrino
+              </button>
+              <button onClick={() => setConfirmClose(true)} className="mdp-btn" style={{
+                padding: "10px 16px", background: "none", border: `1px solid ${t.accent2}`, color: t.accent2,
+                borderRadius: 8, fontSize: TYPE.smallPlus, cursor: "pointer",
+              }}>
+                Chiudi tavolo
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -379,10 +484,12 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(20,15,10,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 }} onClick={() => setConfirmClose(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: t.card, borderRadius: 12, padding: 24, maxWidth: 360, width: "100%" }}>
             <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary, marginBottom: 10 }}>
-              Chiudere il tavolo {order.tableNumber}?
+              Chiudere {tableIdentity(order).primary}?
             </div>
             <div style={{ fontSize: TYPE.body, color: t.inkSoft, marginBottom: 6 }}>
-              {(order.items || []).length} voci ordinate — totale € {formatCentsAsPrice(orderTotalCents(order))}.
+              {(order.items || []).length} voci ordinate
+              {copertoTotalCents(order) > 0 && ` + coperto (${(order.covers?.adults || 0)} adulti, ${(order.covers?.children || 0)} bambini)`}
+              {" "}— totale € {formatCentsAsPrice(orderTotalCents(order))}.
             </div>
             <div style={{ fontSize: TYPE.smallPlus, color: t.inkSoft, marginBottom: 20 }}>
               Nessuno scontrino verrà stampato: questa azione archivia solo la comanda.
@@ -396,6 +503,10 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
           </div>
         </div>
       )}
+
+      {showReceipt && (
+        <ReceiptOverlay t={t} menu={menu} order={order} onClose={() => setShowReceipt(false)} />
+      )}
     </div>
   );
 }
@@ -404,7 +515,9 @@ function WaiterPanel({ menu, session }) {
   const t = THEMES[menu?.theme] || THEMES.rustica;
   const [orders, setOrders] = useState([]);
   const [ordersReady, setOrdersReady] = useState(false);
-  const [view, setView] = useState({ mode: "list" }); // list | new | detail
+  const [shiftClosedOrders, setShiftClosedOrders] = useState([]);
+  const [expandedClosedId, setExpandedClosedId] = useState(null);
+  const [view, setView] = useState({ mode: "list" }); // list | new | detail | history
   const [creating, setCreating] = useState(false);
   const closingRef = useRef(new Set());
 
@@ -413,6 +526,17 @@ function WaiterPanel({ menu, session }) {
       setOrders(list);
       setOrdersReady(true);
     }, (err) => console.error("[waiter] Errore lettura comande:", err));
+    return unsubscribe;
+  }, []);
+
+  // Comande chiuse nel turno in corso (§9): l'inizio turno si calcola una
+  // volta all'apertura della schermata — se l'app resta aperta a cavallo
+  // del cambio turno (pranzo→cena), basta ricaricare la pagina per
+  // aggiornarlo, coerente con gli altri controlli "pigri" già nell'app.
+  useEffect(() => {
+    const unsubscribe = subscribeShiftClosedOrders(currentShiftStart(), (list) => {
+      setShiftClosedOrders(list);
+    }, (err) => console.error("[waiter] Errore lettura comande chiuse nel turno:", err));
     return unsubscribe;
   }, []);
 
@@ -432,7 +556,7 @@ function WaiterPanel({ menu, session }) {
   const createTable = async (fields) => {
     setCreating(true);
     try {
-      const ref = await openOrder({ ...fields, waiterUid: session.user.uid, waiterName: session.name });
+      const ref = await openOrder({ ...fields, coperto: menu?.coperto, waiterUid: session.user.uid, waiterName: session.name });
       setView({ mode: "detail", orderId: ref.id });
     } catch (err) {
       console.error("[waiter] Apertura tavolo fallita:", err);
@@ -454,9 +578,14 @@ function WaiterPanel({ menu, session }) {
           <Logo width={40} />
           <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.subhead, fontWeight: 600 }}>Sala — {session.name}</div>
         </div>
-        <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus }}>
-          <LogOut size={14} /> Esci
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={() => setView({ mode: "history" })} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
+            <History size={14} /> Storico
+          </button>
+          <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
+            <LogOut size={14} /> Esci
+          </button>
+        </div>
       </div>
 
       {!ordersReady && (
@@ -464,7 +593,16 @@ function WaiterPanel({ menu, session }) {
       )}
 
       {ordersReady && view.mode === "list" && (
-        <TableList t={t} orders={orders} onOpenNew={() => setView({ mode: "new" })} onOpenOrder={(id) => setView({ mode: "detail", orderId: id })} />
+        <TableList
+          t={t}
+          menu={menu}
+          orders={orders}
+          shiftClosedOrders={shiftClosedOrders}
+          expandedClosedId={expandedClosedId}
+          onToggleClosed={(id) => setExpandedClosedId((cur) => (cur === id ? null : id))}
+          onOpenNew={() => setView({ mode: "new" })}
+          onOpenOrder={(id) => setView({ mode: "detail", orderId: id })}
+        />
       )}
       {ordersReady && view.mode === "new" && (
         <NewTableForm t={t} onCancel={() => setView({ mode: "list" })} onCreate={createTable} busy={creating} />
@@ -481,6 +619,9 @@ function WaiterPanel({ menu, session }) {
             </button>
           </div>
         </div>
+      )}
+      {view.mode === "history" && (
+        <OrderHistory t={t} menu={menu} onBack={() => setView({ mode: "list" })} />
       )}
     </div>
   );

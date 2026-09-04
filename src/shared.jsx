@@ -66,16 +66,6 @@ export const MENU_DOC_PATH = ["menu", "data"];
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
 /* ============================== COMANDE (staff) ============================== */
-// Portate disponibili per riga di una comanda (§4.2 di docs/comande-camerieri.md).
-export const COURSES = [
-  { id: "antipasto", label: "Antipasto" },
-  { id: "primo", label: "Primo" },
-  { id: "secondo", label: "Secondo" },
-  { id: "dolce", label: "Dolce" },
-  { id: "bevanda", label: "Bevanda" },
-];
-export const COURSE_LABEL = Object.fromEntries(COURSES.map((c) => [c.id, c.label]));
-
 // Somma prezzi salvati come stringa in stile italiano ("12,50") e restituisce
 // una stringa nello stesso formato — coerente con come i prezzi sono già
 // salvati nel menù (mai come number).
@@ -85,6 +75,40 @@ export function parsePriceToCents(price) {
 }
 export function formatCentsAsPrice(cents) {
   return (cents / 100).toFixed(2).replace(".", ",");
+}
+
+// Turno di servizio corrente (pranzo/cena), determinato in automatico
+// dall'orario — nessuna configurazione richiesta. Soglia fissata alle 17:00:
+// prima è pranzo, da quell'ora in poi è cena. Se gli orari reali del locale
+// sono diversi, questa è l'unica costante da cambiare.
+const SHIFT_BOUNDARY_HOUR = 17;
+
+export function currentShiftLabel() {
+  return new Date().getHours() < SHIFT_BOUNDARY_HOUR ? "Pranzo" : "Cena";
+}
+
+// Inizio del turno in corso (oggi): mezzanotte per il pranzo, dalle 17:00
+// per la cena — usato per capire quali comande chiuse fanno parte del
+// turno attuale (vs. turni/giorni precedenti, già nello Storico).
+export function currentShiftStart() {
+  const start = new Date();
+  if (start.getHours() < SHIFT_BOUNDARY_HOUR) {
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setHours(SHIFT_BOUNDARY_HOUR, 0, 0, 0);
+  }
+  return start;
+}
+
+// Identificativo di un tavolo/comanda ovunque compaia nell'interfaccia
+// (elenco tavoli, dettaglio, cucina, storico): se è stato dato un nome,
+// quello è l'identificativo principale e il numero passa in secondo piano;
+// altrimenti il numero resta l'unico identificativo.
+export function tableIdentity(order) {
+  if (order.tableName) {
+    return { primary: order.tableName, secondary: `Tavolo ${order.tableNumber}` };
+  }
+  return { primary: `Tavolo ${order.tableNumber}`, secondary: null };
 }
 
 /* ============================== LINGUE (lato clienti) ============================== */
@@ -98,11 +122,11 @@ export const LANGUAGES = [
 
 // Testi fissi dell'interfaccia: tradotti a mano, non richiedono chiamate API.
 export const UI_STRINGS = {
-  it: { onRequest: "Su richiesta", manageMenu: "Gestione menù", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", linkInstagram: "Seguici su Instagram", linkFacebook: "Seguici su Facebook", linkShop: "Vai al nostro shop online", closeZoom: "Chiudi" },
-  en: { onRequest: "On request", manageMenu: "Menu management", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", linkInstagram: "Follow us on Instagram", linkFacebook: "Follow us on Facebook", linkShop: "Visit our online shop", closeZoom: "Close" },
-  es: { onRequest: "Bajo pedido", manageMenu: "Gestión del menú", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", linkInstagram: "Síguenos en Instagram", linkFacebook: "Síguenos en Facebook", linkShop: "Visita nuestra tienda online", closeZoom: "Cerrar" },
-  de: { onRequest: "Auf Anfrage", manageMenu: "Menüverwaltung", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", linkInstagram: "Folge uns auf Instagram", linkFacebook: "Folge uns auf Facebook", linkShop: "Besuche unseren Online-Shop", closeZoom: "Schließen" },
-  fr: { onRequest: "Sur demande", manageMenu: "Gestion du menu", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", linkInstagram: "Suivez-nous sur Instagram", linkFacebook: "Suivez-nous sur Facebook", linkShop: "Visitez notre boutique en ligne", closeZoom: "Fermer" },
+  it: { onRequest: "Su richiesta", manageMenu: "Area riservata", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", linkInstagram: "Seguici su Instagram", linkFacebook: "Seguici su Facebook", linkShop: "Vai al nostro shop online", closeZoom: "Chiudi" },
+  en: { onRequest: "On request", manageMenu: "Staff area", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", linkInstagram: "Follow us on Instagram", linkFacebook: "Follow us on Facebook", linkShop: "Visit our online shop", closeZoom: "Close" },
+  es: { onRequest: "Bajo pedido", manageMenu: "Área reservada", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", linkInstagram: "Síguenos en Instagram", linkFacebook: "Síguenos en Facebook", linkShop: "Visita nuestra tienda online", closeZoom: "Cerrar" },
+  de: { onRequest: "Auf Anfrage", manageMenu: "Mitarbeiterbereich", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", linkInstagram: "Folge uns auf Instagram", linkFacebook: "Folge uns auf Facebook", linkShop: "Besuche unseren Online-Shop", closeZoom: "Schließen" },
+  fr: { onRequest: "Sur demande", manageMenu: "Espace réservé", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", linkInstagram: "Suivez-nous sur Instagram", linkFacebook: "Suivez-nous sur Facebook", linkShop: "Visitez notre boutique en ligne", closeZoom: "Fermer" },
 };
 
 export const TRANSLATION_LANG_KEY = "mdp-lang";

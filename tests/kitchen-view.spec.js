@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { TEST_WAITER, TEST_KITCHEN } from "./test-env";
+import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
 
 // Range distinto da waiter-order.spec.js per evitare collisioni quando i
 // file di test girano in parallelo.
@@ -63,24 +64,17 @@ test.describe("Area cucina", () => {
       // dover tornare in cucina a chiedere (§5 punto 4 del documento).
       await expect(waiterPage.getByText(/uscita/i).first()).toBeVisible({ timeout: 15_000 });
 
-      // Pulizia: chiude il tavolo di test.
+      // Chiude il tavolo di test: torna all'elenco tavoli aperti...
       await waiterPage.getByRole("button", { name: /chiudi tavolo/i }).click();
       await waiterPage.getByRole("button", { name: /conferma chiusura/i }).click();
-      await expect(waiterPage.getByText(`Tavolo ${TABLE_NUMBER}`, { exact: true })).not.toBeVisible({ timeout: 10_000 });
+      await expect(waiterPage.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
     } finally {
-      // Se un'asserzione precedente è fallita, il tavolo di test potrebbe
-      // essere rimasto aperto: tentativo di pulizia best-effort prima di
-      // chiudere i contesti, per non lasciare comande di test aperte nel
-      // Firestore reale.
-      try {
-        const closeBtn = waiterPage.getByRole("button", { name: /chiudi tavolo/i });
-        if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-          await closeBtn.click();
-          await waiterPage.getByRole("button", { name: /conferma chiusura/i }).click({ timeout: 3000 });
-        }
-      } catch {
-        // best-effort
-      }
+      // Una comanda di test, anche chiusa correttamente dal flusso UI, resta
+      // visibile per sempre nello Storico comande finché non scadono i 30
+      // giorni di retention — quindi non basta chiuderla, va eliminata del
+      // tutto (indipendentemente dal fatto che sia rimasta aperta per
+      // un'asserzione fallita, o già chiusa con successo).
+      await deleteTestOrderByTableNumber(TABLE_NUMBER);
       await waiterContext.close();
       await kitchenContext.close();
     }

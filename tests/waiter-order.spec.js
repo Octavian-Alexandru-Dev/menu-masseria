@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { TEST_WAITER } from "./test-env";
+import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
 
 // Numero di tavolo "sentinella" molto alto e randomizzato ad ogni run, per
 // non essere mai confuso con un tavolo reale e per non collidere con un
@@ -11,19 +12,11 @@ test.describe("Area cameriere", () => {
     await page.goto("/cameriere");
   });
 
-  // Se un test fallisce a metà (es. su un'asserzione dopo l'invio della
-  // comanda), il tavolo di test resterebbe aperto nel Firestore reale.
-  // Tentativo di pulizia best-effort, silenzioso se non c'è nulla da chiudere.
-  test.afterEach(async ({ page }) => {
-    try {
-      const closeBtn = page.getByRole("button", { name: /chiudi tavolo/i });
-      if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await closeBtn.click();
-        await page.getByRole("button", { name: /conferma chiusura/i }).click({ timeout: 3000 });
-      }
-    } catch {
-      // best-effort: non far fallire il test per un problema di pulizia
-    }
+  // Una comanda di test, anche chiusa correttamente dal flusso UI, resta
+  // visibile per sempre nello Storico comande finché non scadono i 30 giorni
+  // di retention — quindi non basta chiuderla, va eliminata del tutto.
+  test.afterEach(async () => {
+    await deleteTestOrderByTableNumber(TABLE_NUMBER);
   });
 
   test("mostra il login per l'area cameriere", async ({ page }) => {
@@ -68,9 +61,14 @@ test.describe("Area cameriere", () => {
     // La riga inviata compare nella comanda con lo stato "Inviata".
     await expect(page.getByText(/inviata/i).first()).toBeVisible();
 
-    // Pulizia: chiude il tavolo di test per non lasciare comande aperte.
+    // Chiude il tavolo: torna all'elenco (non più aperto)...
     await page.getByRole("button", { name: /chiudi tavolo/i }).click();
     await page.getByRole("button", { name: /conferma chiusura/i }).click();
-    await expect(page.getByText(`Tavolo ${TABLE_NUMBER}`, { exact: true })).not.toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+
+    // ...ma resta visibile nella sezione "Chiusi nel turno" (non sparisce
+    // del tutto dalla schermata per tutto il servizio in corso).
+    await expect(page.getByText(/chiusi nel turno/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(`Tavolo ${TABLE_NUMBER}`, { exact: true })).toBeVisible();
   });
 });
