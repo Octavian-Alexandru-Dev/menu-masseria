@@ -139,7 +139,7 @@ export default function ClientView({ menu, onGoAdmin }) {
   // Solo le categorie visibili, e al loro interno solo i piatti visibili.
   const visibleCategories = displayMenu.categories
     .filter((c) => c.visible !== false)
-    .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false) }))
+    .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false && !i.staffOnly) }))
     .filter((c) => c.items.length > 0);
 
   // menu.reviewLinks/socialLinks possono mancare nei menù salvati prima dell'introduzione di questi campi.

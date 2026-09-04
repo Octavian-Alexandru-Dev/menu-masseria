@@ -184,18 +184,32 @@ tempo reale sul proprio schermo.
 Due meccanismi distinti, scelti per restare **interamente gratuiti** (nessun
 upgrade al piano Firebase a consumo):
 
-### 6.1 Cancellazione dopo 30 giorni — Firestore TTL policy
+### 6.1 Cancellazione dopo 30 giorni — pulizia lato client (come §6.2)
 
-Feature nativa di Firestore (disponibile anche sul piano gratuito Spark):
-si configura una policy TTL sul campo `expireAt` della collection `orders`
-(dalla console Firebase, sezione Firestore → TTL). Da quel momento Firestore
-cancella da solo, in background, ogni documento il cui `expireAt` è nel
-passato — nessun codice server da scrivere o mantenere. L'eliminazione
-avviene di norma entro 24-72 ore dalla scadenza, cosa irrilevante per un
-archivio di 30 giorni.
+Il piano in origine prevedeva una policy TTL nativa di Firestore sul campo
+`expireAt`. In fase di implementazione è emerso che **attivare** una policy
+TTL richiede il piano a consumo Blaze (carta di pagamento collegata al
+progetto), anche se l'uso della sola funzione resterebbe a costo zero — sul
+piano gratuito Spark il comando di attivazione viene rifiutato
+(`PERMISSION_DENIED: billing disabled`). Per restare interamente gratuiti,
+si usa quindi lo stesso pattern "pigro" lato client già scelto per la
+chiusura automatica a 24h (§6.2):
 
-L'unico compito del codice applicativo è scrivere correttamente `expireAt`
-quando una comanda viene chiusa (manualmente o automaticamente).
+- Ogni volta che si apre l'area cameriere o l'area cucina, il codice
+  controlla (tramite `localStorage`, per dispositivo) se la pulizia è già
+  stata eseguita oggi; se no, interroga `orders` per i documenti con
+  `expireAt` nel passato e li cancella, poi segna la data odierna come
+  "già pulita" per non ripetere il controllo ad ogni apertura nello stesso
+  giorno sullo stesso dispositivo.
+- Implementato in `runDailyExpiredOrdersCleanup()` (`src/orders.js`),
+  richiamato all'apertura di `Waiter.jsx` e `Kitchen.jsx`.
+- Se in futuro si passasse al piano Blaze per altri motivi, si potrà
+  attivare la policy TTL nativa e rimuovere questo controllo lato client
+  senza cambiare il resto del modello dati.
+
+Come prima, l'unico compito del resto del codice applicativo è scrivere
+correttamente `expireAt` quando una comanda viene chiusa (manualmente o
+automaticamente) — invariato.
 
 ### 6.2 Chiusura automatica dopo 24 ore — controllo lato client
 

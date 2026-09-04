@@ -1,6 +1,7 @@
 node_modules
 dist
 .env
+.env.test
 .firebase
 test-results
 playwright-report

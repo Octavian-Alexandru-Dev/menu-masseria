@@ -2,9 +2,11 @@
 // scaricato SOLO quando qualcuno clicca "Gestione menù" nel sito pubblico
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
-import React, { useState } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X, Users } from "lucide-react";
+import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
+import { db } from "./firebase-db";
 import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation, FALLBACK_STYLE, TYPE } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 
@@ -192,6 +194,136 @@ function AdminBootstrap({ onImport, onExit, importError }) {
           ← Torna al menù
         </button>
       </div>
+    </div>
+  );
+}
+
+const STAFF_ROLES = [
+  { value: "waiter", label: "Cameriere" },
+  { value: "kitchen", label: "Cucina" },
+  { value: "admin", label: "Amministratore" },
+];
+
+// Gestione ruoli del personale (docs/comande-camerieri.md, §3). Collection
+// a parte rispetto al menù (staff/{uid}), quindi legge/scrive Firestore per
+// conto proprio invece di passare da menu/setMenu/onSave.
+//
+// Gli account Firebase Auth vanno creati a mano dalla console Firebase
+// (Authentication → Aggiungi utente): questa sezione serve solo ad
+// assegnare nome e ruolo a un uid già esistente.
+function StaffSection({ t }) {
+  const [staff, setStaff] = useState(null);
+  const [uidInput, setUidInput] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [roleInput, setRoleInput] = useState("waiter");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [confirmDeleteUid, setConfirmDeleteUid] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, "staff"),
+      (snap) => setStaff(snap.docs.map((d) => ({ uid: d.id, ...d.data() }))),
+      (err) => {
+        console.error("[admin] Errore lettura staff:", err);
+        setError("Impossibile leggere l'elenco del personale.");
+      }
+    );
+    return unsubscribe;
+  }, []);
+
+  const addStaff = async (e) => {
+    e.preventDefault();
+    setError("");
+    const cleanUid = uidInput.trim();
+    if (!cleanUid || !nameInput.trim()) return;
+    setSaving(true);
+    try {
+      await setDoc(doc(db, "staff", cleanUid), { name: nameInput.trim(), role: roleInput });
+      setUidInput("");
+      setNameInput("");
+      setRoleInput("waiter");
+    } catch (err) {
+      console.error("[admin] Salvataggio staff fallito:", err);
+      setError("Salvataggio non riuscito. Verifica di aver effettuato l'accesso e riprova.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeStaff = async (uidToRemove) => {
+    try {
+      await deleteDoc(doc(db, "staff", uidToRemove));
+    } catch (err) {
+      console.error("[admin] Eliminazione staff fallita:", err);
+      setError("Eliminazione non riuscita. Riprova.");
+    } finally {
+      setConfirmDeleteUid(null);
+    }
+  };
+
+  const roleLabel = (role) => STAFF_ROLES.find((r) => r.value === role)?.label || role;
+  const inputStyle = { width: "100%", padding: "9px 11px", border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.smallPlus };
+  const labelStyle = { fontSize: TYPE.tiny, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, display: "block", marginBottom: 4 };
+
+  return (
+    <div style={{ ...cardStyle(t), marginBottom: 24 }}>
+      <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
+        <Users size={13} /> Personale — accesso a comande/cucina
+      </div>
+      <div style={{ fontSize: TYPE.labelPlus, color: t.inkSoft, marginBottom: 16, lineHeight: 1.4 }}>
+        Per aggiungere una persona, crea prima il suo account in Firebase Console
+        (Authentication → Aggiungi utente), poi incolla qui il suo UID per
+        assegnargli un ruolo e abilitarlo su /cameriere o /cucina.
+      </div>
+
+      {error && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginBottom: 12 }}>
+          <AlertCircle size={14} /> {error}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gap: 8 }}>
+        {staff === null && <div style={{ fontSize: TYPE.smallPlus, color: t.inkSoft }}>Caricamento…</div>}
+        {staff !== null && staff.length === 0 && (
+          <div style={{ fontSize: TYPE.smallPlus, color: t.inkSoft }}>Nessun membro dello staff configurato.</div>
+        )}
+        {staff !== null && staff.map((s) => (
+          <div key={s.uid} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, border: `1px solid ${t.line}`, borderRadius: 6, padding: "8px 12px", background: t.bg }}>
+            <div>
+              <div style={{ fontSize: TYPE.smallPlus, fontWeight: 600 }}>{s.name} <span style={{ fontWeight: 400, color: t.inkSoft }}>· {roleLabel(s.role)}</span></div>
+              <div style={{ fontSize: TYPE.micro, color: t.inkSoft, fontFamily: "monospace" }}>{s.uid}</div>
+            </div>
+            <button
+              onClick={() => (confirmDeleteUid === s.uid ? removeStaff(s.uid) : setConfirmDeleteUid(s.uid))}
+              className="mdp-btn"
+              style={btnDanger(t)}
+            >
+              <Trash2 size={12} /> {confirmDeleteUid === s.uid ? "Conferma" : "Rimuovi"}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={addStaff} style={{ display: "grid", gap: 10, gridTemplateColumns: "1.4fr 1fr 0.9fr auto", alignItems: "end", marginTop: 16 }}>
+        <div>
+          <span style={labelStyle}>UID (da Firebase Console)</span>
+          <input style={inputStyle} value={uidInput} onChange={(e) => setUidInput(e.target.value)} placeholder="es. aBc123…" />
+        </div>
+        <div>
+          <span style={labelStyle}>Nome</span>
+          <input style={inputStyle} value={nameInput} onChange={(e) => setNameInput(e.target.value)} placeholder="es. Marco" />
+        </div>
+        <div>
+          <span style={labelStyle}>Ruolo</span>
+          <select style={inputStyle} value={roleInput} onChange={(e) => setRoleInput(e.target.value)}>
+            {STAFF_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </div>
+        <button type="submit" disabled={saving || !uidInput.trim() || !nameInput.trim()} className="mdp-btn" style={{ ...btnPrimary(t), opacity: saving || !uidInput.trim() || !nameInput.trim() ? 0.6 : 1 }}>
+          <Plus size={13} /> Aggiungi
+        </button>
+      </form>
     </div>
   );
 }
@@ -458,7 +590,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
       ...m,
       categories: m.categories.map((c) =>
         c.id === catId
-          ? { ...c, items: [...c.items, { id, name: "Nuova voce", price: "0,00", description: "", image: "", visible: true }] }
+          ? { ...c, items: [...c.items, { id, name: "Nuova voce", price: "0,00", description: "", image: "", visible: true, staffOnly: false }] }
           : c
       ),
     }));
@@ -714,6 +846,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           </div>
         </div>
 
+        <StaffSection t={t} />
+
         {/* Selettore lingua: sceglie se sotto si edita il testo italiano (sorgente,
             struttura completa) o la traduzione di una lingua (solo testo). */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
@@ -887,13 +1021,21 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                           <span style={labelStyle}>Descrizione</span>
                           <textarea rows={2} style={{ ...inputStyle, resize: "vertical" }} value={item.description || ""} onChange={(e) => updateItem(cat.id, item.id, "description", e.target.value)} />
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-                          <Toggle
-                            t={t}
-                            checked={item.visible !== false}
-                            onChange={(v) => updateItem(cat.id, item.id, "visible", v)}
-                            label={item.visible === false ? "Nascosto ai clienti" : "Visibile ai clienti"}
-                          />
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 10 }}>
+                          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                            <Toggle
+                              t={t}
+                              checked={item.visible !== false}
+                              onChange={(v) => updateItem(cat.id, item.id, "visible", v)}
+                              label={item.visible === false ? "Nascosto ai clienti" : "Visibile ai clienti"}
+                            />
+                            <Toggle
+                              t={t}
+                              checked={item.staffOnly === true}
+                              onChange={(v) => updateItem(cat.id, item.id, "staffOnly", v)}
+                              label={item.staffOnly === true ? "Riservato allo staff (fuori menù)" : "Nel menù pubblico"}
+                            />
+                          </div>
                           <button
                             onClick={() => (itDelete ? removeItem(cat.id, item.id) : setConfirmDelete({ type: "item", itemId: item.id, catId: cat.id }))}
                             className="mdp-btn"

@@ -1,4 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
+import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+
+// Credenziali degli account di test cameriere/cucina (vedi .env.test, non
+// committato — creato dallo script di setup, non dal codice dell'app).
+loadEnv({ path: ".env.test" });
 
 export default defineConfig({
   testDir: "./tests",

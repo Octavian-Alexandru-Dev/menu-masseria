@@ -11,6 +11,23 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    // Ruoli del personale (admin/waiter/kitchen). Stesso confine di fiducia
+    // già usato per menu/data in questo progetto: qualunque account
+    // autenticato è personale fidato (gli account vengono creati a mano
+    // dall'amministratore, non con autoregistrazione pubblica), quindi non
+    // serve una gerarchia di permessi più fine qui.
+    match /staff/{uid} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Comande dei tavoli, visibili/modificabili da cameriere e cucina.
+    // Stesso confine di fiducia di cui sopra: la distinzione dei ruoli
+    // (cameriere vs cucina) è imposta dall'interfaccia, non da regole
+    // separate per campo.
+    match /orders/{orderId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Tutto il resto è bloccato per sicurezza.
     match /{document=**} {
       allow read, write: if false;

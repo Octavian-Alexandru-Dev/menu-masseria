@@ -21,6 +21,8 @@ import ClientView from "./ClientView";
 
 const Admin = lazy(() => import("./Admin"));
 const PrintMenu = lazy(() => import("./PrintMenu"));
+const Waiter = lazy(() => import("./Waiter"));
+const Kitchen = lazy(() => import("./Kitchen"));
 
 const LOAD_ATTEMPT_TIMEOUT_MS = 5000; // timeout di ciascun tentativo
 const MAX_LOAD_ATTEMPTS = 3; // numero di tentativi automatici prima del messaggio finale
@@ -48,6 +50,14 @@ export default function App() {
   // (vedi PrintMenu.jsx).
   const isPrintMode = typeof window !== "undefined"
     && new URLSearchParams(window.location.search).get("print") === "1";
+
+  // Aree riservate al personale (§2 di docs/comande-camerieri.md): route
+  // dedicate e "bookmarkabili" (es. per lo schermo fisso in cucina), non
+  // raggiungibili da un pulsante nel menù pubblico. Ognuna gestisce da sola
+  // login e verifica del ruolo (vedi staff-shared.jsx).
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
+  const isWaiterPath = pathname.startsWith("/cameriere") || pathname.startsWith("/waiter");
+  const isKitchenPath = pathname.startsWith("/cucina") || pathname.startsWith("/kitchen");
 
   useEffect(() => {
     if (isPrintMode) return;
@@ -201,6 +211,21 @@ export default function App() {
         }
       >
         <PrintMenu />
+      </Suspense>
+    );
+  }
+
+  if (isKitchenPath || isWaiterPath) {
+    const StaffArea = isKitchenPath ? Kitchen : Waiter;
+    return (
+      <Suspense
+        fallback={
+          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...FALLBACK_STYLE }}>
+            Caricamento…
+          </div>
+        }
+      >
+        <StaffArea menu={menu} />
       </Suspense>
     );
   }

@@ -65,6 +65,28 @@ export const MENU_DOC_PATH = ["menu", "data"];
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
+/* ============================== COMANDE (staff) ============================== */
+// Portate disponibili per riga di una comanda (§4.2 di docs/comande-camerieri.md).
+export const COURSES = [
+  { id: "antipasto", label: "Antipasto" },
+  { id: "primo", label: "Primo" },
+  { id: "secondo", label: "Secondo" },
+  { id: "dolce", label: "Dolce" },
+  { id: "bevanda", label: "Bevanda" },
+];
+export const COURSE_LABEL = Object.fromEntries(COURSES.map((c) => [c.id, c.label]));
+
+// Somma prezzi salvati come stringa in stile italiano ("12,50") e restituisce
+// una stringa nello stesso formato — coerente con come i prezzi sono già
+// salvati nel menù (mai come number).
+export function parsePriceToCents(price) {
+  const n = parseFloat(String(price ?? "0").replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+export function formatCentsAsPrice(cents) {
+  return (cents / 100).toFixed(2).replace(".", ",");
+}
+
 /* ============================== LINGUE (lato clienti) ============================== */
 export const LANGUAGES = [
   { code: "it", label: "IT" },
