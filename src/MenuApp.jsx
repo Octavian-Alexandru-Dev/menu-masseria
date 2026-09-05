@@ -23,6 +23,7 @@ const StaffHome = lazy(() => import("./StaffHome"));
 const PrintMenu = lazy(() => import("./PrintMenu"));
 const Waiter = lazy(() => import("./Waiter"));
 const Kitchen = lazy(() => import("./Kitchen"));
+const Reservations = lazy(() => import("./Reservations"));
 
 const LOAD_ATTEMPT_TIMEOUT_MS = 5000; // timeout di ciascun tentativo
 const MAX_LOAD_ATTEMPTS = 3; // numero di tentativi automatici prima del messaggio finale
@@ -58,6 +59,7 @@ export default function App() {
   const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
   const isWaiterPath = pathname.startsWith("/cameriere") || pathname.startsWith("/waiter");
   const isKitchenPath = pathname.startsWith("/cucina") || pathname.startsWith("/kitchen");
+  const isReservationsPath = pathname.startsWith("/prenotazioni") || pathname.startsWith("/reservations");
 
   useEffect(() => {
     if (isPrintMode) return;
@@ -216,8 +218,8 @@ export default function App() {
     );
   }
 
-  if (isKitchenPath || isWaiterPath) {
-    const StaffArea = isKitchenPath ? Kitchen : Waiter;
+  if (isKitchenPath || isWaiterPath || isReservationsPath) {
+    const StaffArea = isKitchenPath ? Kitchen : isReservationsPath ? Reservations : Waiter;
     return (
       <Suspense
         fallback={

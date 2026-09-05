@@ -40,3 +40,16 @@ export async function deleteTestOrderByTableNumber(tableNumber) {
     console.error(`[test cleanup] Eliminazione tavolo ${tableNumber} fallita:`, err.message || err);
   }
 }
+
+// Stesso pattern di deleteTestOrderByTableNumber, per le prenotazioni create
+// durante i test di tests/reservations.spec.js.
+export async function deleteTestReservationByName(name) {
+  try {
+    await ensureSignedIn();
+    const q = query(collection(db, "reservations"), where("name", "==", name));
+    const snap = await getDocs(q);
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  } catch (err) {
+    console.error(`[test cleanup] Eliminazione prenotazione "${name}" fallita:`, err.message || err);
+  }
+}

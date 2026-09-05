@@ -28,6 +28,14 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Prenotazioni tavoli, inserite manualmente da cameriere/amministrazione
+    // (vedi docs/prenotazioni.md). Stesso confine di fiducia delle collection
+    // sopra: nessuna distinzione di ruolo imposta dalle regole, solo
+    // dall'interfaccia (waiter+admin).
+    match /reservations/{reservationId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Tutto il resto è bloccato per sicurezza.
     match /{document=**} {
       allow read, write: if false;

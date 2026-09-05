@@ -1,7 +1,7 @@
 // Area cameriere — presa comande digitale (vedi docs/comande-camerieri.md).
 // Caricato solo su /cameriere (lazy, vedi MenuApp.jsx), mai dal sito pubblico.
-import React, { useState, useEffect, useRef } from "react";
-import { Plus, Minus, X, ArrowLeft, LogOut, CheckCircle2, Clock, Utensils, History, Users, Receipt } from "lucide-react";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
+import { Plus, Minus, X, ArrowLeft, LogOut, CheckCircle2, Clock, Utensils, History, Users, Receipt, CalendarDays, Play } from "lucide-react";
 import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableIdentity, currentShiftStart, currentShiftLabel } from "./shared";
 import {
   subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
@@ -9,10 +9,15 @@ import {
   runDailyExpiredOrdersCleanup, updateCovers,
 } from "./orders";
 import {
+  subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup, coversLabel,
+} from "./reservations";
+import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
 } from "./staff-shared";
 import OrderHistory, { OrderRow } from "./OrderHistory";
 import ReceiptOverlay from "./ReceiptOverlay";
+
+const Reservations = lazy(() => import("./Reservations"));
 
 function formatTime(ts) {
   return ts?.toDate ? ts.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
@@ -51,11 +56,79 @@ function SyncBadge({ t, hasPendingWrites }) {
   );
 }
 
-function TableList({ t, menu, orders, shiftClosedOrders, expandedClosedId, onToggleClosed, onOpenNew, onOpenOrder }) {
+function TodaysReservations({ t, reservations, onAvvia }) {
+  if (reservations.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 8 }}>
+        Prenotazioni di oggi — {reservations.length}
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {reservations.map((r) => (
+          <div key={r.id} style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+            padding: "10px 12px", borderRadius: 10, border: `1px solid ${t.line}`, background: t.card,
+          }}>
+            <div>
+              <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink }}>
+                {r.name || "Senza nome"}{r.time ? ` · ${r.time}` : ""}
+              </div>
+              <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft, marginTop: 2 }}>
+                {coversLabel(r.covers)}{r.tableNumber ? ` · Tavolo ${r.tableNumber}` : ""}
+              </div>
+            </div>
+            <button aria-label={`Avvia prenotazione di ${r.name || "senza nome"}`} onClick={() => onAvvia(r)} className="mdp-btn" style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: t.primary, color: t.bg,
+              border: "none", borderRadius: 8, fontSize: TYPE.smallPlus, fontWeight: 600, cursor: "pointer", flexShrink: 0,
+            }}>
+              <Play size={13} /> Avvia
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AvviaReservationModal({ t, reservation, onCancel, onConfirm, busy }) {
+  const [tableNumber, setTableNumber] = useState("");
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(20,15,10,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 }} onClick={onCancel}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: t.card, borderRadius: 12, padding: 24, maxWidth: 340, width: "100%" }}>
+        <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary, marginBottom: 10 }}>
+          Avvia {reservation.name || "prenotazione"}
+        </div>
+        <div style={{ fontSize: TYPE.body, color: t.inkSoft, marginBottom: 14 }}>
+          {coversLabel(reservation.covers)}{reservation.notes ? ` · ${reservation.notes}` : ""}
+        </div>
+        <label style={{ fontSize: TYPE.tiny, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, display: "block", marginBottom: 4 }}>Numero tavolo *</label>
+        <input
+          autoFocus type="number" min="1" inputMode="numeric" value={tableNumber} onChange={(e) => setTableNumber(e.target.value)}
+          style={{ width: "100%", padding: "10px 12px", border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg, marginBottom: 20 }}
+        />
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onCancel} className="mdp-btn" style={{ flex: 1, padding: "10px 0", background: "none", border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer" }}>Annulla</button>
+          <button
+            disabled={!tableNumber || busy}
+            onClick={() => onConfirm(parseInt(tableNumber, 10))}
+            className="mdp-btn"
+            style={{ flex: 1, padding: "10px 0", background: t.primary, color: t.bg, border: "none", borderRadius: 8, cursor: !tableNumber || busy ? "default" : "pointer", opacity: !tableNumber || busy ? 0.6 : 1 }}
+          >
+            {busy ? "Apertura…" : "Apri comanda"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TableList({ t, menu, orders, shiftClosedOrders, expandedClosedId, onToggleClosed, onOpenNew, onOpenOrder, todaysReservations, onAvviaReservation }) {
   const [printingOrder, setPrintingOrder] = useState(null);
   const sorted = [...orders].sort((a, b) => (a.openedAt?.toMillis?.() || 0) - (b.openedAt?.toMillis?.() || 0));
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "20px 16px 100px" }}>
+      <TodaysReservations t={t} reservations={todaysReservations} onAvvia={onAvviaReservation} />
+
       <button
         onClick={onOpenNew}
         className="mdp-btn"
@@ -517,8 +590,11 @@ function WaiterPanel({ menu, session }) {
   const [ordersReady, setOrdersReady] = useState(false);
   const [shiftClosedOrders, setShiftClosedOrders] = useState([]);
   const [expandedClosedId, setExpandedClosedId] = useState(null);
-  const [view, setView] = useState({ mode: "list" }); // list | new | detail | history
+  const [view, setView] = useState({ mode: "list" }); // list | new | detail | history | reservations
   const [creating, setCreating] = useState(false);
+  const [todaysReservations, setTodaysReservations] = useState([]);
+  const [avviaTarget, setAvviaTarget] = useState(null);
+  const [avviaBusy, setAvviaBusy] = useState(false);
   const closingRef = useRef(new Set());
 
   useEffect(() => {
@@ -542,6 +618,16 @@ function WaiterPanel({ menu, session }) {
 
   useEffect(() => {
     runDailyExpiredOrdersCleanup();
+    runDailyExpiredReservationsCleanup();
+  }, []);
+
+  // Prenotazioni confermate per oggi: appaiono qui appena inizia il turno,
+  // così il cameriere può "avviarle" senza dover ridigitare tavolo/coperti.
+  useEffect(() => {
+    const unsubscribe = subscribeReservationsForDate(dateKey(), (list) => {
+      setTodaysReservations(list.filter((r) => r.status === "confirmed"));
+    }, (err) => console.error("[waiter] Errore lettura prenotazioni:", err));
+    return unsubscribe;
   }, []);
 
   // Chiusura automatica pigra dopo 24h (§6.2): ad ogni aggiornamento della
@@ -565,6 +651,29 @@ function WaiterPanel({ menu, session }) {
     }
   };
 
+  const handleAvviaReservation = (reservation) => {
+    if (reservation.tableNumber) {
+      doAvviaReservation(reservation, reservation.tableNumber);
+    } else {
+      setAvviaTarget(reservation);
+    }
+  };
+
+  const doAvviaReservation = async (reservation, tableNumber) => {
+    setAvviaBusy(true);
+    try {
+      const ref = await startReservation(reservation, {
+        waiterUid: session.user.uid, waiterName: session.name, coperto: menu?.coperto, tableNumber,
+      });
+      setAvviaTarget(null);
+      setView({ mode: "detail", orderId: ref.id });
+    } catch (err) {
+      console.error("[waiter] Avvio prenotazione fallito:", err);
+    } finally {
+      setAvviaBusy(false);
+    }
+  };
+
   const currentOrder = view.mode === "detail" ? orders.find((o) => o.id === view.orderId) : null;
 
   return (
@@ -579,6 +688,9 @@ function WaiterPanel({ menu, session }) {
           <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.subhead, fontWeight: 600 }}>Sala — {session.name}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={() => setView({ mode: "reservations" })} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
+            <CalendarDays size={14} /> Prenotazioni
+          </button>
           <button onClick={() => setView({ mode: "history" })} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
             <History size={14} /> Storico
           </button>
@@ -602,6 +714,8 @@ function WaiterPanel({ menu, session }) {
           onToggleClosed={(id) => setExpandedClosedId((cur) => (cur === id ? null : id))}
           onOpenNew={() => setView({ mode: "new" })}
           onOpenOrder={(id) => setView({ mode: "detail", orderId: id })}
+          todaysReservations={todaysReservations}
+          onAvviaReservation={handleAvviaReservation}
         />
       )}
       {ordersReady && view.mode === "new" && (
@@ -622,6 +736,20 @@ function WaiterPanel({ menu, session }) {
       )}
       {view.mode === "history" && (
         <OrderHistory t={t} menu={menu} onBack={() => setView({ mode: "list" })} />
+      )}
+      {view.mode === "reservations" && (
+        <Suspense fallback={<div style={{ textAlign: "center", padding: 40, color: t.inkSoft }}>Caricamento…</div>}>
+          <Reservations menu={menu} onBack={() => setView({ mode: "list" })} />
+        </Suspense>
+      )}
+
+      {avviaTarget && (
+        <AvviaReservationModal
+          t={t} reservation={avviaTarget}
+          onCancel={() => setAvviaTarget(null)}
+          onConfirm={(tableNumber) => doAvviaReservation(avviaTarget, tableNumber)}
+          busy={avviaBusy}
+        />
       )}
     </div>
   );

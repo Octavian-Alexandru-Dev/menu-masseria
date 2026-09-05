@@ -6,44 +6,79 @@
 // /cameriere e /cucina restano comunque raggiungibili direttamente (utili
 // per un dispositivo dedicato, es. il tablet fisso in cucina): questa
 // pagina è il punto d'ingresso comune, non l'unico.
-import React, { useState } from "react";
-import { ShieldCheck, ClipboardList, ChefHat, ArrowLeft } from "lucide-react";
-import { THEMES, ital, GlobalStyle, Logo, TYPE } from "./shared";
+import React, { useState, useEffect } from "react";
+import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, ArrowLeft } from "lucide-react";
+import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel } from "./shared";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
 } from "./staff-shared";
+import { subscribeOpenOrders } from "./orders";
+import { subscribePendingReservations } from "./reservations";
 import Admin from "./Admin";
 import Waiter from "./Waiter";
 import Kitchen from "./Kitchen";
+import Reservations from "./Reservations";
 
-function AreaPicker({ t, session, options, onChoose }) {
+const TODAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
+
+// Landing "Dashboard": oltre alla scelta dell'area, mostra a colpo d'occhio
+// qualche numero utile a inizio turno (tavoli aperti, prenotazioni da
+// confermare) — le sottoscrizioni che lo alimentano vengono montate solo
+// quando la Dashboard è davvero mostrata (vedi StaffHome), così un account
+// solo-cameriere o solo-cucina, che salta dritto alla propria area, non
+// paga il costo di listener che non vedrà mai.
+function Dashboard({ t, session, options, onChoose, openTablesCount, pendingReservationsCount }) {
+  const countFor = (key) => {
+    if (key === "waiter") return openTablesCount != null ? `${openTablesCount} ${openTablesCount === 1 ? "tavolo aperto" : "tavoli aperti"}` : null;
+    if (key === "reservations" && pendingReservationsCount > 0) return `${pendingReservationsCount} da confermare`;
+    return null;
+  };
+
   return (
-    <div className="mdp-root" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, gap: 22 }}>
+    <div className="mdp-root" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", padding: "48px 24px 24px", gap: 26 }}>
       <GlobalStyle t={t} />
       <Logo width={110} />
       <div style={{ textAlign: "center" }}>
         <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary }}>
           Ciao, {session.name}
         </div>
-        <div style={{ fontSize: TYPE.body, color: t.inkSoft, marginTop: 4 }}>Dove vuoi andare?</div>
+        <div style={{ fontSize: TYPE.body, color: t.inkSoft, marginTop: 4, textTransform: "capitalize" }}>
+          {TODAY_LABEL.format(new Date())} · Turno di {currentShiftLabel()}
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", maxWidth: 480 }}>
-        {options.map((opt) => (
-          <button
-            key={opt.key}
-            onClick={() => onChoose(opt.key)}
-            className="mdp-btn"
-            style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-              width: 140, padding: "24px 16px", borderRadius: 14, cursor: "pointer",
-              border: `1px solid ${t.line}`, background: t.card,
-            }}
-          >
-            <opt.icon size={28} color={t.primary} />
-            <span style={{ fontSize: TYPE.smallPlus, fontWeight: 600, color: t.ink, textAlign: "center" }}>{opt.label}</span>
-          </button>
-        ))}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", maxWidth: 560 }}>
+        {options.map((opt) => {
+          const count = countFor(opt.key);
+          const badge = opt.key === "reservations" ? pendingReservationsCount : 0;
+          return (
+            <button
+              key={opt.key}
+              onClick={() => onChoose(opt.key)}
+              className="mdp-btn"
+              style={{
+                position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                width: 150, padding: "26px 16px", borderRadius: 14, cursor: "pointer",
+                border: `1px solid ${t.line}`, background: t.card,
+              }}
+            >
+              {badge > 0 && (
+                <span style={{
+                  position: "absolute", top: 10, right: 10, minWidth: 18, height: 18, borderRadius: 9,
+                  background: t.accent2, color: "#fff", fontSize: TYPE.tiny, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px",
+                }}>
+                  {badge}
+                </span>
+              )}
+              <opt.icon size={28} color={t.primary} />
+              <span style={{ fontSize: TYPE.smallPlus, fontWeight: 600, color: t.ink, textAlign: "center" }}>{opt.label}</span>
+              {count && (
+                <span style={{ fontSize: TYPE.tiny, color: t.inkSoft, textAlign: "center" }}>{count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.smallPlus, marginTop: 10 }}>
@@ -66,7 +101,50 @@ function BackToAreasBar({ t, onBack }) {
 export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo }) {
   const session = useStaffSession();
   const [area, setArea] = useState(null);
+  const [openTablesCount, setOpenTablesCount] = useState(null);
+  const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
   const theme = menu?.theme;
+
+  const canAdmin = session.status === "ready" && session.role === "admin";
+  const canWaiter = session.status === "ready" && (session.role === "waiter" || session.role === "admin");
+  const canKitchen = session.status === "ready" && (session.role === "kitchen" || session.role === "admin");
+  // Aree "core" (invariate rispetto a prima): determinano da sole se saltare
+  // direttamente in un'area quando ce n'è una sola, e se mostrare la barra
+  // "Cambia area" — un account solo-cameriere o solo-cucina deve continuare
+  // ad avere l'accesso diretto alla propria area di sempre, senza vedere la
+  // Dashboard, anche ora che esiste una quarta voce (Prenotazioni).
+  const coreOptions = [
+    canAdmin && { key: "admin", label: "Gestione menù", icon: ShieldCheck },
+    canWaiter && { key: "waiter", label: "Sala", icon: ClipboardList },
+    canKitchen && { key: "kitchen", label: "Cucina", icon: ChefHat },
+  ].filter(Boolean);
+  const canReservations = canWaiter; // stessa idoneità minima di Sala
+  const dashboardOptions = [
+    ...coreOptions,
+    canReservations && { key: "reservations", label: "Prenotazioni", icon: CalendarDays },
+  ].filter(Boolean);
+
+  const chosen = area || (coreOptions.length === 1 ? coreOptions[0].key : null);
+  const showingDashboard = session.status === "ready" && !chosen && coreOptions.length > 0;
+
+  // I contatori live della Dashboard si montano solo quando la Dashboard è
+  // davvero mostrata: un account che salta dritto in un'area (waiter-only,
+  // kitchen-only) non apre queste sottoscrizioni in più.
+  useEffect(() => {
+    if (!showingDashboard || !canWaiter) { setOpenTablesCount(null); return; }
+    return subscribeOpenOrders(
+      (list) => setOpenTablesCount(list.length),
+      (err) => console.error("[dashboard] Errore lettura tavoli aperti:", err)
+    );
+  }, [showingDashboard, canWaiter]);
+
+  useEffect(() => {
+    if (!showingDashboard || !canReservations) { setPendingReservationsCount(0); return; }
+    return subscribePendingReservations(
+      (list) => setPendingReservationsCount(list.length),
+      (err) => console.error("[dashboard] Errore lettura prenotazioni da confermare:", err)
+    );
+  }, [showingDashboard, canReservations]);
 
   if (session.status === "loading") return <StaffLoadingScreen theme={theme} />;
   if (session.status === "signed-out") {
@@ -83,10 +161,6 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
     );
   }
 
-  const canAdmin = session.role === "admin";
-  const canWaiter = session.role === "waiter" || session.role === "admin";
-  const canKitchen = session.role === "kitchen" || session.role === "admin";
-
   if (!canAdmin && !canWaiter && !canKitchen) {
     return (
       <StaffMessageScreen
@@ -98,17 +172,18 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
     );
   }
 
-  const options = [
-    canAdmin && { key: "admin", label: "Gestione menù", icon: ShieldCheck },
-    canWaiter && { key: "waiter", label: "Sala", icon: ClipboardList },
-    canKitchen && { key: "kitchen", label: "Cucina", icon: ChefHat },
-  ].filter(Boolean);
-
-  const chosen = area || (options.length === 1 ? options[0].key : null);
-
   if (!chosen) {
     const t = THEMES[theme] || THEMES.rustica;
-    return <AreaPicker t={t} session={session} options={options} onChoose={setArea} />;
+    return (
+      <Dashboard
+        t={t}
+        session={session}
+        options={dashboardOptions}
+        onChoose={setArea}
+        openTablesCount={openTablesCount}
+        pendingReservationsCount={pendingReservationsCount}
+      />
+    );
   }
 
   const panel = chosen === "admin"
@@ -127,11 +202,15 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
     )
     : chosen === "waiter"
       ? <Waiter menu={menu} />
-      : <Kitchen menu={menu} />;
+      : chosen === "kitchen"
+        ? <Kitchen menu={menu} />
+        : <Reservations menu={menu} />;
 
-  // Se c'è più di un'area disponibile e questa è stata scelta dal menù (non
-  // l'unica possibile), mostra una barra per tornare alla scelta.
-  if (options.length > 1) {
+  // Se c'è più di un'area core disponibile, mostra una barra per tornare
+  // alla scelta (invariato rispetto a prima: un account solo-cameriere o
+  // solo-cucina, che non ha mai visto la Dashboard, non vede nemmeno questa
+  // barra quando è nella sua unica area).
+  if (coreOptions.length > 1) {
     const t = THEMES[theme] || THEMES.rustica;
     return (
       <>
