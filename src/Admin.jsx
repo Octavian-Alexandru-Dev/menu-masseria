@@ -3,8 +3,11 @@
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X, Users, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X, Users, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, DragOverlay, useDroppable } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { db } from "./firebase-db";
 import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation, FALLBACK_STYLE, TYPE } from "./shared";
@@ -100,6 +103,73 @@ function moveTranslationItem(translations, fromCatId, toCatId, itemId) {
     changed = true;
   }
   return changed ? next : translations;
+}
+
+// Rilevamento delle "collisioni" per il drag&drop (dnd-kit): limita i
+// bersagli validi allo stesso tipo dell'elemento trascinato (una categoria
+// può agganciarsi solo a un'altra categoria, una voce solo a un'altra voce o
+// a un contenitore vuoto) — altrimenti trascinare una categoria sopra le voci
+// di un'altra categoria aperta la farebbe agganciare per errore a quelle.
+function dragCollisionDetection(args) {
+  const activeType = args.active.data.current?.type;
+  const droppableContainers = args.droppableContainers.filter((c) => {
+    const type = c.data.current?.type;
+    return activeType === "item" ? type === "item" || type === "container" : type === activeType;
+  });
+  return closestCenter({ ...args, droppableContainers });
+}
+
+// Wrapper generico che rende un elemento riordinabile via drag&drop: espone
+// ref/stile/listener del maniglione tramite render-prop, così il markup di
+// categorie e voci resta quasi invariato rispetto alla versione coi soli
+// pulsanti su/giù.
+function SortableSlot({ id, data, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, data });
+  return children({
+    setNodeRef,
+    isDragging,
+    dragHandleProps: { ...attributes, ...listeners },
+    style: {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    },
+  });
+}
+
+function DragHandle({ t, size, dragHandleProps, label }) {
+  return (
+    <button
+      type="button"
+      className="mdp-btn"
+      {...dragHandleProps}
+      style={{ ...btnGhost(t), padding: size <= 13 ? "5px 6px" : "6px 7px", cursor: "grab", touchAction: "none" }}
+      aria-label={label}
+      title={label}
+    >
+      <GripVertical size={size} />
+    </button>
+  );
+}
+
+// Area su cui rilasciare una voce trascinata da un'altra categoria, mostrata
+// solo quando la categoria di destinazione non ha ancora voci proprie
+// (altrimenti non ci sarebbe nessuna voce esistente su cui rilasciarla).
+function EmptyCategoryDropZone({ t, catId }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `empty-${catId}`, data: { type: "container", catId } });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        border: `1px dashed ${isOver ? t.secondary : t.line}`,
+        borderRadius: 8, padding: "14px 12px", textAlign: "center",
+        fontSize: TYPE.labelPlus, color: t.inkSoft, marginBottom: 10,
+        background: isOver ? t.bgAlt : "transparent", transition: "background .15s, border-color .15s",
+      }}
+    >
+      Trascina qui una voce da un'altra categoria
+    </div>
+  );
 }
 
 function AdminLogin({ onBack, theme }) {
@@ -717,6 +787,82 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     setOpenCats((prev) => new Set(prev).add(toCatId));
   };
 
+  // Riordino via drag&drop (dnd-kit), alternativa ai pulsanti su/giù sopra.
+  // PointerSensor con una piccola soglia di spostamento, così un click
+  // normale sul maniglione non parte come drag.
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const [activeDrag, setActiveDrag] = useState(null); // { label } dell'elemento trascinato, per il DragOverlay
+
+  const handleDragStart = (event) => {
+    const data = event.active.data.current;
+    if (data?.type === "category") {
+      const cat = menu.categories.find((c) => c.id === event.active.id);
+      setActiveDrag({ label: cat?.name || "Categoria" });
+    } else if (data?.type === "item") {
+      const cat = menu.categories.find((c) => c.id === data.catId);
+      const item = cat?.items.find((it) => it.id === event.active.id);
+      setActiveDrag({ label: item?.name || "Voce" });
+    }
+  };
+
+  const handleDragEnd = ({ active, over }) => {
+    setActiveDrag(null);
+    if (!over || active.id === over.id) return;
+    const activeData = active.data.current;
+    const overData = over.data.current;
+
+    if (activeData?.type === "category") {
+      setMenu((m) => {
+        const oldIndex = m.categories.findIndex((c) => c.id === active.id);
+        const newIndex = m.categories.findIndex((c) => c.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return m;
+        return { ...m, categories: arrayMove(m.categories, oldIndex, newIndex) };
+      });
+      return;
+    }
+
+    if (activeData?.type === "item") {
+      const fromCatId = activeData.catId;
+      const toCatId = overData?.catId;
+      if (!toCatId) return;
+
+      if (fromCatId === toCatId) {
+        setMenu((m) => ({
+          ...m,
+          categories: m.categories.map((c) => {
+            if (c.id !== fromCatId) return c;
+            const oldIndex = c.items.findIndex((it) => it.id === active.id);
+            const newIndex = c.items.findIndex((it) => it.id === over.id);
+            if (oldIndex === -1 || newIndex === -1) return c;
+            return { ...c, items: arrayMove(c.items, oldIndex, newIndex) };
+          }),
+        }));
+        return;
+      }
+
+      setMenu((m) => {
+        const categories = m.categories.map((c) => ({ ...c, items: [...c.items] }));
+        const fromCat = categories.find((c) => c.id === fromCatId);
+        const toCat = categories.find((c) => c.id === toCatId);
+        if (!fromCat || !toCat) return m;
+        const activeIndex = fromCat.items.findIndex((it) => it.id === active.id);
+        if (activeIndex === -1) return m;
+        const [movedItem] = fromCat.items.splice(activeIndex, 1);
+        let insertIndex = toCat.items.length;
+        if (overData.type === "item") {
+          const idx = toCat.items.findIndex((it) => it.id === over.id);
+          if (idx !== -1) insertIndex = idx;
+        }
+        toCat.items.splice(insertIndex, 0, movedItem);
+        return {
+          ...m,
+          categories,
+          translations: moveTranslationItem(m.translations, fromCatId, toCatId, movedItem.id),
+        };
+      });
+    }
+  };
+
   const google = menu.reviewLinks?.google || { url: "", visible: false };
   const tripadvisor = menu.reviewLinks?.tripadvisor || { url: "", visible: false };
   const instagram = menu.socialLinks?.instagram || { url: "", visible: false };
@@ -1015,13 +1161,22 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
 
         {/* Categories (testo sorgente in italiano + struttura: aggiungere/eliminare
             voci, caricare foto, riordinare la visibilità — tutto ciò che le
-            traduzioni condividono per riferimento tramite id) */}
-        {lang === "it" && menu.categories.map((cat, catIdx) => {
-          const isOpen = openCats.has(cat.id);
-          const catDelete = confirmDelete?.type === "cat" && confirmDelete.catId === cat.id;
-          return (
-            <div key={cat.id} style={{ ...cardStyle(t), background: t.bgAlt, padding: 0, marginBottom: 16, overflow: "hidden", opacity: cat.visible === false ? 0.6 : 1 }}>
+            traduzioni condividono per riferimento tramite id). Riordino sia
+            coi pulsanti su/giù sia trascinando dal maniglione ⠿ — le voci
+            anche tra categorie diverse, purché quella di destinazione sia
+            aperta (altrimenti usa "Sposta in categoria…"). */}
+        {lang === "it" && (
+          <DndContext sensors={dndSensors} collisionDetection={dragCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <SortableContext items={menu.categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+              {menu.categories.map((cat, catIdx) => {
+                const isOpen = openCats.has(cat.id);
+                const catDelete = confirmDelete?.type === "cat" && confirmDelete.catId === cat.id;
+                return (
+                  <SortableSlot key={cat.id} id={cat.id} data={{ type: "category" }}>
+                    {({ setNodeRef, style, dragHandleProps, isDragging }) => (
+            <div ref={setNodeRef} style={{ ...cardStyle(t), ...style, background: t.bgAlt, padding: 0, marginBottom: 16, overflow: "hidden", opacity: cat.visible === false ? 0.6 : 1, boxShadow: isDragging ? "0 10px 24px rgba(0,0,0,0.18)" : undefined }}>
               <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+                <DragHandle t={t} size={16} dragHandleProps={dragHandleProps} label="Trascina per riordinare la categoria" />
                 <div style={{ display: "flex", gap: 2 }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); moveCategory(cat.id, -1); }}
@@ -1081,13 +1236,17 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                     </div>
                   </div>
 
+                  <SortableContext items={cat.items.map((it) => it.id)} strategy={verticalListSortingStrategy}>
                   {cat.items.map((item, itemIdx) => {
                     const itDelete = confirmDelete?.type === "item" && confirmDelete.itemId === item.id;
                     const otherCats = menu.categories.filter((c) => c.id !== cat.id);
                     return (
-                      <React.Fragment key={item.id}>
-                      <div style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: 12, marginBottom: 10, background: t.bg, opacity: item.visible === false ? 0.6 : 1 }}>
+                      <SortableSlot key={item.id} id={item.id} data={{ type: "item", catId: cat.id }}>
+                        {({ setNodeRef: setItemRef, style: itemStyle, dragHandleProps, isDragging }) => (
+                      <React.Fragment>
+                      <div ref={setItemRef} style={{ ...itemStyle, border: `1px solid ${t.line}`, borderRadius: 8, padding: 12, marginBottom: 10, background: t.bg, opacity: item.visible === false ? 0.6 : itemStyle.opacity, boxShadow: isDragging ? "0 8px 18px rgba(0,0,0,0.18)" : undefined }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                          <DragHandle t={t} size={13} dragHandleProps={dragHandleProps} label="Trascina per riordinare la voce" />
                           <div style={{ display: "flex", gap: 2 }}>
                             <button
                               onClick={() => moveItem(cat.id, item.id, -1)}
@@ -1241,8 +1400,13 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                         </div>
                       )}
                       </React.Fragment>
+                        )}
+                      </SortableSlot>
                     );
                   })}
+                  </SortableContext>
+
+                  {cat.items.length === 0 && <EmptyCategoryDropZone t={t} catId={cat.id} />}
 
                   <button onClick={() => addItem(cat.id)} className="mdp-btn" style={btnGhost(t)}>
                     <Plus size={13} /> Aggiungi voce
@@ -1250,8 +1414,20 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                 </div>
               )}
             </div>
-          );
-        })}
+                    )}
+                  </SortableSlot>
+                );
+              })}
+            </SortableContext>
+            <DragOverlay>
+              {activeDrag ? (
+                <div style={{ ...cardStyle(t), padding: "10px 16px", background: t.card, boxShadow: "0 12px 28px rgba(0,0,0,0.22)", display: "flex", alignItems: "center", gap: 8, fontSize: TYPE.smallPlus, fontWeight: 600 }}>
+                  <GripVertical size={14} /> {activeDrag.label}
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        )}
 
         {lang === "it" && (
           <button onClick={addCategory} className="mdp-btn" style={{ ...btnPrimary(t), width: "100%", justifyContent: "center" }}>
