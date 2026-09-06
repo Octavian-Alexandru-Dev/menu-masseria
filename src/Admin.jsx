@@ -3,7 +3,7 @@
 // (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
 // che guardano solo il menù non scaricano mai Firebase Authentication.
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X, Users } from "lucide-react";
+import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X, Users, ArrowUp, ArrowDown } from "lucide-react";
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { db } from "./firebase-db";
@@ -71,6 +71,32 @@ function pruneTranslations(translations, catId, itemId) {
       delete categories[catId];
       next[langCode] = { ...langData, categories };
     }
+    changed = true;
+  }
+  return changed ? next : translations;
+}
+
+// Sposta la traduzione di una voce da una categoria all'altra in tutte le
+// lingue salvate, quando la voce stessa viene spostata di categoria — senza
+// questo, pruneTranslations-style logic la scambierebbe per orfana e la
+// perderebbe alla prossima modifica.
+function moveTranslationItem(translations, fromCatId, toCatId, itemId) {
+  if (!translations) return translations;
+  let changed = false;
+  const next = {};
+  for (const [langCode, langData] of Object.entries(translations)) {
+    const fromCat = langData?.categories?.[fromCatId];
+    const itemData = fromCat?.items?.[itemId];
+    if (!itemData) {
+      next[langCode] = langData;
+      continue;
+    }
+    const fromItems = { ...fromCat.items };
+    delete fromItems[itemId];
+    const categories = { ...langData.categories, [fromCatId]: { ...fromCat, items: fromItems } };
+    const toCat = categories[toCatId] || {};
+    categories[toCatId] = { ...toCat, items: { ...(toCat.items || {}), [itemId]: itemData } };
+    next[langCode] = { ...langData, categories };
     changed = true;
   }
   return changed ? next : translations;
@@ -640,6 +666,57 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     setConfirmDelete(null);
   };
 
+  // direction: -1 (su) o +1 (giù). Nessun effetto se già al bordo dell'elenco.
+  const moveCategory = (catId, direction) => {
+    setMenu((m) => {
+      const idx = m.categories.findIndex((c) => c.id === catId);
+      const newIdx = idx + direction;
+      if (idx < 0 || newIdx < 0 || newIdx >= m.categories.length) return m;
+      const categories = [...m.categories];
+      [categories[idx], categories[newIdx]] = [categories[newIdx], categories[idx]];
+      return { ...m, categories };
+    });
+  };
+
+  const moveItem = (catId, itemId, direction) => {
+    setMenu((m) => ({
+      ...m,
+      categories: m.categories.map((c) => {
+        if (c.id !== catId) return c;
+        const idx = c.items.findIndex((it) => it.id === itemId);
+        const newIdx = idx + direction;
+        if (idx < 0 || newIdx < 0 || newIdx >= c.items.length) return c;
+        const items = [...c.items];
+        [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+        return { ...c, items };
+      }),
+    }));
+  };
+
+  // Sposta una voce dalla categoria fromCatId alla fine di toCatId, portando
+  // con sé anche le traduzioni già presenti.
+  const moveItemToCategory = (fromCatId, itemId, toCatId) => {
+    if (!toCatId || fromCatId === toCatId) return;
+    setMenu((m) => {
+      let movedItem = null;
+      const withoutItem = m.categories.map((c) => {
+        if (c.id !== fromCatId) return c;
+        movedItem = c.items.find((it) => it.id === itemId) || null;
+        return { ...c, items: c.items.filter((it) => it.id !== itemId) };
+      });
+      if (!movedItem) return m;
+      const categories = withoutItem.map((c) =>
+        c.id === toCatId ? { ...c, items: [...c.items, movedItem] } : c
+      );
+      return {
+        ...m,
+        categories,
+        translations: moveTranslationItem(m.translations, fromCatId, toCatId, itemId),
+      };
+    });
+    setOpenCats((prev) => new Set(prev).add(toCatId));
+  };
+
   const google = menu.reviewLinks?.google || { url: "", visible: false };
   const tripadvisor = menu.reviewLinks?.tripadvisor || { url: "", visible: false };
   const instagram = menu.socialLinks?.instagram || { url: "", visible: false };
@@ -939,12 +1016,34 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
         {/* Categories (testo sorgente in italiano + struttura: aggiungere/eliminare
             voci, caricare foto, riordinare la visibilità — tutto ciò che le
             traduzioni condividono per riferimento tramite id) */}
-        {lang === "it" && menu.categories.map((cat) => {
+        {lang === "it" && menu.categories.map((cat, catIdx) => {
           const isOpen = openCats.has(cat.id);
           const catDelete = confirmDelete?.type === "cat" && confirmDelete.catId === cat.id;
           return (
             <div key={cat.id} style={{ ...cardStyle(t), background: t.bgAlt, padding: 0, marginBottom: 16, overflow: "hidden", opacity: cat.visible === false ? 0.6 : 1 }}>
               <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", gap: 2 }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); moveCategory(cat.id, -1); }}
+                    disabled={catIdx === 0}
+                    className="mdp-btn"
+                    style={{ ...btnGhost(t), padding: "6px 7px", opacity: catIdx === 0 ? 0.35 : 1, cursor: catIdx === 0 ? "default" : "pointer" }}
+                    aria-label="Sposta categoria su"
+                    title="Sposta categoria su"
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); moveCategory(cat.id, 1); }}
+                    disabled={catIdx === menu.categories.length - 1}
+                    className="mdp-btn"
+                    style={{ ...btnGhost(t), padding: "6px 7px", opacity: catIdx === menu.categories.length - 1 ? 0.35 : 1, cursor: catIdx === menu.categories.length - 1 ? "default" : "pointer" }}
+                    aria-label="Sposta categoria giù"
+                    title="Sposta categoria giù"
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: "pointer" }} onClick={() => toggleCat(cat.id)}>
                   {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   <div style={{ flex: 1 }}>
@@ -982,11 +1081,49 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                     </div>
                   </div>
 
-                  {cat.items.map((item) => {
+                  {cat.items.map((item, itemIdx) => {
                     const itDelete = confirmDelete?.type === "item" && confirmDelete.itemId === item.id;
+                    const otherCats = menu.categories.filter((c) => c.id !== cat.id);
                     return (
                       <React.Fragment key={item.id}>
                       <div style={{ border: `1px solid ${t.line}`, borderRadius: 8, padding: 12, marginBottom: 10, background: t.bg, opacity: item.visible === false ? 0.6 : 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                          <div style={{ display: "flex", gap: 2 }}>
+                            <button
+                              onClick={() => moveItem(cat.id, item.id, -1)}
+                              disabled={itemIdx === 0}
+                              className="mdp-btn"
+                              style={{ ...btnGhost(t), padding: "5px 6px", opacity: itemIdx === 0 ? 0.35 : 1, cursor: itemIdx === 0 ? "default" : "pointer" }}
+                              aria-label="Sposta voce su"
+                              title="Sposta voce su"
+                            >
+                              <ArrowUp size={13} />
+                            </button>
+                            <button
+                              onClick={() => moveItem(cat.id, item.id, 1)}
+                              disabled={itemIdx === cat.items.length - 1}
+                              className="mdp-btn"
+                              style={{ ...btnGhost(t), padding: "5px 6px", opacity: itemIdx === cat.items.length - 1 ? 0.35 : 1, cursor: itemIdx === cat.items.length - 1 ? "default" : "pointer" }}
+                              aria-label="Sposta voce giù"
+                              title="Sposta voce giù"
+                            >
+                              <ArrowDown size={13} />
+                            </button>
+                          </div>
+                          {otherCats.length > 0 && (
+                            <select
+                              value=""
+                              onChange={(e) => moveItemToCategory(cat.id, item.id, e.target.value)}
+                              style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: TYPE.labelPlus }}
+                              aria-label="Sposta voce in un'altra categoria"
+                            >
+                              <option value="">Sposta in categoria…</option>
+                              {otherCats.map((c) => (
+                                <option key={c.id} value={c.id}>{c.name || "Senza nome"}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
                         <div style={{ display: "flex", gap: 12, marginBottom: 10, alignItems: "flex-start" }}>
                           {item.image ? (
                             <img src={optimizedImageUrl(item.image, { width: 112 })} alt={item.name} style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain", background: t.bgAlt, border: `1px solid ${t.line}`, flexShrink: 0 }} />
