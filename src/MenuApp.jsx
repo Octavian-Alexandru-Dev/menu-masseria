@@ -16,7 +16,7 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase-db";
-import { MENU_DOC_PATH, FALLBACK_STYLE } from "./shared";
+import { MENU_DOC_PATH, FALLBACK_STYLE, useUrlState } from "./shared";
 import ClientView from "./ClientView";
 
 const StaffHome = lazy(() => import("./StaffHome"));
@@ -32,7 +32,10 @@ const MAX_UNDO_STEPS = 20;
 
 export default function App() {
   const [menu, setMenuState] = useState(null);
-  const [view, setView] = useState("client"); // client | staff
+  // client | staff — sincronizzato con ?area=staff nell'URL, così il
+  // pulsante Indietro del browser torna al menù pubblico invece di non fare
+  // nulla (vedi useUrlState in shared.jsx).
+  const [view, setView] = useUrlState("area", "client");
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [saveError, setSaveError] = useState(null);
@@ -151,6 +154,22 @@ export default function App() {
     });
   }, []);
 
+  // Uscita dall'area riservata (pulsanti "Esci"/"Anteprima" in Admin, o dal
+  // login cameriere/cucina/prenotazioni dentro StaffHome): oltre a tornare
+  // al menù pubblico, ripulisce anche ?sezione (la sotto-area scelta in
+  // StaffHome, vedi StaffHome.jsx) con una replaceState silenziosa — non
+  // deve restare nell'URL né generare una voce di cronologia propria,
+  // altrimenti riaprendo "Gestione menù" si salterebbe dritti all'ultima
+  // sezione invece di mostrare di nuovo la Dashboard.
+  const handleExitStaff = () => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("sezione");
+      window.history.replaceState(null, "", url);
+    }
+    setView("client");
+  };
+
   const handleUndo = () => {
     if (undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
@@ -252,7 +271,7 @@ export default function App() {
           saving={saving}
           savedAt={savedAt}
           saveError={saveError || loadNotice}
-          onExit={() => setView("client")}
+          onExit={handleExitStaff}
           onUndo={handleUndo}
           canUndo={undoStack.length > 0}
         />

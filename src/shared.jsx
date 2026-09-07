@@ -1,7 +1,7 @@
 // Pezzi condivisi tra il sito pubblico (ClientView) e il pannello di gestione (Admin):
 // temi grafici, dati di default del menù, utility di traduzione automatica, piccoli
 // componenti decorativi. Nessun import di Firebase qui: restano fuori dal bundle pubblico.
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 /* ============================== THEME PRESETS ============================== */
 export const THEMES = {
@@ -64,6 +64,48 @@ export const FALLBACK_STYLE = { color: "#3A3A3A", fontFamily: "'Work Sans', sans
 export const MENU_DOC_PATH = ["menu", "data"];
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
+
+/* ============================== NAVIGAZIONE (cronologia browser) ============================== */
+// Sincronizza uno stato con un parametro della query string, così le
+// schermate principali (menù pubblico / area riservata / sezione scelta)
+// restano raggiungibili dall'URL e navigabili col pulsante Indietro del
+// browser — senza introdurre un router: ogni cambiamento fa un push nella
+// cronologia (a meno di passare { replace: true }), e un listener su
+// "popstate" riallinea lo stato quando l'utente va avanti/indietro.
+export function useUrlState(paramName, defaultValue) {
+  const readValue = () => {
+    if (typeof window === "undefined") return defaultValue;
+    const params = new URLSearchParams(window.location.search);
+    return params.has(paramName) ? params.get(paramName) : defaultValue;
+  };
+
+  const [value, setValue] = useState(readValue);
+
+  useEffect(() => {
+    const onPopState = () => setValue(readValue());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setUrlValue = useCallback((next, { replace = false } = {}) => {
+    setValue((prev) => {
+      const resolved = typeof next === "function" ? next(prev) : next;
+      if (typeof window !== "undefined" && resolved !== prev) {
+        const url = new URL(window.location.href);
+        if (resolved === defaultValue || resolved == null) {
+          url.searchParams.delete(paramName);
+        } else {
+          url.searchParams.set(paramName, resolved);
+        }
+        window.history[replace ? "replaceState" : "pushState"](null, "", url);
+      }
+      return resolved;
+    });
+  }, [paramName, defaultValue]);
+
+  return [value, setUrlValue];
+}
 
 /* ============================== COMANDE (staff) ============================== */
 // Somma prezzi salvati come stringa in stile italiano ("12,50") e restituisce

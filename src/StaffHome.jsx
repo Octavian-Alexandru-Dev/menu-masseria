@@ -8,7 +8,7 @@
 // pagina è il punto d'ingresso comune, non l'unico.
 import React, { useState, useEffect } from "react";
 import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, ArrowLeft } from "lucide-react";
-import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel } from "./shared";
+import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel, useUrlState } from "./shared";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
 } from "./staff-shared";
@@ -100,7 +100,11 @@ function BackToAreasBar({ t, onBack }) {
 
 export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo }) {
   const session = useStaffSession();
-  const [area, setArea] = useState(null);
+  // Sezione scelta nella Dashboard (admin/waiter/kitchen/reservations),
+  // sincronizzata con ?sezione nell'URL — così anche qui il pulsante
+  // Indietro del browser torna alla Dashboard invece di non fare nulla
+  // (vedi useUrlState in shared.jsx; ripulito all'uscita da MenuApp.jsx).
+  const [area, setArea] = useUrlState("sezione", null);
   const [openTablesCount, setOpenTablesCount] = useState(null);
   const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
   const theme = menu?.theme;
