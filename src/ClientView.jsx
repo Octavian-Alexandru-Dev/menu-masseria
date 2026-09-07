@@ -142,14 +142,16 @@ export default function ClientView({ menu, onGoStaff }) {
     .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false && !i.staffOnly) }))
     .filter((c) => c.items.length > 0);
 
-  // Ricerca piatti: lato client, filtra dal vivo mentre l'utente digita.
-  // Le categorie senza corrispondenze spariscono del tutto, così a schermo
-  // restano solo i risultati pertinenti.
+  // Ricerca piatti: lato client, filtra dal vivo mentre l'utente digita, in
+  // qualunque lingua sia stata tradotta la voce — indipendentemente dalla
+  // lingua mostrata a schermo in quel momento. Le categorie senza
+  // corrispondenze spariscono del tutto, così a schermo restano solo i
+  // risultati pertinenti.
   const [search, setSearch] = useState("");
   const isSearching = search.trim() !== "";
   const filteredCategories = isSearching
     ? visibleCategories
-        .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(i, search)) }))
+        .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(menu, c.id, i.id, search)) }))
         .filter((c) => c.items.length > 0)
     : visibleCategories;
 

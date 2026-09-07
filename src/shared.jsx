@@ -75,10 +75,23 @@ function normalizeSearch(text) {
     .toLowerCase()
     .trim();
 }
-export function itemMatchesSearch(item, query) {
+// Cerca un piatto per nome/descrizione in QUALSIASI lingua in cui il menù è
+// stato tradotto, non solo in quella mostrata a schermo in quel momento: un
+// cameriere che lavora sul menù in italiano può digitare "steak" e trovare
+// comunque "Costata" se la traduzione inglese esiste, utile con clienti
+// stranieri che chiedono un piatto nella propria lingua. Cerca per id
+// (stabile tra le lingue), non per il testo già visualizzato.
+function candidateMatches(candidate, q) {
+  return !!candidate && (normalizeSearch(candidate.name).includes(q) || normalizeSearch(candidate.description).includes(q));
+}
+export function itemMatchesSearch(menu, categoryId, itemId, query) {
   const q = normalizeSearch(query);
   if (!q) return true;
-  return normalizeSearch(item.name).includes(q) || normalizeSearch(item.description).includes(q);
+  const rawCategory = menu?.categories?.find((c) => c.id === categoryId);
+  const rawItem = rawCategory?.items?.find((i) => i.id === itemId);
+  if (candidateMatches(rawItem, q)) return true;
+  const translations = menu?.translations || {};
+  return Object.values(translations).some((t) => candidateMatches(t?.categories?.[categoryId]?.items?.[itemId], q));
 }
 
 /* ============================== NAVIGAZIONE (cronologia browser) ============================== */

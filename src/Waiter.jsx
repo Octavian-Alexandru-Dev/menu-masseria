@@ -325,17 +325,18 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
   const offMenuItems = categories.flatMap((c) => c.items.filter((i) => i.staffOnly).map((i) => ({ ...i, _categoryId: c.id, _categoryName: c.name })));
 
   // Ricerca piatti: filtra dal vivo le liste sotto "Aggiungi piatti" mentre
-  // il cameriere digita, così può trovare subito la voce da aggiungere
-  // senza scorrere tutte le categorie.
+  // il cameriere digita, in qualunque lingua sia stata tradotta la voce —
+  // utile quando un cliente straniero chiede un piatto nella propria lingua
+  // anche se il pannello cameriere lavora sul menù in italiano.
   const [itemSearch, setItemSearch] = useState("");
   const isItemSearching = itemSearch.trim() !== "";
   const filteredNormalItems = isItemSearching
     ? normalItems
-        .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(i, itemSearch)) }))
+        .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(menu, c.id, i.id, itemSearch)) }))
         .filter((c) => c.items.length > 0)
     : normalItems;
   const filteredOffMenuItems = isItemSearching
-    ? offMenuItems.filter((i) => itemMatchesSearch(i, itemSearch))
+    ? offMenuItems.filter((i) => itemMatchesSearch(menu, i._categoryId, i.id, itemSearch))
     : offMenuItems;
 
   // La "portata" non è più una scelta manuale (fonte di errori: un piatto
