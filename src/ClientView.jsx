@@ -2,10 +2,10 @@
 // leggero: nessun import di Firebase Authentication, nessun codice del
 // pannello di gestione — solo React e Firestore per leggere il menù.
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { X, Expand, ShoppingBag } from "lucide-react";
+import { X, Expand, ShoppingBag, Search } from "lucide-react";
 import {
   THEMES, ital, LANGUAGES, UI_STRINGS, TRANSLATION_LANG_KEY,
-  applyTranslation, TYPE, SPACE,
+  applyTranslation, TYPE, SPACE, itemMatchesSearch,
   GlobalStyle, BranchDivider, Logo,
 } from "./shared";
 import { optimizedImageUrl } from "./cloudinary";
@@ -141,6 +141,17 @@ export default function ClientView({ menu, onGoStaff }) {
     .filter((c) => c.visible !== false)
     .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false && !i.staffOnly) }))
     .filter((c) => c.items.length > 0);
+
+  // Ricerca piatti: lato client, filtra dal vivo mentre l'utente digita.
+  // Le categorie senza corrispondenze spariscono del tutto, così a schermo
+  // restano solo i risultati pertinenti.
+  const [search, setSearch] = useState("");
+  const isSearching = search.trim() !== "";
+  const filteredCategories = isSearching
+    ? visibleCategories
+        .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(i, search)) }))
+        .filter((c) => c.items.length > 0)
+    : visibleCategories;
 
   // menu.reviewLinks/socialLinks possono mancare nei menù salvati prima dell'introduzione di questi campi.
   const google = menu.reviewLinks?.google || { url: "", visible: false };
@@ -280,38 +291,77 @@ export default function ClientView({ menu, onGoStaff }) {
         </div>
       </header>
 
-      {/* Sticky nav */}
-      <nav
-        ref={navRef}
-        className="mdp-scrollbar"
-        style={{
-          position: "sticky", top: 0, zIndex: 10, background: t.bg,
-          borderBottom: `1px solid ${t.line}`, display: "flex", gap: 22,
-          overflowX: "auto", padding: "12px 20px", backdropFilter: "blur(6px)",
-        }}
-      >
-        {visibleCategories.map((c) => (
-          <button
-            key={c.id}
-            ref={(el) => (tabRefs.current[c.id] = el)}
-            onClick={() => scrollTo(c.id)}
-            className="mdp-tab"
+      {/* Barra di ricerca + nav categorie, entrambe sticky in cima */}
+      <div style={{ position: "sticky", top: 0, zIndex: 10, background: t.bg, borderBottom: `1px solid ${t.line}` }}>
+        <div style={{ padding: "12px 20px", maxWidth: 720, margin: "0 auto" }}>
+          <div style={{ position: "relative" }}>
+            <Search size={16} color={t.inkSoft} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={ui.searchPlaceholder}
+              aria-label={ui.searchPlaceholder}
+              style={{
+                width: "100%", padding: "10px 36px", borderRadius: 20, border: `1px solid ${t.line}`,
+                background: t.card, color: t.ink, fontSize: TYPE.bodyPlus, fontFamily: t.fontBody,
+                boxSizing: "border-box",
+              }}
+            />
+            {isSearching && (
+              <button
+                onClick={() => setSearch("")}
+                aria-label={ui.closeZoom}
+                className="mdp-btn"
+                style={{
+                  position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                  background: "none", border: "none", cursor: "pointer", color: t.inkSoft,
+                  display: "flex", alignItems: "center", padding: 4,
+                }}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!isSearching && (
+          <nav
+            ref={navRef}
+            className="mdp-scrollbar"
             style={{
-              background: "none", border: "none", cursor: "pointer",
-              fontFamily: t.fontBody, fontSize: TYPE.smallPlus, letterSpacing: 1,
-              textTransform: "uppercase", paddingBottom: 6,
-              color: active === c.id ? t.primary : t.inkSoft,
-              borderBottom: active === c.id ? `2px solid ${t.accent}` : "2px solid transparent",
+              display: "flex", gap: 22, overflowX: "auto", padding: "0 20px 12px",
             }}
           >
-            {c.name}
-          </button>
-        ))}
-      </nav>
+            {visibleCategories.map((c) => (
+              <button
+                key={c.id}
+                ref={(el) => (tabRefs.current[c.id] = el)}
+                onClick={() => scrollTo(c.id)}
+                className="mdp-tab"
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontFamily: t.fontBody, fontSize: TYPE.smallPlus, letterSpacing: 1,
+                  textTransform: "uppercase", paddingBottom: 6,
+                  color: active === c.id ? t.primary : t.inkSoft,
+                  borderBottom: active === c.id ? `2px solid ${t.accent}` : "2px solid transparent",
+                }}
+              >
+                {c.name}
+              </button>
+            ))}
+          </nav>
+        )}
+      </div>
 
       {/* Sections */}
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "10px 20px 80px" }}>
-        {visibleCategories.map((cat) => (
+        {isSearching && filteredCategories.length === 0 && (
+          <div style={{ textAlign: "center", color: t.inkSoft, fontSize: TYPE.body, padding: "40px 0" }}>
+            {ui.searchNoResults}
+          </div>
+        )}
+        {filteredCategories.map((cat) => (
           <section
             key={cat.id}
             ref={(el) => (refs.current[cat.id] = el)}
