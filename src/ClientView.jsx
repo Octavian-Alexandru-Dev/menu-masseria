@@ -228,8 +228,8 @@ export default function ClientView({ menu, onGoStaff }) {
   const renderPrice = (price) => {
     const isRequest = /richiesta/i.test(price || "");
     return (
-      <span className="mdp-display" style={{ fontStyle: ital(t), fontWeight: 600, color: t.accent, fontSize: isRequest ? TYPE.body : TYPE.subhead, letterSpacing: isRequest ? 1 : 0 }}>
-        {isRequest ? ui.onRequest : `€ ${price}`}
+      <span className="mdp-display" style={{ fontStyle: ital(t), fontWeight: 600, color: t.accent, fontSize: isRequest ? TYPE.body : TYPE.subhead, letterSpacing: isRequest ? 1 : 0, whiteSpace: "nowrap", flexShrink: 0 }}>
+        {isRequest ? ui.onRequest : `€ ${price}`}
       </span>
     );
   };
@@ -339,7 +339,7 @@ export default function ClientView({ menu, onGoStaff }) {
                   tabIndex={hasImage ? 0 : undefined}
                   onClick={hasImage ? () => setZoomedItemId(item.id) : undefined}
                   onKeyDown={hasImage ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setZoomedItemId(item.id); } } : undefined}
-                  style={{ padding: `${SPACE.md}px ${SPACE.sm}px`, borderRadius: 6, display: "flex", gap: 14, cursor: hasImage ? "pointer" : "default" }}
+                  style={{ padding: `${SPACE.md}px ${SPACE.sm}px`, borderRadius: 6, display: "flex", alignItems: "flex-start", gap: 14, cursor: hasImage ? "pointer" : "default" }}
                 >
                   {hasImage && (
                     <div style={{ position: "relative", flexShrink: 0 }}>
