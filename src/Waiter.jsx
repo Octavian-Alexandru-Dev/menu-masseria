@@ -327,9 +327,11 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
   // Ricerca piatti: filtra dal vivo le liste sotto "Aggiungi piatti" mentre
   // il cameriere digita, in qualunque lingua sia stata tradotta la voce —
   // utile quando un cliente straniero chiede un piatto nella propria lingua
-  // anche se il pannello cameriere lavora sul menù in italiano.
+  // anche se il pannello cameriere lavora sul menù in italiano. Disattivabile
+  // dall'admin (menu.searchEnabled): assente/true = attiva.
+  const searchEnabled = menu?.searchEnabled !== false;
   const [itemSearch, setItemSearch] = useState("");
-  const isItemSearching = itemSearch.trim() !== "";
+  const isItemSearching = searchEnabled && itemSearch.trim() !== "";
   const filteredNormalItems = isItemSearching
     ? normalItems
         .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(menu, c.id, i.id, itemSearch)) }))
@@ -459,34 +461,36 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
         Aggiungi piatti
       </div>
 
-      <div style={{ position: "relative", marginBottom: 14 }}>
-        <Search size={15} color={t.inkSoft} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-        <input
-          type="text"
-          value={itemSearch}
-          onChange={(e) => setItemSearch(e.target.value)}
-          placeholder="Cerca un piatto…"
-          aria-label="Cerca un piatto"
-          style={{
-            width: "100%", padding: "9px 34px", borderRadius: 8, border: `1px solid ${t.line}`,
-            background: t.bg, color: t.ink, fontSize: TYPE.bodyLg, boxSizing: "border-box",
-          }}
-        />
-        {isItemSearching && (
-          <button
-            onClick={() => setItemSearch("")}
-            aria-label="Cancella ricerca"
-            className="mdp-btn"
+      {searchEnabled && (
+        <div style={{ position: "relative", marginBottom: 14 }}>
+          <Search size={15} color={t.inkSoft} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+          <input
+            type="text"
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            placeholder="Cerca un piatto…"
+            aria-label="Cerca un piatto"
             style={{
-              position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-              background: "none", border: "none", cursor: "pointer", color: t.inkSoft,
-              display: "flex", alignItems: "center", padding: 4,
+              width: "100%", padding: "9px 34px", borderRadius: 8, border: `1px solid ${t.line}`,
+              background: t.bg, color: t.ink, fontSize: TYPE.bodyLg, boxSizing: "border-box",
             }}
-          >
-            <X size={15} />
-          </button>
-        )}
-      </div>
+          />
+          {isItemSearching && (
+            <button
+              onClick={() => setItemSearch("")}
+              aria-label="Cancella ricerca"
+              className="mdp-btn"
+              style={{
+                position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", cursor: "pointer", color: t.inkSoft,
+                display: "flex", alignItems: "center", padding: 4,
+              }}
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
+      )}
 
       {isItemSearching && filteredNormalItems.length === 0 && filteredOffMenuItems.length === 0 && (
         <div style={{ textAlign: "center", color: t.inkSoft, fontSize: TYPE.body, padding: "16px 0" }}>

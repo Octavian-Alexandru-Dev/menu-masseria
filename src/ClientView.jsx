@@ -146,9 +146,12 @@ export default function ClientView({ menu, onGoStaff }) {
   // qualunque lingua sia stata tradotta la voce — indipendentemente dalla
   // lingua mostrata a schermo in quel momento. Le categorie senza
   // corrispondenze spariscono del tutto, così a schermo restano solo i
-  // risultati pertinenti.
+  // risultati pertinenti. Disattivabile dall'admin (menu.searchEnabled):
+  // assente/true = attiva, per non nascondere la barra ai menù già salvati
+  // prima dell'introduzione di questo interruttore.
+  const searchEnabled = menu.searchEnabled !== false;
   const [search, setSearch] = useState("");
-  const isSearching = search.trim() !== "";
+  const isSearching = searchEnabled && search.trim() !== "";
   const filteredCategories = isSearching
     ? visibleCategories
         .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(menu, c.id, i.id, search)) }))
@@ -295,37 +298,39 @@ export default function ClientView({ menu, onGoStaff }) {
 
       {/* Barra di ricerca + nav categorie, entrambe sticky in cima */}
       <div style={{ position: "sticky", top: 0, zIndex: 10, background: t.bg, borderBottom: `1px solid ${t.line}` }}>
-        <div style={{ padding: "12px 20px", maxWidth: 720, margin: "0 auto" }}>
-          <div style={{ position: "relative" }}>
-            <Search size={16} color={t.inkSoft} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={ui.searchPlaceholder}
-              aria-label={ui.searchPlaceholder}
-              style={{
-                width: "100%", padding: "10px 36px", borderRadius: 20, border: `1px solid ${t.line}`,
-                background: t.card, color: t.ink, fontSize: TYPE.bodyPlus, fontFamily: t.fontBody,
-                boxSizing: "border-box",
-              }}
-            />
-            {isSearching && (
-              <button
-                onClick={() => setSearch("")}
-                aria-label={ui.closeZoom}
-                className="mdp-btn"
+        {searchEnabled && (
+          <div style={{ padding: "12px 20px", maxWidth: 720, margin: "0 auto" }}>
+            <div style={{ position: "relative" }}>
+              <Search size={16} color={t.inkSoft} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={ui.searchPlaceholder}
+                aria-label={ui.searchPlaceholder}
                 style={{
-                  position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-                  background: "none", border: "none", cursor: "pointer", color: t.inkSoft,
-                  display: "flex", alignItems: "center", padding: 4,
+                  width: "100%", padding: "10px 36px", borderRadius: 20, border: `1px solid ${t.line}`,
+                  background: t.card, color: t.ink, fontSize: TYPE.bodyPlus, fontFamily: t.fontBody,
+                  boxSizing: "border-box",
                 }}
-              >
-                <X size={16} />
-              </button>
-            )}
+              />
+              {isSearching && (
+                <button
+                  onClick={() => setSearch("")}
+                  aria-label={ui.closeZoom}
+                  className="mdp-btn"
+                  style={{
+                    position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer", color: t.inkSoft,
+                    display: "flex", alignItems: "center", padding: 4,
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {!isSearching && (
           <nav
