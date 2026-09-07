@@ -1,8 +1,8 @@
 // Area cameriere — presa comande digitale (vedi docs/comande-camerieri.md).
 // Caricato solo su /cameriere (lazy, vedi MenuApp.jsx), mai dal sito pubblico.
 import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
-import { Plus, Minus, X, ArrowLeft, LogOut, CheckCircle2, Clock, Utensils, History, Users, Receipt, CalendarDays, Play } from "lucide-react";
-import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableIdentity, currentShiftStart, currentShiftLabel } from "./shared";
+import { Plus, Minus, X, ArrowLeft, LogOut, CheckCircle2, Clock, Utensils, History, Users, Receipt, CalendarDays, Play, Search } from "lucide-react";
+import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableIdentity, currentShiftStart, currentShiftLabel, itemMatchesSearch } from "./shared";
 import {
   subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
   autoCloseStaleOrders, orderTotalCents, copertoTotalCents,
@@ -324,6 +324,21 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
     .filter((c) => c.items.length > 0);
   const offMenuItems = categories.flatMap((c) => c.items.filter((i) => i.staffOnly).map((i) => ({ ...i, _categoryId: c.id, _categoryName: c.name })));
 
+  // Ricerca piatti: filtra dal vivo le liste sotto "Aggiungi piatti" mentre
+  // il cameriere digita, in qualunque lingua sia stata tradotta la voce —
+  // utile quando un cliente straniero chiede un piatto nella propria lingua
+  // anche se il pannello cameriere lavora sul menù in italiano.
+  const [itemSearch, setItemSearch] = useState("");
+  const isItemSearching = itemSearch.trim() !== "";
+  const filteredNormalItems = isItemSearching
+    ? normalItems
+        .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(menu, c.id, i.id, itemSearch)) }))
+        .filter((c) => c.items.length > 0)
+    : normalItems;
+  const filteredOffMenuItems = isItemSearching
+    ? offMenuItems.filter((i) => itemMatchesSearch(menu, i._categoryId, i.id, itemSearch))
+    : offMenuItems;
+
   // La "portata" non è più una scelta manuale (fonte di errori: un piatto
   // finito per sbaglio sotto la categoria selezionata in quel momento), ma
   // sempre la categoria reale del menù a cui il piatto appartiene.
@@ -444,7 +459,42 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
         Aggiungi piatti
       </div>
 
-      {normalItems.map((cat) => (
+      <div style={{ position: "relative", marginBottom: 14 }}>
+        <Search size={15} color={t.inkSoft} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
+        <input
+          type="text"
+          value={itemSearch}
+          onChange={(e) => setItemSearch(e.target.value)}
+          placeholder="Cerca un piatto…"
+          aria-label="Cerca un piatto"
+          style={{
+            width: "100%", padding: "9px 34px", borderRadius: 8, border: `1px solid ${t.line}`,
+            background: t.bg, color: t.ink, fontSize: TYPE.bodyLg, boxSizing: "border-box",
+          }}
+        />
+        {isItemSearching && (
+          <button
+            onClick={() => setItemSearch("")}
+            aria-label="Cancella ricerca"
+            className="mdp-btn"
+            style={{
+              position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", cursor: "pointer", color: t.inkSoft,
+              display: "flex", alignItems: "center", padding: 4,
+            }}
+          >
+            <X size={15} />
+          </button>
+        )}
+      </div>
+
+      {isItemSearching && filteredNormalItems.length === 0 && filteredOffMenuItems.length === 0 && (
+        <div style={{ textAlign: "center", color: t.inkSoft, fontSize: TYPE.body, padding: "16px 0" }}>
+          Nessun piatto trovato.
+        </div>
+      )}
+
+      {filteredNormalItems.map((cat) => (
         <div key={cat.id} style={{ marginBottom: 14 }}>
           <div style={{ fontSize: TYPE.smallPlus, fontWeight: 600, color: t.ink, marginBottom: 6 }}>{cat.name}</div>
           <div style={{ display: "grid", gap: 6 }}>
@@ -464,13 +514,13 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
         </div>
       ))}
 
-      {offMenuItems.length > 0 && (
+      {filteredOffMenuItems.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, fontWeight: 600, color: t.accent2, marginBottom: 6 }}>
             <Utensils size={13} /> Fuori menù
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            {offMenuItems.map((item) => (
+            {filteredOffMenuItems.map((item) => (
               <button key={item.id} onClick={() => addToDraft(item, item._categoryId, item._categoryName)} className="mdp-btn" style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left",
                 padding: "8px 12px", borderRadius: 6, border: `1px dashed ${t.accent2}`, background: t.bg, cursor: "pointer",

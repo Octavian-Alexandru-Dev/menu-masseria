@@ -65,6 +65,35 @@ export const MENU_DOC_PATH = ["menu", "data"];
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
+/* ============================== RICERCA PIATTI ============================== */
+// Confronto case/accento-insensibile ("crema di pomodoro" trova "Crémá"),
+// usato sia dal menù cliente sia dalla presa comande cameriere.
+function normalizeSearch(text) {
+  return (text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+// Cerca un piatto per nome/descrizione in QUALSIASI lingua in cui il menù è
+// stato tradotto, non solo in quella mostrata a schermo in quel momento: un
+// cameriere che lavora sul menù in italiano può digitare "steak" e trovare
+// comunque "Costata" se la traduzione inglese esiste, utile con clienti
+// stranieri che chiedono un piatto nella propria lingua. Cerca per id
+// (stabile tra le lingue), non per il testo già visualizzato.
+function candidateMatches(candidate, q) {
+  return !!candidate && (normalizeSearch(candidate.name).includes(q) || normalizeSearch(candidate.description).includes(q));
+}
+export function itemMatchesSearch(menu, categoryId, itemId, query) {
+  const q = normalizeSearch(query);
+  if (!q) return true;
+  const rawCategory = menu?.categories?.find((c) => c.id === categoryId);
+  const rawItem = rawCategory?.items?.find((i) => i.id === itemId);
+  if (candidateMatches(rawItem, q)) return true;
+  const translations = menu?.translations || {};
+  return Object.values(translations).some((t) => candidateMatches(t?.categories?.[categoryId]?.items?.[itemId], q));
+}
+
 /* ============================== NAVIGAZIONE (cronologia browser) ============================== */
 // Sincronizza uno stato con un parametro della query string, così le
 // schermate principali (menù pubblico / area riservata / sezione scelta)
@@ -164,11 +193,11 @@ export const LANGUAGES = [
 
 // Testi fissi dell'interfaccia: tradotti a mano, non richiedono chiamate API.
 export const UI_STRINGS = {
-  it: { onRequest: "Su richiesta", manageMenu: "Area riservata", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", linkInstagram: "Seguici su Instagram", linkFacebook: "Seguici su Facebook", linkShop: "Vai al nostro shop online", closeZoom: "Chiudi" },
-  en: { onRequest: "On request", manageMenu: "Staff area", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", linkInstagram: "Follow us on Instagram", linkFacebook: "Follow us on Facebook", linkShop: "Visit our online shop", closeZoom: "Close" },
-  es: { onRequest: "Bajo pedido", manageMenu: "Área reservada", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", linkInstagram: "Síguenos en Instagram", linkFacebook: "Síguenos en Facebook", linkShop: "Visita nuestra tienda online", closeZoom: "Cerrar" },
-  de: { onRequest: "Auf Anfrage", manageMenu: "Mitarbeiterbereich", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", linkInstagram: "Folge uns auf Instagram", linkFacebook: "Folge uns auf Facebook", linkShop: "Besuche unseren Online-Shop", closeZoom: "Schließen" },
-  fr: { onRequest: "Sur demande", manageMenu: "Espace réservé", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", linkInstagram: "Suivez-nous sur Instagram", linkFacebook: "Suivez-nous sur Facebook", linkShop: "Visitez notre boutique en ligne", closeZoom: "Fermer" },
+  it: { onRequest: "Su richiesta", manageMenu: "Area riservata", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", linkInstagram: "Seguici su Instagram", linkFacebook: "Seguici su Facebook", linkShop: "Vai al nostro shop online", closeZoom: "Chiudi", searchPlaceholder: "Cerca un piatto…", searchNoResults: "Nessun piatto trovato." },
+  en: { onRequest: "On request", manageMenu: "Staff area", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", linkInstagram: "Follow us on Instagram", linkFacebook: "Follow us on Facebook", linkShop: "Visit our online shop", closeZoom: "Close", searchPlaceholder: "Search for a dish…", searchNoResults: "No dishes found." },
+  es: { onRequest: "Bajo pedido", manageMenu: "Área reservada", reviewGoogle: "Deja una reseña en Google", reviewTripadvisor: "Deja una reseña en TripAdvisor", linkInstagram: "Síguenos en Instagram", linkFacebook: "Síguenos en Facebook", linkShop: "Visita nuestra tienda online", closeZoom: "Cerrar", searchPlaceholder: "Busca un plato…", searchNoResults: "No se han encontrado platos." },
+  de: { onRequest: "Auf Anfrage", manageMenu: "Mitarbeiterbereich", reviewGoogle: "Bewertung auf Google hinterlassen", reviewTripadvisor: "Bewertung auf TripAdvisor hinterlassen", linkInstagram: "Folge uns auf Instagram", linkFacebook: "Folge uns auf Facebook", linkShop: "Besuche unseren Online-Shop", closeZoom: "Schließen", searchPlaceholder: "Gericht suchen…", searchNoResults: "Keine Gerichte gefunden." },
+  fr: { onRequest: "Sur demande", manageMenu: "Espace réservé", reviewGoogle: "Laisser un avis sur Google", reviewTripadvisor: "Laisser un avis sur TripAdvisor", linkInstagram: "Suivez-nous sur Instagram", linkFacebook: "Suivez-nous sur Facebook", linkShop: "Visitez notre boutique en ligne", closeZoom: "Fermer", searchPlaceholder: "Rechercher un plat…", searchNoResults: "Aucun plat trouvé." },
 };
 
 export const TRANSLATION_LANG_KEY = "mdp-lang";
