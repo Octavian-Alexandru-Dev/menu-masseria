@@ -10,7 +10,7 @@ import {
 } from "./orders";
 import {
   subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup, coversLabel,
-} from "./reservations";
+} from "./reservationsData";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
 } from "./staff-shared";

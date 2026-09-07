@@ -13,7 +13,7 @@ import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
 } from "./staff-shared";
 import { subscribeOpenOrders } from "./orders";
-import { subscribePendingReservations } from "./reservations";
+import { subscribePendingReservations } from "./reservationsData";
 import Admin from "./Admin";
 import Waiter from "./Waiter";
 import Kitchen from "./Kitchen";

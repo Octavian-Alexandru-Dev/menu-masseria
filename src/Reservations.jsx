@@ -15,7 +15,7 @@ import {
   dateKey, createReservation, updateReservation, confirmReservation, rejectReservation,
   cancelReservation, startReservation, subscribeReservationsForRange, subscribeReservationsForDate,
   autoFlagNoShows, runDailyExpiredReservationsCleanup, coversLabel,
-} from "./reservations";
+} from "./reservationsData";
 
 const MONTH_LABEL = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const WEEKDAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "short" });

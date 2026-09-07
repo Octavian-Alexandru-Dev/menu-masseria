@@ -3,6 +3,11 @@
 //
 // File caricato SOLO dalle aree cameriere/prenotazioni (Waiter.jsx/
 // Reservations.jsx, entrambe lazy-load), mai dal sito pubblico.
+//
+// Nome scelto deliberatamente diverso da Reservations.jsx: un nome che
+// differisce solo per maiuscola/minuscola crea un import ambiguo su
+// filesystem case-insensitive (macOS/Windows), dove Vite può risolvere
+// "./Reservations" verso questo file invece del componente.
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
   orderBy, serverTimestamp, Timestamp,

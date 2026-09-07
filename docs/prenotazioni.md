@@ -44,7 +44,7 @@ punti (tutti verso lo stesso componente `src/Reservations.jsx`):
 - Scorciatoia nell'header dell'area cameriere (`Waiter.jsx`), necessaria
   perché un account solo-cameriere salta la Dashboard (vedi §5).
 
-Dati e logica di scrittura/lettura in `src/reservations.js`, seguendo
+Dati e logica di scrittura/lettura in `src/reservationsData.js`, seguendo
 esattamente le convenzioni di `src/orders.js` (stesso stile di listener,
 stesso uso di `serverTimestamp`/`Timestamp`, stessa pulizia lazy).
 

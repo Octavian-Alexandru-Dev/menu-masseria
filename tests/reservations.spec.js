@@ -105,7 +105,7 @@ test.describe("Area prenotazioni", () => {
     await page.locator('input[type="number"]').fill(String(TABLE_NUMBER));
     await page.getByRole("button", { name: /apri comanda/i }).click();
 
-    await expect(page.getByText(new RegExp(`Tavolo ${TABLE_NUMBER}`))).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(name)).toBeVisible();
+    await expect(page.getByText(new RegExp(`Tavolo ${TABLE_NUMBER}`)).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(name).first()).toBeVisible();
   });
 });
