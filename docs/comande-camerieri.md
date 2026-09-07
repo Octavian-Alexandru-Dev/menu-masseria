@@ -387,7 +387,7 @@ piano iniziale (già implementate):
 
 ---
 
-## 13. Turno di servizio e pre-scontrino
+## 13. Turno di servizio e preconto
 
 ### 13.1 Comande chiuse visibili durante il turno
 
@@ -405,9 +405,9 @@ schermata; se l'app resta aperta a cavallo del cambio turno, una ricarica
 della pagina aggiorna la sezione — stessa filosofia "pigra" già usata per la
 chiusura automatica a 24h e la pulizia dei 30 giorni.
 
-### 13.2 Pre-scontrino / scontrino finale (non fiscale)
+### 13.2 Preconto (non fiscale)
 
-Pulsante "Pre-scontrino" nel dettaglio del tavolo: apre un riepilogo in stile
+Pulsante "Preconto" nel dettaglio del tavolo: apre un riepilogo in stile
 scontrino (nome locale, tavolo, orario, cameriere, righe con prezzo, coperto,
 totale), **esplicitamente etichettato "documento non fiscale"** — non
 un'integrazione con cassa/stampante fiscale (resta fuori scopo, §1), solo un
@@ -417,15 +417,15 @@ per il menù) per dare un'occhiata condivisa col tavolo prima del conto vero.
 - **Stampa**: usa la stampa nativa del browser; un CSS `@media print` nasconde
   tutto il resto della pagina e i controlli non pertinenti (pulsanti di
   modifica), lasciando solo il riepilogo.
-- **Modifica**: dopo aver generato il pre-scontrino, si possono rimuovere
+- **Modifica**: dopo aver generato il preconto, si possono rimuovere
   righe sbagliate (`removeOrderLine`) — per aggiungerne di nuove si chiude il
   riquadro e si usa "Aggiungi piatti" come al solito, poi si riapre per un
   riepilogo aggiornato.
-- **Conferma scontrino finale**: salva sulla comanda (`order.receipt`) un
+- **Conferma preconto**: salva sulla comanda (`order.receipt`) un
   timestamp di stampa (`printedAt`), un timestamp di conferma (`confirmedAt`)
   e uno snapshot delle righe/totale al momento della conferma — sincronizzato
   in tempo reale su tutti i client, e recuperabile in futuro dallo Storico
-  (badge "scontrino confermato alle…").
+  (badge "preconto confermato alle…").
 - **"Fine modifica"**: in modalità modifica si può uscire senza chiudere e
   riaprire tutta la card (le rimozioni righe sono comunque già salvate subito
   su Firestore ad ogni tocco, non è un "annulla" delle modifiche già fatte).

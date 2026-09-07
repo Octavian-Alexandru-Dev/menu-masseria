@@ -57,7 +57,7 @@ export function OrderRow({ t, order, expanded, onToggle, onPrint }) {
           <button
             onClick={() => onPrint(order)}
             className="mdp-btn"
-            title="Stampa scontrino"
+            title="Stampa preconto"
             style={{ padding: "0 14px", background: "none", border: "none", borderLeft: `1px solid ${t.line}`, color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center" }}
           >
             <Printer size={14} />
@@ -72,7 +72,7 @@ export function OrderRow({ t, order, expanded, onToggle, onPrint }) {
             {copertoTotalCents(order) > 0 && ` (coperto € ${formatCentsAsPrice(copertoTotalCents(order))})`}
             {order.notes ? ` · ${order.notes}` : ""}
             {order.receipt?.confirmedAt && (
-              <span style={{ color: t.secondary }}> · scontrino confermato alle {formatTime(order.receipt.confirmedAt)}</span>
+              <span style={{ color: t.secondary }}> · preconto confermato alle {formatTime(order.receipt.confirmedAt)}</span>
             )}
           </div>
           <div style={{ display: "grid", gap: 4 }}>

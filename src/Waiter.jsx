@@ -540,7 +540,7 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
                 borderRadius: 8, fontSize: TYPE.smallPlus, cursor: "pointer",
                 display: "flex", alignItems: "center", gap: 6,
               }}>
-                <Receipt size={14} /> Pre-scontrino
+                <Receipt size={14} /> Preconto
               </button>
               <button onClick={() => setConfirmClose(true)} className="mdp-btn" style={{
                 padding: "10px 16px", background: "none", border: `1px solid ${t.accent2}`, color: t.accent2,
@@ -565,7 +565,7 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
               {" "}— totale € {formatCentsAsPrice(orderTotalCents(order))}.
             </div>
             <div style={{ fontSize: TYPE.smallPlus, color: t.inkSoft, marginBottom: 20 }}>
-              Nessuno scontrino verrà stampato: questa azione archivia solo la comanda.
+              Nessun preconto verrà stampato: questa azione archivia solo la comanda.
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setConfirmClose(false)} className="mdp-btn" style={{ flex: 1, padding: "10px 0", background: "none", border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer" }}>Annulla</button>

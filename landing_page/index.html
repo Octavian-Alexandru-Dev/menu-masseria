@@ -6,8 +6,8 @@
     <meta name="robots" content="index, follow">
     <meta name="theme-color" content="#1A1A1A">
 
-    <title>Masseria della Piana | Ristorante Agriturismo a Candidoni, Reggio Calabria</title>
-    <meta name="description" content="Masseria della Piana, il ristorante di Fattoria della Piana a Candidoni (RC): cucina calabrese a km 0, prodotti dell'azienda agricola. Scopri il menù, gli orari e come prenotare.">
+    <title id="page-title">Masseria della Piana | Ristorante Agriturismo a Candidoni, Reggio Calabria</title>
+    <meta id="meta-description" name="description" content="Masseria della Piana, il ristorante di Fattoria della Piana a Candidoni (RC): cucina calabrese a km 0, prodotti dell'azienda agricola. Scopri il menù, gli orari e come prenotare.">
     <link rel="canonical" href="https://masseria-della-piana.it/">
 
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
@@ -16,8 +16,8 @@
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Masseria della Piana">
-    <meta property="og:title" content="Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)">
-    <meta property="og:description" content="Cucina calabrese a km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana.">
+    <meta id="og-title" property="og:title" content="Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)">
+    <meta id="og-description" property="og:description" content="Cucina calabrese a km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana.">
     <meta property="og:image" content="https://masseria-della-piana.it/logo.jpg">
     <meta property="og:image:width" content="400">
     <meta property="og:image:height" content="218">
@@ -27,8 +27,8 @@
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)">
-    <meta name="twitter:description" content="Cucina calabrese a km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana.">
+    <meta id="twitter-title" name="twitter:title" content="Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)">
+    <meta id="twitter-description" name="twitter:description" content="Cucina calabrese a km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana.">
     <meta name="twitter:image" content="https://masseria-della-piana.it/logo.jpg">
     <meta name="twitter:image:alt" content="Logo Masseria della Piana">
 
@@ -116,10 +116,41 @@
         }
         a { color: inherit; }
 
+        /* Language switcher */
+        .lang-switcher {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            padding: 14px 20px 0;
+        }
+        .lang-btn {
+            appearance: none;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--ink-soft);
+            font-family: 'Roboto', sans-serif;
+            font-size: 12.5px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            padding: 5px 9px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background .15s ease, color .15s ease;
+        }
+        .lang-btn:hover { background: var(--bg-alt); color: var(--ink); }
+        .lang-btn[aria-pressed="true"] {
+            background: var(--primary);
+            color: #fff;
+        }
+        .lang-btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+        }
+
         /* Hero */
         header.hero {
             text-align: center;
-            padding: 48px 20px 8px;
+            padding: 24px 20px 8px;
         }
         header.hero img.logo {
             width: 190px;
@@ -394,13 +425,21 @@
 </head>
 <body>
 
+    <div class="lang-switcher" role="group" aria-label="Lingua / Language">
+        <button type="button" class="lang-btn" data-lang="it" aria-pressed="true">IT</button>
+        <button type="button" class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+        <button type="button" class="lang-btn" data-lang="es" aria-pressed="false">ES</button>
+        <button type="button" class="lang-btn" data-lang="de" aria-pressed="false">DE</button>
+        <button type="button" class="lang-btn" data-lang="fr" aria-pressed="false">FR</button>
+    </div>
+
     <header class="hero">
         <picture>
             <source srcset="logo.webp" type="image/webp">
             <img class="logo" src="logo.jpg" alt="Masseria della Piana" width="400" height="218" loading="eager">
         </picture>
         <h1>Masseria della Piana</h1>
-        <p class="tagline">Cucina calabrese a km 0 nella Piana di Gioia Tauro</p>
+        <p class="tagline" data-i18n="tagline">Cucina calabrese a km 0 nella Piana di Gioia Tauro</p>
 
         <svg class="divider" width="180" height="18" viewBox="0 0 180 18" fill="none" aria-hidden="true">
             <path d="M2 9 H178" stroke="#B5602F" stroke-width="1" opacity="0.55"/>
@@ -412,15 +451,15 @@
         <div class="cta-group">
             <a href="https://menu.masseria-della-piana.it/" class="btn btn-primary">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 4.5C4 3.67 4.67 3 5.5 3H16a3 3 0 0 1 3 3v14.5a.5.5 0 0 1-.79.41L16 19H5.5A1.5 1.5 0 0 1 4 17.5V4.5Z" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8h7M8 11.5h7M8 15h4" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/></svg>
-                Sfoglia il Menù Digitale
+                <span data-i18n="ctaMenu">Sfoglia il Menù Digitale</span>
             </a>
             <a href="https://wa.me/393481000710?text=Ciao!%20Vorrei%20informazioni%20per%20prenotare%20un%20tavolo." target="_blank" rel="noopener noreferrer" class="btn btn-whatsapp">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.3A9 9 0 1 0 12 3Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.3 8.6c.2-.5.4-.5.6-.5h.5c.2 0 .4 0 .5.4.2.5.7 1.6.7 1.8.1.1.1.3 0 .4-.1.2-.2.3-.3.4-.1.2-.3.3-.4.4-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6-.1.2-.2.7-.8.9-1 .2-.3.4-.2.6-.1l1.7.8c.2.1.3.2.4.3.1.2.1.9-.2 1.4-.3.6-1.5 1.2-2.1 1.2-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1 0-1.5.8-2.2 1-2.5Z" fill="#fff"/></svg>
-                Scrivici su WhatsApp
+                <span data-i18n="ctaWhatsapp">Scrivici su WhatsApp</span>
             </a>
             <a href="https://fattoria-della-piana.myshopify.com/" target="_blank" rel="noopener noreferrer" class="btn btn-shop">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 8h12l-1 12.5a1.5 1.5 0 0 1-1.5 1.5h-7a1.5 1.5 0 0 1-1.5-1.5L6 8Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 8V6a3 3 0 0 1 6 0v2" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
-                Scopri i prodotti Fattoria della Piana
+                <span data-i18n="ctaShop">Scopri i prodotti Fattoria della Piana</span>
             </a>
         </div>
     </header>
@@ -428,49 +467,49 @@
     <div class="wrap">
         <main>
             <section class="intro">
-                <p>La Masseria della Piana è il ristorante di Fattoria della Piana, nel cuore della Piana di Gioia Tauro. Cuciniamo la tradizione calabrese con i prodotti della nostra azienda agricola, in un ambiente rustico e accogliente a Candidoni, a pochi minuti dall'uscita autostradale di Rosarno.</p>
+                <p data-i18n="introText">La Masseria della Piana è il ristorante di Fattoria della Piana, nel cuore della Piana di Gioia Tauro. Cuciniamo la tradizione calabrese con i prodotti della nostra azienda agricola, in un ambiente rustico e accogliente a Candidoni, a pochi minuti dall'uscita autostradale di Rosarno.</p>
             </section>
 
             <section class="card">
                 <h2>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="#1A1A1A" stroke-width="1.6"/><path d="M12 7v5l3.5 2" stroke="#1A1A1A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    Orari di Apertura
+                    <span data-i18n="hoursTitle">Orari di Apertura</span>
                 </h2>
                 <ul class="hours-list">
-                    <li><span>Pranzo — tutti i giorni</span><strong>12:30 – 15:00</strong></li>
-                    <li><span>Cena — solo su prenotazione</span><strong>19:00 – 23:00</strong></li>
+                    <li><span data-i18n="hoursLunch">Pranzo — tutti i giorni</span><strong>12:30 – 15:00</strong></li>
+                    <li><span data-i18n="hoursDinner">Cena — solo su prenotazione</span><strong>19:00 – 23:00</strong></li>
                 </ul>
-                <p class="hours-note">A pranzo la prenotazione è sempre consigliata. La sera il locale resta chiuso e apre solo quando le prenotazioni ricevute sono sufficienti: prenota con anticipo per sapere se la cena sarà disponibile.</p>
+                <p class="hours-note" data-i18n="hoursNote">A pranzo la prenotazione è sempre consigliata. La sera il locale resta chiuso e apre solo quando le prenotazioni ricevute sono sufficienti: prenota con anticipo per sapere se la cena sarà disponibile.</p>
             </section>
 
             <section class="card" id="prenota">
                 <h2>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" stroke="#1A1A1A" stroke-width="1.6"/><path d="M4 9h16M8 3v4M16 3v4" stroke="#1A1A1A" stroke-width="1.6" stroke-linecap="round"/></svg>
-                    Prenota un Tavolo
+                    <span data-i18n="bookingTitle">Prenota un Tavolo</span>
                 </h2>
-                <p class="form-note">Compila il modulo: si aprirà WhatsApp con il messaggio già scritto, dovrai solo inviarlo.</p>
+                <p class="form-note" data-i18n="bookingNote">Compila il modulo: si aprirà WhatsApp con il messaggio già scritto, dovrai solo inviarlo.</p>
                 <form id="booking-form" class="booking-form" novalidate>
                     <div class="field">
-                        <label for="b-name">Nome e cognome</label>
+                        <label for="b-name" data-i18n="labelName">Nome e cognome</label>
                         <input type="text" id="b-name" name="name" autocomplete="name" required>
                         <small class="field-error" id="b-name-error" role="alert"></small>
                     </div>
                     <div class="field">
-                        <label for="b-phone">Numero di telefono</label>
+                        <label for="b-phone" data-i18n="labelPhone">Numero di telefono</label>
                         <input type="tel" id="b-phone" name="phone" autocomplete="tel" placeholder="+39 312 345 6789" required>
                         <small class="field-error" id="b-phone-error" role="alert"></small>
                     </div>
                     <div class="field-row">
                         <div class="field">
-                            <label for="b-date">Data</label>
+                            <label for="b-date" data-i18n="labelDate">Data</label>
                             <input type="date" id="b-date" name="date" required>
                             <small class="field-error" id="b-date-error" role="alert"></small>
                         </div>
                         <div class="field">
-                            <label for="b-time">Ora</label>
+                            <label for="b-time" data-i18n="labelTime">Ora</label>
                             <select id="b-time" name="time" required>
-                                <option value="" disabled selected>Seleziona un orario</option>
-                                <optgroup label="Pranzo">
+                                <option value="" disabled selected data-i18n="selectTimePlaceholder">Seleziona un orario</option>
+                                <optgroup label="Pranzo" data-i18n-attr-label="optgroupLunch">
                                     <option value="12:30">12:30</option>
                                     <option value="12:45">12:45</option>
                                     <option value="13:00">13:00</option>
@@ -481,7 +520,7 @@
                                     <option value="14:15">14:15</option>
                                     <option value="14:30">14:30</option>
                                 </optgroup>
-                                <optgroup label="Cena">
+                                <optgroup label="Cena" data-i18n-attr-label="optgroupDinner">
                                     <option value="19:00">19:00</option>
                                     <option value="19:15">19:15</option>
                                     <option value="19:30">19:30</option>
@@ -503,26 +542,26 @@
                         </div>
                     </div>
                     <div class="field">
-                        <label for="b-people">Numero di persone (max 70)</label>
+                        <label for="b-people" data-i18n="labelPeople">Numero di persone (max 70)</label>
                         <input type="number" id="b-people" name="people" min="1" max="70" required>
                         <small class="field-error" id="b-people-error" role="alert"></small>
                     </div>
                     <div class="field">
-                        <label for="b-notes">Note (allergie, richieste particolari)</label>
+                        <label for="b-notes" data-i18n="labelNotes">Note (allergie, richieste particolari)</label>
                         <textarea id="b-notes" name="notes" rows="3"></textarea>
                     </div>
                     <button type="submit" class="btn btn-whatsapp">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.7 13.6L3 21l4.5-1.3A9 9 0 1 0 12 3Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.3 8.6c.2-.5.4-.5.6-.5h.5c.2 0 .4 0 .5.4.2.5.7 1.6.7 1.8.1.1.1.3 0 .4-.1.2-.2.3-.3.4-.1.2-.3.3-.4.4-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.2.5.1.6-.1.2-.2.7-.8.9-1 .2-.3.4-.2.6-.1l1.7.8c.2.1.3.2.4.3.1.2.1.9-.2 1.4-.3.6-1.5 1.2-2.1 1.2-.5.1-1.2.1-1.9-.1-.4-.1-1-.3-1.7-.6-3-1.3-4.9-4.3-5.1-4.5-.1-.2-1.2-1.6-1.2-3.1 0-1.5.8-2.2 1-2.5Z" fill="#fff"/></svg>
-                        Invia richiesta su WhatsApp
+                        <span data-i18n="submitBooking">Invia richiesta su WhatsApp</span>
                     </button>
                 </form>
-                <p class="form-disclaimer">La richiesta non è confermata finché non ti rispondiamo su WhatsApp con disponibilità e orario.</p>
+                <p class="form-disclaimer" data-i18n="formDisclaimer">La richiesta non è confermata finché non ti rispondiamo su WhatsApp con disponibilità e orario.</p>
             </section>
 
             <section class="card">
                 <h2>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s7-6.5 7-11.5a7 7 0 0 0-14 0C5 14.5 12 21 12 21Z" stroke="#1A1A1A" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="2.3" stroke="#1A1A1A" stroke-width="1.6"/></svg>
-                    Dove Siamo &amp; Contatti
+                    <span data-i18n="contactsTitle">Dove Siamo &amp; Contatti</span>
                 </h2>
 
                 <div class="contact-row">
@@ -545,27 +584,27 @@
                 </div>
             </section>
 
-            <p class="social-title">Seguici e lascia una recensione</p>
+            <p class="social-title" data-i18n="socialTitle">Seguici e lascia una recensione</p>
             <div class="social-row">
-                <a href="https://share.google/jSPlEA4RyoXxJrFNq" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Lascia una recensione su Google">
+                <a href="https://share.google/jSPlEA4RyoXxJrFNq" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Lascia una recensione su Google" data-i18n-attr-aria-label="ariaGoogle">
                     <span class="badge">
                         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/><path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
                     </span>
                     <span class="label" style="background:#4285F4">Google</span>
                 </a>
-                <a href="https://www.tripadvisor.com/Restaurant_Review-g2282898-d4770660-Reviews-Masseria_della_Piana-Rosarno_Province_of_Reggio_Calabria_Calabria.html" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Lascia una recensione su TripAdvisor">
+                <a href="https://www.tripadvisor.com/Restaurant_Review-g2282898-d4770660-Reviews-Masseria_della_Piana-Rosarno_Province_of_Reggio_Calabria_Calabria.html" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Lascia una recensione su TripAdvisor" data-i18n-attr-aria-label="ariaTripadvisor">
                     <span class="badge">
                         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#00AF87" d="M12 8.3c-1.7-1.6-4.2-2.2-6.6-1.6C6.5 5.8 8 5.3 9.7 5.3h4.6c1.7 0 3.2.5 4.3 1.4-2.4-.6-4.9 0-6.6 1.6z"/><circle cx="12" cy="13" r="10.2" fill="none" stroke="#00AF87" stroke-width="1.6"/><circle cx="6.8" cy="13" r="4" fill="#fff" stroke="#00AF87" stroke-width="1.4"/><circle cx="17.2" cy="13" r="4" fill="#fff" stroke="#00AF87" stroke-width="1.4"/><circle cx="6.8" cy="13" r="1.5" fill="#00AF87"/><circle cx="17.2" cy="13" r="1.5" fill="#00AF87"/></svg>
                     </span>
                     <span class="label" style="background:#00AF87">TripAdvisor</span>
                 </a>
-                <a href="https://www.instagram.com/fattoriadellapiana/" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Seguici su Instagram">
+                <a href="https://www.instagram.com/fattoriadellapiana/" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Seguici su Instagram" data-i18n-attr-aria-label="ariaInstagram">
                     <span class="badge">
                         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><defs><radialGradient id="ig-grad" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="5%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig-grad)"/><rect x="6.5" y="6.5" width="11" height="11" rx="3.2" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="12" cy="12" r="3.4" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="16.4" cy="7.6" r="1" fill="#fff"/></svg>
                     </span>
                     <span class="label" style="background:#C13584">Instagram</span>
                 </a>
-                <a href="https://www.facebook.com/FattoriaDellaPiana" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Seguici su Facebook">
+                <a href="https://www.facebook.com/FattoriaDellaPiana" target="_blank" rel="noopener noreferrer" class="pill" aria-label="Seguici su Facebook" data-i18n-attr-aria-label="ariaFacebook">
                     <span class="badge">
                         <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#1877F2"/><path fill="#fff" d="M13.5 21v-7.2h2.4l.36-2.8h-2.76V9.1c0-.81.22-1.36 1.39-1.36h1.48V5.23A20 20 0 0 0 13.9 5.1c-1.98 0-3.34 1.21-3.34 3.43v1.47H8.1v2.8h2.46V21h2.94z"/></svg>
                     </span>
@@ -574,10 +613,10 @@
             </div>
 
             <div class="repeat-cta">
-                <p>Pronto a scoprire i nostri piatti?</p>
+                <p data-i18n="repeatCta">Pronto a scoprire i nostri piatti?</p>
                 <a href="https://menu.masseria-della-piana.it/" class="btn btn-primary">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 4.5C4 3.67 4.67 3 5.5 3H16a3 3 0 0 1 3 3v14.5a.5.5 0 0 1-.79.41L16 19H5.5A1.5 1.5 0 0 1 4 17.5V4.5Z" stroke="#FFFFFF" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 8h7M8 11.5h7M8 15h4" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/></svg>
-                    Vai al Menù
+                    <span data-i18n="ctaMenu2">Vai al Menù</span>
                 </a>
             </div>
         </main>
@@ -589,13 +628,274 @@
 
     <script>
         (function () {
-            var yearEl = document.getElementById('year');
-            if (yearEl) yearEl.textContent = new Date().getFullYear();
-
-            var form = document.getElementById('booking-form');
-            if (!form) return;
-
+            var LANG_KEY = 'mdp-lang';
             var MAX_PEOPLE = 70;
+
+            // Testi tradotti a mano (stesso criterio usato per il menù: niente traduzione
+            // automatica letterale, adattati per suonare naturali in ciascuna lingua).
+            // Il modello WhatsApp di prenotazione resta volutamente in italiano in ogni lingua:
+            // ad arrivare è sempre lo staff del ristorante, che legge in italiano.
+            var TRANSLATIONS = {
+                it: {
+                    tagline: "Cucina calabrese a km 0 nella Piana di Gioia Tauro",
+                    ctaMenu: "Sfoglia il Menù Digitale",
+                    ctaWhatsapp: "Scrivici su WhatsApp",
+                    ctaShop: "Scopri i prodotti Fattoria della Piana",
+                    introText: "La Masseria della Piana è il ristorante di Fattoria della Piana, nel cuore della Piana di Gioia Tauro. Cuciniamo la tradizione calabrese con i prodotti della nostra azienda agricola, in un ambiente rustico e accogliente a Candidoni, a pochi minuti dall'uscita autostradale di Rosarno.",
+                    hoursTitle: "Orari di Apertura",
+                    hoursLunch: "Pranzo — tutti i giorni",
+                    hoursDinner: "Cena — solo su prenotazione",
+                    hoursNote: "A pranzo la prenotazione è sempre consigliata. La sera il locale resta chiuso e apre solo quando le prenotazioni ricevute sono sufficienti: prenota con anticipo per sapere se la cena sarà disponibile.",
+                    bookingTitle: "Prenota un Tavolo",
+                    bookingNote: "Compila il modulo: si aprirà WhatsApp con il messaggio già scritto, dovrai solo inviarlo.",
+                    labelName: "Nome e cognome",
+                    labelPhone: "Numero di telefono",
+                    labelDate: "Data",
+                    labelTime: "Ora",
+                    selectTimePlaceholder: "Seleziona un orario",
+                    optgroupLunch: "Pranzo",
+                    optgroupDinner: "Cena",
+                    labelPeople: "Numero di persone (max 70)",
+                    labelNotes: "Note (allergie, richieste particolari)",
+                    submitBooking: "Invia richiesta su WhatsApp",
+                    formDisclaimer: "La richiesta non è confermata finché non ti rispondiamo su WhatsApp con disponibilità e orario.",
+                    contactsTitle: "Dove Siamo & Contatti",
+                    socialTitle: "Seguici e lascia una recensione",
+                    ariaGoogle: "Lascia una recensione su Google",
+                    ariaTripadvisor: "Lascia una recensione su TripAdvisor",
+                    ariaInstagram: "Seguici su Instagram",
+                    ariaFacebook: "Seguici su Facebook",
+                    repeatCta: "Pronto a scoprire i nostri piatti?",
+                    ctaMenu2: "Vai al Menù",
+                    errorName: "Inserisci il tuo nome e cognome.",
+                    errorPhone: "Inserisci un numero di telefono valido (es. +39 312 345 6789).",
+                    errorDate: "Seleziona una data.",
+                    errorTime: "Seleziona un orario.",
+                    errorPeople: "Inserisci un numero di persone tra 1 e {max}.",
+                    metaTitle: "Masseria della Piana | Ristorante Agriturismo a Candidoni, Reggio Calabria",
+                    metaDescription: "Masseria della Piana, il ristorante di Fattoria della Piana a Candidoni (RC): cucina calabrese a km 0, prodotti dell'azienda agricola. Scopri il menù, gli orari e come prenotare.",
+                    ogTitle: "Masseria della Piana | Ristorante Agriturismo a Candidoni (RC)",
+                    ogDescription: "Cucina calabrese a km 0 nella Piana di Gioia Tauro. Menù, orari, contatti e prenotazioni della Masseria della Piana."
+                },
+                en: {
+                    tagline: "Calabrian farm-to-table cooking in the Piana di Gioia Tauro",
+                    ctaMenu: "Browse the Digital Menu",
+                    ctaWhatsapp: "Message us on WhatsApp",
+                    ctaShop: "Discover Fattoria della Piana products",
+                    introText: "Masseria della Piana is the restaurant of Fattoria della Piana, in the heart of the Piana di Gioia Tauro. We serve traditional Calabrian cuisine using produce from our own farm, in a rustic, welcoming setting in Candidoni, just minutes from the Rosarno motorway exit.",
+                    hoursTitle: "Opening Hours",
+                    hoursLunch: "Lunch — every day",
+                    hoursDinner: "Dinner — by reservation only",
+                    hoursNote: "For lunch, booking ahead is always recommended. In the evening we only open once we've received enough bookings: reserve in advance to find out if dinner service will be available.",
+                    bookingTitle: "Book a Table",
+                    bookingNote: "Fill in the form: WhatsApp will open with the message already written, just send it.",
+                    labelName: "Full name",
+                    labelPhone: "Phone number",
+                    labelDate: "Date",
+                    labelTime: "Time",
+                    selectTimePlaceholder: "Select a time",
+                    optgroupLunch: "Lunch",
+                    optgroupDinner: "Dinner",
+                    labelPeople: "Number of guests (max 70)",
+                    labelNotes: "Notes (allergies, special requests)",
+                    submitBooking: "Send your request on WhatsApp",
+                    formDisclaimer: "Your request isn't confirmed until we reply on WhatsApp with availability and time.",
+                    contactsTitle: "Find Us & Contact",
+                    socialTitle: "Follow us and leave a review",
+                    ariaGoogle: "Leave a review on Google",
+                    ariaTripadvisor: "Leave a review on TripAdvisor",
+                    ariaInstagram: "Follow us on Instagram",
+                    ariaFacebook: "Follow us on Facebook",
+                    repeatCta: "Ready to discover our dishes?",
+                    ctaMenu2: "View the Menu",
+                    errorName: "Please enter your full name.",
+                    errorPhone: "Please enter a valid phone number (e.g. +39 312 345 6789).",
+                    errorDate: "Please select a date.",
+                    errorTime: "Please select a time.",
+                    errorPeople: "Please enter a number of guests between 1 and {max}.",
+                    metaTitle: "Masseria della Piana | Farmhouse Restaurant in Candidoni, Reggio Calabria",
+                    metaDescription: "Masseria della Piana, the restaurant of Fattoria della Piana in Candidoni (RC): farm-to-table Calabrian cooking with our own produce. Check the menu, opening hours and how to book.",
+                    ogTitle: "Masseria della Piana | Farmhouse Restaurant in Candidoni (RC)",
+                    ogDescription: "Farm-to-table Calabrian cooking in the Piana di Gioia Tauro. Menu, opening hours, contacts and bookings for Masseria della Piana."
+                },
+                es: {
+                    tagline: "Cocina calabresa de kilómetro cero en la Piana di Gioia Tauro",
+                    ctaMenu: "Consultar el menú digital",
+                    ctaWhatsapp: "Escríbenos por WhatsApp",
+                    ctaShop: "Descubre los productos de Fattoria della Piana",
+                    introText: "Masseria della Piana es el restaurante de Fattoria della Piana, en el corazón de la Piana di Gioia Tauro. Cocinamos la tradición calabresa con los productos de nuestra propia finca, en un ambiente rústico y acogedor en Candidoni, a pocos minutos de la salida de la autopista de Rosarno.",
+                    hoursTitle: "Horarios de apertura",
+                    hoursLunch: "Almuerzo — todos los días",
+                    hoursDinner: "Cena — solo con reserva",
+                    hoursNote: "Para la comida siempre se recomienda reservar. Por la noche el local permanece cerrado y abre solo cuando se reciben suficientes reservas: reserva con antelación para saber si habrá servicio de cena.",
+                    bookingTitle: "Reserva una mesa",
+                    bookingNote: "Rellena el formulario: se abrirá WhatsApp con el mensaje ya escrito, solo tendrás que enviarlo.",
+                    labelName: "Nombre y apellidos",
+                    labelPhone: "Número de teléfono",
+                    labelDate: "Fecha",
+                    labelTime: "Hora",
+                    selectTimePlaceholder: "Selecciona un horario",
+                    optgroupLunch: "Almuerzo",
+                    optgroupDinner: "Cena",
+                    labelPeople: "Número de personas (máx. 70)",
+                    labelNotes: "Notas (alergias, peticiones especiales)",
+                    submitBooking: "Enviar solicitud por WhatsApp",
+                    formDisclaimer: "La solicitud no queda confirmada hasta que te respondamos por WhatsApp con disponibilidad y horario.",
+                    contactsTitle: "Cómo llegar y contacto",
+                    socialTitle: "Síguenos y déjanos una reseña",
+                    ariaGoogle: "Deja una reseña en Google",
+                    ariaTripadvisor: "Deja una reseña en TripAdvisor",
+                    ariaInstagram: "Síguenos en Instagram",
+                    ariaFacebook: "Síguenos en Facebook",
+                    repeatCta: "¿Listo para descubrir nuestros platos?",
+                    ctaMenu2: "Ver el menú",
+                    errorName: "Introduce tu nombre y apellidos.",
+                    errorPhone: "Introduce un número de teléfono válido (ej. +39 312 345 6789).",
+                    errorDate: "Selecciona una fecha.",
+                    errorTime: "Selecciona un horario.",
+                    errorPeople: "Introduce un número de personas entre 1 y {max}.",
+                    metaTitle: "Masseria della Piana | Restaurante y Agriturismo en Candidoni, Reggio Calabria",
+                    metaDescription: "Masseria della Piana, el restaurante de Fattoria della Piana en Candidoni (RC): cocina calabresa de kilómetro cero con productos de nuestra propia finca. Consulta el menú, los horarios y cómo reservar.",
+                    ogTitle: "Masseria della Piana | Restaurante y Agriturismo en Candidoni (RC)",
+                    ogDescription: "Cocina calabresa de kilómetro cero en la Piana di Gioia Tauro. Menú, horarios, contactos y reservas de Masseria della Piana."
+                },
+                de: {
+                    tagline: "Kalabrische Küche mit Zutaten aus eigenem Anbau in der Piana di Gioia Tauro",
+                    ctaMenu: "Digitale Speisekarte ansehen",
+                    ctaWhatsapp: "Schreiben Sie uns auf WhatsApp",
+                    ctaShop: "Produkte von Fattoria della Piana entdecken",
+                    introText: "Die Masseria della Piana ist das Restaurant der Fattoria della Piana im Herzen der Piana di Gioia Tauro. Wir servieren traditionelle kalabrische Küche mit Produkten aus unserem eigenen Landwirtschaftsbetrieb, in einer rustikalen und einladenden Atmosphäre in Candidoni, nur wenige Minuten von der Autobahnausfahrt Rosarno entfernt.",
+                    hoursTitle: "Öffnungszeiten",
+                    hoursLunch: "Mittagessen — jeden Tag",
+                    hoursDinner: "Abendessen — nur nach Reservierung",
+                    hoursNote: "Für das Mittagessen wird eine Reservierung stets empfohlen. Abends bleibt das Lokal geschlossen und öffnet nur, wenn genügend Reservierungen eingehen: Reservieren Sie frühzeitig, um zu erfahren, ob das Abendessen verfügbar ist.",
+                    bookingTitle: "Tisch reservieren",
+                    bookingNote: "Füllen Sie das Formular aus: WhatsApp öffnet sich mit der bereits geschriebenen Nachricht, Sie müssen sie nur noch senden.",
+                    labelName: "Vor- und Nachname",
+                    labelPhone: "Telefonnummer",
+                    labelDate: "Datum",
+                    labelTime: "Uhrzeit",
+                    selectTimePlaceholder: "Uhrzeit auswählen",
+                    optgroupLunch: "Mittagessen",
+                    optgroupDinner: "Abendessen",
+                    labelPeople: "Anzahl der Personen (max. 70)",
+                    labelNotes: "Anmerkungen (Allergien, besondere Wünsche)",
+                    submitBooking: "Anfrage über WhatsApp senden",
+                    formDisclaimer: "Die Anfrage ist erst bestätigt, wenn wir Ihnen auf WhatsApp Verfügbarkeit und Uhrzeit mitteilen.",
+                    contactsTitle: "Anfahrt & Kontakt",
+                    socialTitle: "Folgen Sie uns und hinterlassen Sie eine Bewertung",
+                    ariaGoogle: "Bewertung auf Google hinterlassen",
+                    ariaTripadvisor: "Bewertung auf TripAdvisor hinterlassen",
+                    ariaInstagram: "Folgen Sie uns auf Instagram",
+                    ariaFacebook: "Folgen Sie uns auf Facebook",
+                    repeatCta: "Bereit, unsere Gerichte zu entdecken?",
+                    ctaMenu2: "Zur Speisekarte",
+                    errorName: "Bitte geben Sie Ihren Vor- und Nachnamen ein.",
+                    errorPhone: "Bitte geben Sie eine gültige Telefonnummer ein (z. B. +39 312 345 6789).",
+                    errorDate: "Bitte wählen Sie ein Datum.",
+                    errorTime: "Bitte wählen Sie eine Uhrzeit.",
+                    errorPeople: "Bitte geben Sie eine Personenzahl zwischen 1 und {max} ein.",
+                    metaTitle: "Masseria della Piana | Restaurant & Agriturismo in Candidoni, Reggio Calabria",
+                    metaDescription: "Masseria della Piana, das Restaurant der Fattoria della Piana in Candidoni (RC): kalabrische Küche mit Zutaten aus eigenem Anbau. Speisekarte, Öffnungszeiten und Reservierung.",
+                    ogTitle: "Masseria della Piana | Restaurant & Agriturismo in Candidoni (RC)",
+                    ogDescription: "Kalabrische Küche mit Zutaten aus eigenem Anbau in der Piana di Gioia Tauro. Speisekarte, Öffnungszeiten, Kontakt und Reservierungen der Masseria della Piana."
+                },
+                fr: {
+                    tagline: "Cuisine calabraise en circuit court dans la Piana di Gioia Tauro",
+                    ctaMenu: "Consulter le menu numérique",
+                    ctaWhatsapp: "Écrivez-nous sur WhatsApp",
+                    ctaShop: "Découvrir les produits Fattoria della Piana",
+                    introText: "La Masseria della Piana est le restaurant de la Fattoria della Piana, au cœur de la Piana di Gioia Tauro. Nous cuisinons la tradition calabraise avec les produits de notre propre exploitation agricole, dans un cadre rustique et chaleureux à Candidoni, à quelques minutes de la sortie d'autoroute de Rosarno.",
+                    hoursTitle: "Horaires d'ouverture",
+                    hoursLunch: "Déjeuner — tous les jours",
+                    hoursDinner: "Dîner — uniquement sur réservation",
+                    hoursNote: "Pour le déjeuner, la réservation est toujours conseillée. Le soir, l'établissement reste fermé et n'ouvre que lorsque suffisamment de réservations ont été reçues : réservez à l'avance pour savoir si le dîner sera disponible.",
+                    bookingTitle: "Réserver une table",
+                    bookingNote: "Remplissez le formulaire : WhatsApp s'ouvrira avec le message déjà rédigé, il ne vous restera qu'à l'envoyer.",
+                    labelName: "Nom et prénom",
+                    labelPhone: "Numéro de téléphone",
+                    labelDate: "Date",
+                    labelTime: "Heure",
+                    selectTimePlaceholder: "Choisissez un horaire",
+                    optgroupLunch: "Déjeuner",
+                    optgroupDinner: "Dîner",
+                    labelPeople: "Nombre de personnes (max 70)",
+                    labelNotes: "Notes (allergies, demandes particulières)",
+                    submitBooking: "Envoyer ma demande sur WhatsApp",
+                    formDisclaimer: "La demande n'est confirmée que lorsque nous vous répondons sur WhatsApp avec la disponibilité et l'heure.",
+                    contactsTitle: "Nous trouver & contact",
+                    socialTitle: "Suivez-nous et laissez un avis",
+                    ariaGoogle: "Laisser un avis sur Google",
+                    ariaTripadvisor: "Laisser un avis sur TripAdvisor",
+                    ariaInstagram: "Suivez-nous sur Instagram",
+                    ariaFacebook: "Suivez-nous sur Facebook",
+                    repeatCta: "Prêt à découvrir nos plats ?",
+                    ctaMenu2: "Voir le menu",
+                    errorName: "Veuillez indiquer votre nom et prénom.",
+                    errorPhone: "Veuillez indiquer un numéro de téléphone valide (ex. +39 312 345 6789).",
+                    errorDate: "Veuillez sélectionner une date.",
+                    errorTime: "Veuillez sélectionner un horaire.",
+                    errorPeople: "Veuillez indiquer un nombre de personnes compris entre 1 et {max}.",
+                    metaTitle: "Masseria della Piana | Restaurant Agritourisme à Candidoni, Reggio Calabria",
+                    metaDescription: "Masseria della Piana, le restaurant de la Fattoria della Piana à Candidoni (RC) : cuisine calabraise en circuit court avec les produits de notre exploitation. Menu, horaires et réservation.",
+                    ogTitle: "Masseria della Piana | Restaurant Agritourisme à Candidoni (RC)",
+                    ogDescription: "Cuisine calabraise en circuit court dans la Piana di Gioia Tauro. Menu, horaires, contacts et réservations de la Masseria della Piana."
+                }
+            };
+
+            var currentLang = 'it';
+
+            function t(key) {
+                var dict = TRANSLATIONS[currentLang] || TRANSLATIONS.it;
+                return (dict && dict[key] != null) ? dict[key] : TRANSLATIONS.it[key];
+            }
+
+            function applyLanguage(lang) {
+                if (!TRANSLATIONS[lang]) lang = 'it';
+                currentLang = lang;
+
+                document.documentElement.lang = lang;
+
+                document.querySelectorAll('[data-i18n]').forEach(function (el) {
+                    var key = el.getAttribute('data-i18n');
+                    el.textContent = t(key);
+                });
+                document.querySelectorAll('[data-i18n-attr-label]').forEach(function (el) {
+                    el.setAttribute('label', t(el.getAttribute('data-i18n-attr-label')));
+                });
+                document.querySelectorAll('[data-i18n-attr-aria-label]').forEach(function (el) {
+                    el.setAttribute('aria-label', t(el.getAttribute('data-i18n-attr-aria-label')));
+                });
+
+                var titleEl = document.getElementById('page-title');
+                if (titleEl) { titleEl.textContent = t('metaTitle'); document.title = t('metaTitle'); }
+                var metaDesc = document.getElementById('meta-description');
+                if (metaDesc) metaDesc.setAttribute('content', t('metaDescription'));
+                var ogTitle = document.getElementById('og-title');
+                if (ogTitle) ogTitle.setAttribute('content', t('ogTitle'));
+                var ogDesc = document.getElementById('og-description');
+                if (ogDesc) ogDesc.setAttribute('content', t('ogDescription'));
+                var twTitle = document.getElementById('twitter-title');
+                if (twTitle) twTitle.setAttribute('content', t('ogTitle'));
+                var twDesc = document.getElementById('twitter-description');
+                if (twDesc) twDesc.setAttribute('content', t('ogDescription'));
+
+                document.querySelectorAll('.lang-btn').forEach(function (btn) {
+                    btn.setAttribute('aria-pressed', String(btn.getAttribute('data-lang') === lang));
+                });
+
+                try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+
+                // Ripulisce eventuali messaggi di errore già mostrati, per non lasciarli
+                // nella lingua precedente dopo un cambio lingua a metà compilazione.
+                var form = document.getElementById('booking-form');
+                if (form) {
+                    ['name', 'phone', 'date', 'time', 'people'].forEach(function (f) {
+                        var input = form[f];
+                        if (input && input.classList.contains('invalid')) setFieldError(input, '');
+                    });
+                }
+            }
 
             function setFieldError(input, message) {
                 var errorEl = document.getElementById(input.id + '-error');
@@ -608,75 +908,95 @@
                 }
             }
 
-            function validateForm() {
-                var valid = true;
+            document.addEventListener('DOMContentLoaded', function () {
+                var yearEl = document.getElementById('year');
+                if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-                if (!form.name.value.trim()) {
-                    setFieldError(form.name, 'Inserisci il tuo nome e cognome.');
-                    valid = false;
-                } else {
-                    setFieldError(form.name, '');
+                var initialLang = 'it';
+                try { initialLang = localStorage.getItem(LANG_KEY) || 'it'; } catch (e) {}
+                applyLanguage(initialLang);
+
+                document.querySelectorAll('.lang-btn').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        applyLanguage(btn.getAttribute('data-lang'));
+                    });
+                });
+
+                var form = document.getElementById('booking-form');
+                if (!form) return;
+
+                function validateForm() {
+                    var valid = true;
+
+                    if (!form.name.value.trim()) {
+                        setFieldError(form.name, t('errorName'));
+                        valid = false;
+                    } else {
+                        setFieldError(form.name, '');
+                    }
+
+                    var phoneDigits = form.phone.value.trim().replace(/[\s().-]/g, '');
+                    if (!/^\+?\d{8,15}$/.test(phoneDigits)) {
+                        setFieldError(form.phone, t('errorPhone'));
+                        valid = false;
+                    } else {
+                        setFieldError(form.phone, '');
+                    }
+
+                    if (!form.date.value) {
+                        setFieldError(form.date, t('errorDate'));
+                        valid = false;
+                    } else {
+                        setFieldError(form.date, '');
+                    }
+
+                    if (!form.time.value) {
+                        setFieldError(form.time, t('errorTime'));
+                        valid = false;
+                    } else {
+                        setFieldError(form.time, '');
+                    }
+
+                    var peopleValue = form.people.value.trim();
+                    var peopleNum = Number(peopleValue);
+                    if (!/^\d+$/.test(peopleValue) || peopleNum < 1 || peopleNum > MAX_PEOPLE) {
+                        setFieldError(form.people, t('errorPeople').replace('{max}', MAX_PEOPLE));
+                        valid = false;
+                    } else {
+                        setFieldError(form.people, '');
+                    }
+
+                    return valid;
                 }
 
-                var phoneDigits = form.phone.value.trim().replace(/[\s().-]/g, '');
-                if (!/^\+?\d{8,15}$/.test(phoneDigits)) {
-                    setFieldError(form.phone, 'Inserisci un numero di telefono valido (es. +39 312 345 6789).');
-                    valid = false;
-                } else {
-                    setFieldError(form.phone, '');
-                }
+                form.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    if (!validateForm()) return;
 
-                if (!form.date.value) {
-                    setFieldError(form.date, 'Seleziona una data.');
-                    valid = false;
-                } else {
-                    setFieldError(form.date, '');
-                }
+                    var name = form.name.value.trim();
+                    var phone = form.phone.value.trim();
+                    var date = form.date.value;
+                    var time = form.time.value;
+                    var people = form.people.value.trim();
+                    var notes = form.notes.value.trim();
 
-                if (!form.time.value) {
-                    setFieldError(form.time, 'Seleziona un orario.');
-                    valid = false;
-                } else {
-                    setFieldError(form.time, '');
-                }
+                    var dateFormatted = date ? date.split('-').reverse().join('/') : '';
 
-                var peopleValue = form.people.value.trim();
-                var peopleNum = Number(peopleValue);
-                if (!/^\d+$/.test(peopleValue) || peopleNum < 1 || peopleNum > MAX_PEOPLE) {
-                    setFieldError(form.people, 'Inserisci un numero di persone tra 1 e ' + MAX_PEOPLE + '.');
-                    valid = false;
-                } else {
-                    setFieldError(form.people, '');
-                }
+                    // Il messaggio inviato allo staff resta sempre in italiano, indipendentemente
+                    // dalla lingua scelta dal visitatore: a leggerlo è il ristorante, non il cliente.
+                    var lines = [
+                        'Richiesta di prenotazione — Masseria della Piana',
+                        'Nome: ' + name,
+                        'Telefono: ' + phone,
+                        'Data: ' + dateFormatted,
+                        'Ora: ' + time,
+                        'Persone: ' + people
+                    ];
+                    if (notes) lines.push('Note: ' + notes);
 
-                return valid;
-            }
-
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                if (!validateForm()) return;
-
-                var name = form.name.value.trim();
-                var phone = form.phone.value.trim();
-                var date = form.date.value;
-                var time = form.time.value;
-                var people = form.people.value.trim();
-                var notes = form.notes.value.trim();
-
-                var dateFormatted = date ? date.split('-').reverse().join('/') : '';
-
-                var lines = [
-                    'Richiesta di prenotazione — Masseria della Piana',
-                    'Nome: ' + name,
-                    'Telefono: ' + phone,
-                    'Data: ' + dateFormatted,
-                    'Ora: ' + time,
-                    'Persone: ' + people
-                ];
-                if (notes) lines.push('Note: ' + notes);
-
-                var message = lines.join('\n');
-                window.location.href = 'https://wa.me/393481000710?text=' + encodeURIComponent(message);
+                    var message = lines.join('\n');
+                    window.location.href = 'https://wa.me/393481000710?text=' + encodeURIComponent(message);
+                });
             });
         })();
     </script>

@@ -139,16 +139,16 @@ export async function closeOrder(orderId) {
 }
 
 // Rimuove una riga già inviata (correzione di un errore di battitura, non
-// più recuperabile con lo "storno" — usata dal flusso pre-scontrino).
+// più recuperabile con lo "storno" — usata dal flusso del preconto).
 export async function removeOrderLine(orderId, currentItems, lineId) {
   const updated = currentItems.filter((line) => line.lineId !== lineId);
   return updateDoc(orderRef(orderId), { items: updated });
 }
 
-// Pre-scontrino / scontrino finale (non fiscale — vedi docs, §9): il
-// cameriere genera un riepilogo stampabile via browser, può correggere la
-// comanda (righe perse, errori) e poi confermare uno stato "finale". Tutto
-// salvato sulla comanda stessa, sincronizzato in tempo reale su ogni client.
+// Preconto (non fiscale — vedi docs, §9): il cameriere genera un riepilogo
+// stampabile via browser, può correggere la comanda (righe perse, errori) e
+// poi confermare uno stato "finale". Tutto salvato sulla comanda stessa,
+// sincronizzato in tempo reale su ogni client.
 export async function markReceiptPrinted(orderId) {
   return updateDoc(orderRef(orderId), { "receipt.printedAt": serverTimestamp() });
 }

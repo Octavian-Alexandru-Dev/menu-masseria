@@ -1,4 +1,4 @@
-// Pre-scontrino / scontrino finale — riepilogo stampabile (non fiscale, via
+// Preconto — riepilogo stampabile (non fiscale, via
 // stampa del browser) sovrapposto al resto della schermata. Componente
 // condiviso: usato dal dettaglio di un tavolo ancora aperto (Waiter.jsx,
 // modificabile) e dalle righe di comande già chiuse — sezione "Chiusi nel
@@ -39,7 +39,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
       await confirmFinalReceipt(order.id, order);
       setEditing(false);
     } catch (err) {
-      console.error("[receipt] Conferma scontrino finale fallita:", err);
+      console.error("[receipt] Conferma preconto fallita:", err);
     } finally {
       setBusy(false);
     }
@@ -115,7 +115,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
 
         {order.receipt?.confirmedAt && (
           <div style={{ fontSize: TYPE.tinyPlus, color: t.secondary, textAlign: "center", marginBottom: 12 }}>
-            Scontrino confermato
+            Preconto confermato
           </div>
         )}
 
@@ -152,7 +152,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
               fontSize: TYPE.bodyPlus, fontWeight: 600, cursor: busy || items.length === 0 ? "default" : "pointer",
               opacity: busy || items.length === 0 ? 0.6 : 1,
             }}>
-              {busy ? "Conferma…" : "Conferma scontrino finale"}
+              {busy ? "Conferma…" : "Conferma preconto"}
             </button>
           )}
         </div>
