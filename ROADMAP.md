@@ -141,11 +141,6 @@ decisioni sopra cambiano parecchio la complessità finale.
   (`aria-selected`, `aria-pressed`) — non letto dagli screen reader. I
   contrasti dei temi (specialmente "Notte di Cirò", scuro) andrebbero
   verificati con uno strumento automatico (es. axe).
-- **Copertura test**: come già scritto in `CLAUDE.md`, i flussi Admin
-  autenticati (editing, upload immagini Cloudinary, link social, export/
-  import, PDF) non sono coperti da Playwright — nessun account di test
-  configurato. È il rischio più alto di regressioni silenziose su ogni
-  nuova modifica a `Admin.jsx`.
 - **Igiene `.env.example`**: se mai finiscono lì credenziali reali invece
   dei placeholder vuoti in fase di commit, va ripulito prima di qualsiasi
   commit (`git restore --staged .env.example` + rimettere i placeholder).
