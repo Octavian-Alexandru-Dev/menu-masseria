@@ -988,6 +988,16 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
               </div>
             </div>
           </div>
+
+          <div style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={labelStyle}>Barra di ricerca piatti</span>
+            <Toggle
+              t={t}
+              checked={menu.searchEnabled !== false}
+              onChange={(v) => updateField("searchEnabled", v)}
+              label="Attiva su menù cliente e comande"
+            />
+          </div>
         </div>
 
         {/* Recensioni */}
