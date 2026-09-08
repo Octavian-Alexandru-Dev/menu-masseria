@@ -58,6 +58,10 @@ test.describe("Storico comande", () => {
       await toggle.locator("xpath=following-sibling::button[1]").click();
       await expect(page.getByText("Documento non fiscale")).toBeVisible();
       await expect(page.getByText("Voce di test").last()).toBeVisible();
+      // Sola lettura: una comanda già chiusa non si modifica più — niente
+      // pulsante Modifica né Conferma preconto.
+      await expect(page.getByRole("button", { name: /^modifica$/i })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^conferma preconto$/i })).toHaveCount(0);
       await page.getByRole("button", { name: "Chiudi preconto" }).click();
       await expect(page.getByText("Documento non fiscale")).toHaveCount(0);
     } finally {

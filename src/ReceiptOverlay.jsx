@@ -90,6 +90,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
               <span style={{ whiteSpace: "nowrap" }}>€ {formatCentsAsPrice(parsePriceToCents(l.price) * l.quantity)}</span>
               {editing && !locked && (
                 <button
+                  aria-label={`Rimuovi ${l.name} dal preconto`}
                   onClick={() => doRemove(l.lineId)}
                   disabled={removingId === l.lineId}
                   className="mdp-btn mdp-receipt-noprint"

@@ -177,6 +177,35 @@ test.describe("Area cameriere", () => {
       await expect(page.getByText("Documento non fiscale")).toHaveCount(0);
     });
 
+    test("il Preconto si modifica (rimuove una riga) e si conferma, bloccandosi", async ({ page }) => {
+      const tableNumber = await openFreshTable(page);
+      openedTableNumbers.push(tableNumber);
+
+      await page.getByRole("button", { name: /bruschetta/i }).click();
+      await page.getByRole("button", { name: /caprese/i }).click();
+      await page.getByRole("button", { name: /invia comanda/i }).click();
+      await expect(page.getByText(/sincronizzata/i)).toBeVisible({ timeout: 15_000 });
+
+      await page.getByRole("button", { name: /preconto/i }).click();
+      await expect(page.getByText("Documento non fiscale")).toBeVisible();
+      // In sola lettura (non ancora in modifica) le righe non hanno un
+      // bottone di rimozione.
+      await expect(page.getByRole("button", { name: /^rimuovi .* dal preconto$/i })).toHaveCount(0);
+
+      await page.getByRole("button", { name: /^modifica$/i }).click();
+      const removeButtons = page.getByRole("button", { name: /^rimuovi .* dal preconto$/i });
+      await expect(removeButtons).toHaveCount(2);
+      await removeButtons.first().click();
+      await expect(removeButtons).toHaveCount(1, { timeout: 10_000 });
+
+      await page.getByRole("button", { name: /^fine modifica$/i }).click();
+      await page.getByRole("button", { name: /^conferma preconto$/i }).click();
+      await expect(page.getByText(/^preconto confermato$/i)).toBeVisible({ timeout: 10_000 });
+      // Bloccato: niente più Modifica/Conferma.
+      await expect(page.getByRole("button", { name: /^modifica$/i })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^conferma preconto$/i })).toHaveCount(0);
+    });
+
     test("i link Storico e Prenotazioni nell'header aprono le rispettive sezioni e si può tornare a Sala", async ({ page }) => {
       await page.getByRole("button", { name: /storico/i }).click();
       await expect(page.getByText("Storico comande")).toBeVisible();
