@@ -1,13 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
-import "dotenv/config";
-import { config as loadEnv } from "dotenv";
 
-// Credenziali degli account di test cameriere/cucina (vedi .env.test, non
-// committato — creato dallo script di setup, non dal codice dell'app).
-loadEnv({ path: ".env.test" });
-
+// L'intera suite gira contro gli emulatori Firebase locali (Docker), mai
+// contro il progetto reale: globalSetup li avvia e li popola con dati demo
+// (tests/global-setup.js), globalTeardown li spegne (tests/global-teardown.js),
+// e il server Vite qui sotto viene avviato con VITE_USE_FIREBASE_EMULATOR=true
+// così l'app si collega all'emulatore invece che a ".env".
 export default defineConfig({
   testDir: "./tests",
+  globalSetup: "./tests/global-setup.js",
+  globalTeardown: "./tests/global-teardown.js",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -26,5 +27,10 @@ export default defineConfig({
     url: "http://localhost:5173",
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
+    env: {
+      VITE_USE_FIREBASE_EMULATOR: "true",
+      VITE_FIREBASE_API_KEY: "demo-key",
+      VITE_FIREBASE_PROJECT_ID: "demo-masseria-test",
+    },
   },
 });

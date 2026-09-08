@@ -30,3 +30,50 @@ test("footer link opens the staff login screen", async ({ page }) => {
   await expect(page.locator('input[type="email"]')).toBeVisible();
   await expect(page.locator('input[type="password"]')).toBeVisible();
 });
+
+test("searching filters items and can be cleared back to the full menu", async ({ page }) => {
+  const search = page.getByRole("textbox", { name: /cerca un piatto|search for a dish/i });
+  await expect(search).toBeVisible();
+  const categoryButtonsBefore = page.getByRole("navigation").getByRole("button");
+  const categoryCountBefore = await categoryButtonsBefore.count();
+
+  await search.fill("tiramisù");
+  // Category nav is replaced by search results while searching (ClientView.jsx).
+  await expect(page.getByRole("navigation")).toHaveCount(0);
+  await expect(page.getByText("Tiramisù", { exact: true })).toBeVisible();
+  await expect(page.getByText("Bruschetta", { exact: true })).toHaveCount(0);
+
+  const clearButton = page.getByRole("button", { name: /chiudi|close/i });
+  await clearButton.click();
+  await expect(search).toHaveValue("");
+  await expect(page.getByRole("navigation")).toBeVisible();
+  await expect(page.getByRole("navigation").getByRole("button")).toHaveCount(categoryCountBefore);
+});
+
+test("searching for a dish that doesn't exist shows the empty-results message", async ({ page }) => {
+  const search = page.getByRole("textbox", { name: /cerca un piatto|search for a dish/i });
+  await search.fill("xyznonexistentdish");
+  await expect(page.getByText(/nessun piatto trovato|no dishes found/i)).toBeVisible();
+});
+
+test("clicking an item with a photo opens a zoom modal, closable via the X button", async ({ page }) => {
+  await page.getByText("Tiramisù", { exact: true }).click();
+  const modal = page.locator(".mdp-modal-card");
+  await expect(modal).toBeVisible();
+  await expect(modal.getByText("Ricetta della casa")).toBeVisible();
+
+  await page.getByRole("button", { name: /chiudi|close/i }).click();
+  await expect(page.locator(".mdp-modal-card")).toHaveCount(0);
+});
+
+test("zoom modal closes on Escape and on backdrop click", async ({ page }) => {
+  await page.getByText("Tiramisù", { exact: true }).click();
+  await expect(page.locator(".mdp-modal-card")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".mdp-modal-card")).toHaveCount(0);
+
+  await page.getByText("Tiramisù", { exact: true }).click();
+  await expect(page.locator(".mdp-modal-card")).toBeVisible();
+  await page.locator(".mdp-modal-backdrop").click({ position: { x: 5, y: 5 } });
+  await expect(page.locator(".mdp-modal-card")).toHaveCount(0);
+});

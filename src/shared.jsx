@@ -1,7 +1,7 @@
 // Pezzi condivisi tra il sito pubblico (ClientView) e il pannello di gestione (Admin):
 // temi grafici, dati di default del menù, utility di traduzione automatica, piccoli
 // componenti decorativi. Nessun import di Firebase qui: restano fuori dal bundle pubblico.
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 /* ============================== THEME PRESETS ============================== */
 export const THEMES = {
@@ -109,6 +109,11 @@ export function useUrlState(paramName, defaultValue) {
   };
 
   const [value, setValue] = useState(readValue);
+  // Specchia `value` per poterlo leggere in setUrlValue senza passare dalla
+  // forma funzionale di setState (vedi sotto): l'aggiornamento del ref è
+  // sincrono, quello dello state no.
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; }, [value]);
 
   useEffect(() => {
     const onPopState = () => setValue(readValue());
@@ -117,20 +122,27 @@ export function useUrlState(paramName, defaultValue) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // L'effetto collaterale (history.pushState/replaceState) vive nel corpo di
+  // questa callback, MAI dentro la forma funzionale di setState: in
+  // React.StrictMode (main.jsx) un updater funzionale passato a setState
+  // viene invocato due volte in sviluppo per verificarne la purezza, il che
+  // raddoppiava silenziosamente ogni pushState (un click → due voci nella
+  // cronologia, pulsante Indietro del browser rotto: serviva un doppio
+  // Indietro per annullare una singola navigazione in-app).
   const setUrlValue = useCallback((next, { replace = false } = {}) => {
-    setValue((prev) => {
-      const resolved = typeof next === "function" ? next(prev) : next;
-      if (typeof window !== "undefined" && resolved !== prev) {
-        const url = new URL(window.location.href);
-        if (resolved === defaultValue || resolved == null) {
-          url.searchParams.delete(paramName);
-        } else {
-          url.searchParams.set(paramName, resolved);
-        }
-        window.history[replace ? "replaceState" : "pushState"](null, "", url);
+    const prev = valueRef.current;
+    const resolved = typeof next === "function" ? next(prev) : next;
+    if (typeof window !== "undefined" && resolved !== prev) {
+      const url = new URL(window.location.href);
+      if (resolved === defaultValue || resolved == null) {
+        url.searchParams.delete(paramName);
+      } else {
+        url.searchParams.set(paramName, resolved);
       }
-      return resolved;
-    });
+      window.history[replace ? "replaceState" : "pushState"](null, "", url);
+    }
+    valueRef.current = resolved;
+    setValue(resolved);
   }, [paramName, defaultValue]);
 
   return [value, setUrlValue];

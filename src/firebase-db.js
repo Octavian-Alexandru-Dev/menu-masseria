@@ -6,9 +6,18 @@
 import { initializeApp } from "firebase/app";
 import {
   initializeFirestore,
+  connectFirestoreEmulator,
   persistentLocalCache,
   persistentMultipleTabManager,
 } from "firebase/firestore";
+
+// Modalità emulatore locale (Docker, vedi docker-compose.emulator.yml): usata
+// da `npm run dev:local` e dalla suite Playwright, per non toccare mai il
+// progetto Firebase reale e per poter eseguire l'app senza credenziali vere
+// (utile anche per far provare il progetto ad altri senza un proprio account
+// Firebase). I valori VITE_FIREBASE_* sono ignorati dall'emulatore: bastano
+// placeholder (vedi .env.example).
+const USE_EMULATOR = import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -36,3 +45,7 @@ export const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
+
+if (USE_EMULATOR) {
+  connectFirestoreEmulator(db, "localhost", 8080);
+}

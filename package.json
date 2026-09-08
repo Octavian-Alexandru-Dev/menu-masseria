@@ -5,8 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "npm run emulators:up && npm run seed:emulator && VITE_USE_FIREBASE_EMULATOR=true VITE_FIREBASE_API_KEY=demo-key VITE_FIREBASE_PROJECT_ID=demo-masseria-test vite",
     "build": "vite build",
     "preview": "vite preview",
+    "emulators:up": "docker compose -f docker-compose.emulator.yml up -d --wait",
+    "emulators:down": "docker compose -f docker-compose.emulator.yml down",
+    "seed:emulator": "node scripts/seed-emulator.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

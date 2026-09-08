@@ -1,0 +1,21 @@
+# Firebase Local Emulator Suite (Auth + Firestore) in a container, so the
+# only prerequisite to run the app or the E2E suite locally is Docker — no
+# real Firebase project, credentials, or globally-installed firebase-tools.
+# Needs a JRE 21+ (firebase-tools no longer supports older Java), which
+# Debian bookworm doesn't ship by default — start from Temurin 21 and add
+# Node.js on top instead.
+FROM eclipse-temurin:21-jre-jammy
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g firebase-tools
+
+WORKDIR /app
+COPY firebase.json firestore.rules .firebaserc ./
+
+EXPOSE 8080 9099 4000
+
+CMD ["firebase", "emulators:start", "--project", "demo-masseria-test"]

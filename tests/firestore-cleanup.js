@@ -1,30 +1,23 @@
-// Elimina (non solo chiude) le comande di test create durante i test
-// Playwright, per non lasciare residui permanenti nello storico comande
-// reale (le comande chiuse restano visibili nello Storico finché non
-// scadono i 30 giorni di retention — dati di test non dovrebbero mai
-// arrivarci). Usa il client SDK di Firebase direttamente in Node: le
-// chiavi VITE_FIREBASE_* sono valori pubblici (già nel bundle client),
-// non credenziali segrete.
+// Elimina (non solo chiude) le comande/prenotazioni di test create durante
+// i test Playwright, per non lasciare residui tra test che girano in
+// parallelo nello stesso run (fullyParallel: true) contro lo stesso
+// emulatore. Usa il client SDK di Firebase direttamente in Node, connesso
+// all'emulatore locale (mai al progetto reale — vedi tests/global-setup.js).
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
-import { config } from "dotenv";
+import { getAuth, connectAuthEmulator, signInWithEmailAndPassword } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator, collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
+import { TEST_WAITER } from "./test-env.js";
 
-config();
-config({ path: ".env.test" });
-
-const app = getApps()[0] || initializeApp({
-  apiKey: process.env.VITE_FIREBASE_API_KEY,
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-});
+const app = getApps()[0] || initializeApp({ apiKey: "demo-key", projectId: "demo-masseria-test" });
 const auth = getAuth(app);
 const db = getFirestore(app);
+connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+connectFirestoreEmulator(db, "localhost", 8080);
 
 let signInPromise = null;
 function ensureSignedIn() {
   if (!signInPromise) {
-    signInPromise = signInWithEmailAndPassword(auth, process.env.TEST_WAITER_EMAIL, process.env.TEST_WAITER_PASSWORD);
+    signInPromise = signInWithEmailAndPassword(auth, TEST_WAITER.email, TEST_WAITER.password);
   }
   return signInPromise;
 }
