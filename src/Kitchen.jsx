@@ -118,7 +118,7 @@ function TableCard({ t, order, onMarkOut }) {
 }
 
 function KitchenPanel({ theme, menu, session }) {
-  const t = THEMES[theme] || THEMES.rustica;
+  const t = THEMES[theme] || THEMES.minimal;
   const [orders, setOrders] = useState([]);
   const [ready, setReady] = useState(false);
   const [showHistory, setShowHistory] = useState(false);

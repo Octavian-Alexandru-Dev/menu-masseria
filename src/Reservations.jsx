@@ -406,7 +406,7 @@ function DayList({ t, selectedDate, dayReservations, onOpen, onConfirm, onReject
 }
 
 function ReservationsPanel({ menu, session, onBack }) {
-  const t = THEMES[menu?.theme] || THEMES.rustica;
+  const t = THEMES[menu?.theme] || THEMES.minimal;
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(dateKey());
   const [monthReservations, setMonthReservations] = useState([]);

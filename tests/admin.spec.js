@@ -49,12 +49,13 @@ test.describe("Admin — identità, tema, staff (scrivono su Firestore)", () => 
 
   test("il selettore tema evidenzia visivamente il tema scelto", async ({ page }) => {
     await openAdmin(page);
-    const rustica = page.getByRole("button", { name: "Calabria Rustica" });
+    // "Essenziale" è il tema di default del menù demo (scripts/seed-emulator.js).
+    const essenziale = page.getByRole("button", { name: "Essenziale" });
     const ciro = page.getByRole("button", { name: "Notte di Cirò" });
-    await expect(rustica).toHaveCSS("border-width", "2px");
+    await expect(essenziale).toHaveCSS("border-width", "2px");
     await ciro.click();
     await expect(ciro).toHaveCSS("border-width", "2px");
-    await expect(rustica).toHaveCSS("border-width", "1px");
+    await expect(essenziale).toHaveCSS("border-width", "1px");
     // Non salvato: la selezione resta solo nell'editor di questa pagina.
   });
 

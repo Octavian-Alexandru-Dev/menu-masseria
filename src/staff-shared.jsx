@@ -39,7 +39,7 @@ export function useStaffSession() {
 }
 
 export function StaffLoginScreen({ title, subtitle, theme }) {
-  const t = THEMES[theme] || THEMES.rustica;
+  const t = THEMES[theme] || THEMES.minimal;
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
@@ -116,7 +116,7 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
 }
 
 export function StaffMessageScreen({ theme, title, message, onLogout }) {
-  const t = THEMES[theme] || THEMES.rustica;
+  const t = THEMES[theme] || THEMES.minimal;
   return (
     <div className="mdp-root" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <GlobalStyle t={t} />

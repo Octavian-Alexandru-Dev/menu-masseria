@@ -173,7 +173,7 @@ function EmptyCategoryDropZone({ t, catId }) {
 }
 
 function AdminLogin({ onBack, theme }) {
-  const t = THEMES[theme] || THEMES.rustica;
+  const t = THEMES[theme] || THEMES.minimal;
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
@@ -263,7 +263,7 @@ function AdminLogin({ onBack, theme }) {
 // l'unico modo di procedere è importare un backup JSON esportato in
 // precedenza da questo stesso pannello.
 function AdminBootstrap({ onImport, onExit, importError }) {
-  const t = THEMES.rustica;
+  const t = THEMES.minimal;
   return (
     <div className="mdp-root" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 20, minHeight: "100vh" }}>
       <GlobalStyle t={t} />
@@ -441,7 +441,7 @@ function StaffSection({ t }) {
 
 /* ============================== ADMIN DASHBOARD ============================== */
 function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogout, onPreview, onUndo, canUndo }) {
-  const t = THEMES[menu.theme] || THEMES.rustica;
+  const t = THEMES[menu.theme] || THEMES.minimal;
   const [openCats, setOpenCats] = useState(() => new Set());
   const [confirmDelete, setConfirmDelete] = useState(null); // {type:'cat'|'item', catId, itemId}
   const [uploadingItem, setUploadingItem] = useState(null); // id della voce con upload in corso

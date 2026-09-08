@@ -639,7 +639,7 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
 }
 
 function WaiterPanel({ menu, session }) {
-  const t = THEMES[menu?.theme] || THEMES.rustica;
+  const t = THEMES[menu?.theme] || THEMES.minimal;
   const [orders, setOrders] = useState([]);
   const [ordersReady, setOrdersReady] = useState(false);
   const [shiftClosedOrders, setShiftClosedOrders] = useState([]);

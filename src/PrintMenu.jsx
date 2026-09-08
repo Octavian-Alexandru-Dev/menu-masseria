@@ -67,7 +67,7 @@ export default function PrintMenu() {
     );
   }
 
-  const t = THEMES[payload.theme] || THEMES.rustica;
+  const t = THEMES[payload.theme] || THEMES.minimal;
   const ui = UI_STRINGS[payload.lang] || UI_STRINGS.it;
   const social = payload.socialLinks || {};
   const socialEntries = [

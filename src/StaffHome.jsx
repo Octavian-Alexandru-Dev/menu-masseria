@@ -177,7 +177,7 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   }
 
   if (!chosen) {
-    const t = THEMES[theme] || THEMES.rustica;
+    const t = THEMES[theme] || THEMES.minimal;
     return (
       <Dashboard
         t={t}
@@ -215,7 +215,7 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   // solo-cucina, che non ha mai visto la Dashboard, non vede nemmeno questa
   // barra quando è nella sua unica area).
   if (coreOptions.length > 1) {
-    const t = THEMES[theme] || THEMES.rustica;
+    const t = THEMES[theme] || THEMES.minimal;
     return (
       <>
         <BackToAreasBar t={t} onBack={() => setArea(null)} />

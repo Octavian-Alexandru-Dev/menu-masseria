@@ -108,7 +108,7 @@ function LinkButton({ href, icon, bg, children }) {
 }
 
 export default function ClientView({ menu, onGoStaff }) {
-  const t = THEMES[menu.theme] || THEMES.rustica;
+  const t = THEMES[menu.theme] || THEMES.minimal;
 
   // Lingua scelta dal cliente, ricordata tra una visita e l'altra.
   const [lang, setLang] = useState(() => {

@@ -8,7 +8,7 @@
 // npm run emulators:up).
 import { initializeApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator, doc, setDoc } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator, doc, setDoc, Timestamp } from "firebase/firestore";
 
 const app = initializeApp({ apiKey: "demo-key", projectId: "demo-masseria-test" });
 const auth = getAuth(app);
@@ -61,7 +61,7 @@ async function ensureUser({ email, password }) {
 }
 
 const DEMO_MENU = {
-  theme: "rustica",
+  theme: "minimal",
   restaurantName: "Masseria Demo",
   location: "Località Demo",
   tagline: "Menù di prova — dati seed dell'emulatore",
@@ -103,8 +103,102 @@ const DEMO_MENU = {
         },
       ],
     },
+    {
+      id: "cat-bevande",
+      name: "Bevande",
+      subtitle: "",
+      visible: true,
+      items: [
+        { id: "item-acqua", name: "Acqua naturale", price: "2,00", tag: "", description: "0,75L", visible: true, staffOnly: false },
+        { id: "item-vino-casa", name: "Vino della casa", price: "12,00", tag: "", description: "Rosso o bianco, la caraffa", visible: true, staffOnly: false },
+      ],
+    },
   ],
 };
+
+// Comande chiuse di test per la Dashboard statistiche (src/Stats.jsx,
+// src/statsData.js): date relative a "adesso" al momento del seed (non fisse)
+// così i preset "Oggi"/"Ieri"/"Ultimi 7 giorni" le trovano sempre, a
+// prescindere da quando gira la suite. ID fissi (idempotente come il resto
+// del file). Scritte direttamente via setDoc, non tramite il flusso reale
+// openOrder/sendOrderLines/closeOrder — qui serve controllo esatto su
+// date/importi, non il percorso applicativo.
+function dateAt(daysOffset, hour, minute) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysOffset);
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
+function buildTestOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, sentAt }) {
+  return { lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes: "", status: "sent", sentAt: Timestamp.fromDate(sentAt), outAt: null };
+}
+
+function buildTestOrder({ tableNumber, waiterUid, waiterName, adults, children, status, openedAt, closedAt, items }) {
+  return {
+    tableNumber, tableName: "", covers: { adults, children },
+    coperto: { adults: DEMO_MENU.coperto.adults, children: DEMO_MENU.coperto.children },
+    notes: "", waiterUid, waiterName, status,
+    openedAt: Timestamp.fromDate(openedAt), closedAt: Timestamp.fromDate(closedAt), expireAt: null,
+    items,
+  };
+}
+
+async function seedTestOrders(uids) {
+  const waiterUid = uids.waiter;
+  const waiterName = SEED_ACCOUNTS.waiter.name;
+  const adminUid = uids.admin;
+  const adminName = SEED_ACCOUNTS.admin.name;
+
+  const orders = {
+    // Oggi, cameriere di test: antipasto + bevanda — copre Antipasti e Bevande,
+    // usata anche per il totale del preset "Oggi".
+    "stats-today-1": buildTestOrder({
+      tableNumber: 501, waiterUid, waiterName, adults: 2, children: 0, status: "closed",
+      openedAt: dateAt(0, 12, 30), closedAt: dateAt(0, 13, 30),
+      items: [
+        buildTestOrderLine({ lineId: "l1", menuItemId: "item-bruschetta", name: "Bruschetta", price: "6,00", quantity: 2, categoryId: "cat-antipasti", categoryName: "Antipasti", sentAt: dateAt(0, 12, 35) }),
+        buildTestOrderLine({ lineId: "l2", menuItemId: "item-acqua", name: "Acqua naturale", price: "2,00", quantity: 2, categoryId: "cat-bevande", categoryName: "Bevande", sentAt: dateAt(0, 12, 36) }),
+      ],
+    }),
+    // Oggi, admin, chiusa AUTOMATICAMENTE (tavolo dimenticato): serve a
+    // testare l'interruttore "includi comande chiuse automaticamente".
+    "stats-today-2": buildTestOrder({
+      tableNumber: 502, waiterUid: adminUid, waiterName: adminName, adults: 1, children: 0, status: "auto_closed",
+      openedAt: dateAt(0, 10, 0), closedAt: dateAt(0, 14, 0),
+      items: [
+        buildTestOrderLine({ lineId: "l1", menuItemId: "item-vino-casa", name: "Vino della casa", price: "12,00", quantity: 1, categoryId: "cat-bevande", categoryName: "Bevande", sentAt: dateAt(0, 10, 5) }),
+      ],
+    }),
+    // Ieri, cameriere di test: primo + dolce — copre Primi e Dolci, e dà un
+    // secondo giorno distinto per "Ultimi 7 giorni" vs "Oggi".
+    "stats-yesterday-1": buildTestOrder({
+      tableNumber: 503, waiterUid, waiterName, adults: 3, children: 1, status: "closed",
+      openedAt: dateAt(-1, 20, 0), closedAt: dateAt(-1, 21, 30),
+      items: [
+        buildTestOrderLine({ lineId: "l1", menuItemId: "item-orecchiette", name: "Orecchiette", price: "10,00", quantity: 3, categoryId: "cat-primi", categoryName: "Primi", sentAt: dateAt(-1, 20, 10) }),
+        buildTestOrderLine({ lineId: "l2", menuItemId: "item-tiramisu", name: "Tiramisù", price: "5,00", quantity: 1, categoryId: "cat-dolci", categoryName: "Dolci", sentAt: dateAt(-1, 21, 0) }),
+      ],
+    }),
+    // A cavallo della mezzanotte locale: verifica che "Ieri" e "Oggi" separino
+    // correttamente i confini di giorno (mai UTC — vedi resolvePresetRange in
+    // src/statsData.js).
+    "stats-midnight-late": buildTestOrder({
+      tableNumber: 504, waiterUid, waiterName, adults: 1, children: 0, status: "closed",
+      openedAt: dateAt(-1, 23, 30), closedAt: dateAt(-1, 23, 58),
+      items: [buildTestOrderLine({ lineId: "l1", menuItemId: "item-caprese", name: "Caprese", price: "7,00", quantity: 1, categoryId: "cat-antipasti", categoryName: "Antipasti", sentAt: dateAt(-1, 23, 35) })],
+    }),
+    "stats-midnight-early": buildTestOrder({
+      tableNumber: 505, waiterUid, waiterName, adults: 1, children: 0, status: "closed",
+      openedAt: dateAt(0, 0, 2), closedAt: dateAt(0, 0, 20),
+      items: [buildTestOrderLine({ lineId: "l1", menuItemId: "item-caprese", name: "Caprese", price: "7,00", quantity: 1, categoryId: "cat-antipasti", categoryName: "Antipasti", sentAt: dateAt(0, 0, 5) })],
+    }),
+  };
+
+  for (const [id, order] of Object.entries(orders)) {
+    await withRetry(() => setDoc(doc(db, "orders", id), order));
+  }
+}
 
 async function main() {
   const uids = {};
@@ -117,8 +211,16 @@ async function main() {
   }
 
   await withRetry(() => setDoc(doc(db, "menu", "data"), DEMO_MENU));
+  await seedTestOrders(uids);
 
   console.log("[seed-emulator] Fatto:", uids);
+  console.log("");
+  console.log("Credenziali di accesso (emulatore locale — vedi npm run dev:local):");
+  for (const [key, account] of Object.entries(SEED_ACCOUNTS)) {
+    if (!account.role || account.role === "legacy-role") continue; // account solo per test automatici, non per l'uso interattivo
+    console.log(`  ${account.role.padEnd(7)} → ${account.email} / ${account.password}`);
+  }
+  console.log("");
   process.exit(0);
 }
 
