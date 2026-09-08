@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Printer, Pencil, Check } from "lucide-react";
-import { ital, TYPE, formatCentsAsPrice, parsePriceToCents, tableIdentity } from "./shared";
+import { TYPE, formatCentsAsPrice, parsePriceToCents, tableIdentity } from "./shared";
 import { itemsTotalCents, copertoTotalCents, markReceiptPrinted, removeOrderLine, confirmFinalReceipt } from "./orders";
 
 export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = false }) {

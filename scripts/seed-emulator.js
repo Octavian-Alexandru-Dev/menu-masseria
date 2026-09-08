@@ -233,7 +233,7 @@ async function main() {
   console.log("[seed-emulator] Fatto:", uids);
   console.log("");
   console.log("Credenziali di accesso (emulatore locale — vedi npm run dev:local):");
-  for (const [key, account] of Object.entries(SEED_ACCOUNTS)) {
+  for (const account of Object.values(SEED_ACCOUNTS)) {
     if (!account.role || account.role === "legacy-role") continue; // account solo per test automatici, non per l'uso interattivo
     console.log(`  ${account.role.padEnd(7)} → ${account.email} / ${account.password}`);
   }

@@ -245,7 +245,7 @@ export default function ClientView({ menu, onGoStaff }) {
     const isRequest = /richiesta/i.test(price || "");
     return (
       <span className="mdp-display" style={{ fontStyle: ital(t), fontWeight: 600, color: t.accent, fontSize: isRequest ? TYPE.body : TYPE.subhead, letterSpacing: isRequest ? 1 : 0, whiteSpace: "nowrap", flexShrink: 0 }}>
-        {isRequest ? ui.onRequest : `€ ${price}`}
+        {isRequest ? ui.onRequest : `€ ${price}`}
       </span>
     );
   };

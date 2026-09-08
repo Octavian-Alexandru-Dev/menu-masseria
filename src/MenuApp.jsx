@@ -192,7 +192,7 @@ export default function App() {
       // setDoc senza auth può restare in attesa per sempre.
       const { auth } = await import("./firebase-auth");
       if (!auth.currentUser) {
- 	throw new Error("Sessione scaduta. Effettua di nuovo l'accesso e riprova.");
+        throw new Error("Sessione scaduta. Effettua di nuovo l'accesso e riprova.");
       }
       // Forza refresh del token per evitare rifiuti silenziosi.
       try { await auth.currentUser.getIdToken(true); } catch (_) { /* proseguiamo */ }

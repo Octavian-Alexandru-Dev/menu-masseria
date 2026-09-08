@@ -2,7 +2,7 @@
 // Caricato solo su /cameriere (lazy, vedi MenuApp.jsx), mai dal sito pubblico.
 import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { Plus, Minus, X, ArrowLeft, LogOut, CheckCircle2, Clock, Utensils, History, Users, Receipt, CalendarDays, Play, Search } from "lucide-react";
-import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableIdentity, currentShiftStart, currentShiftLabel, itemMatchesSearch } from "./shared";
+import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, parsePriceToCents, tableIdentity, currentShiftStart, currentShiftLabel, itemMatchesSearch } from "./shared";
 import {
   subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
   autoCloseStaleOrders, orderTotalCents, copertoTotalCents,
@@ -311,7 +311,7 @@ function CoversEditor({ t, order }) {
   );
 }
 
-function OrderDetail({ t, menu, menuCosts, order, onBack, staffName }) {
+function OrderDetail({ t, menu, menuCosts, order, onBack }) {
   const [draft, setDraft] = useState([]); // { lineId, menuItemId, name, price, categoryId, categoryName, quantity, notes }
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -404,10 +404,7 @@ function OrderDetail({ t, menu, menuCosts, order, onBack, staffName }) {
     sentByCategory.push({ categoryId: "__other__", categoryName: sentOther[0].categoryName || "Altro", lines: sentOther });
   }
 
-  const totalCents = orderTotalCents(order) + draft.reduce((s, l) => {
-    const n = parseFloat(String(l.price).replace(",", ".")) || 0;
-    return s + Math.round(n * 100) * l.quantity;
-  }, 0);
+  const totalCents = orderTotalCents(order) + draft.reduce((s, l) => s + parsePriceToCents(l.price) * l.quantity, 0);
 
   const statusColor = (status) => (status === "out" ? t.secondary : status === "preparing" ? t.accent : t.inkSoft);
   const statusLabel = (status) => (status === "out" ? "Uscita" : status === "preparing" ? "In preparazione" : "Inviata");
@@ -787,7 +784,7 @@ function WaiterPanel({ menu, session }) {
         <NewTableForm t={t} onCancel={() => setView({ mode: "list" })} onCreate={createTable} busy={creating} />
       )}
       {ordersReady && view.mode === "detail" && currentOrder && (
-        <OrderDetail t={t} menu={menu} menuCosts={menuCosts} order={currentOrder} onBack={() => setView({ mode: "list" })} staffName={session.name} />
+        <OrderDetail t={t} menu={menu} menuCosts={menuCosts} order={currentOrder} onBack={() => setView({ mode: "list" })} />
       )}
       {ordersReady && view.mode === "detail" && !currentOrder && (
         <div style={{ textAlign: "center", padding: 40, color: t.inkSoft }}>

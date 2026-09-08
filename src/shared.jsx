@@ -231,7 +231,7 @@ async function translateText(text, lang, cache) {
       cache[key] = translated;
       return translated;
     }
-  } catch (e) {
+  } catch {
     // Nessuna connessione o servizio non raggiungibile: si ricade sul testo italiano.
   }
   return text;

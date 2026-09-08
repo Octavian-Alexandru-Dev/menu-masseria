@@ -604,7 +604,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     try {
       const updated = await generateMissingTranslations(menu, lang, menu.translations?.[lang]);
       setMenu((m) => ({ ...m, translations: { ...m.translations, [lang]: updated } }));
-    } catch (err) {
+    } catch {
       setGenerateError("Generazione non riuscita. Riprova.");
     } finally {
       setGenerating(false);
@@ -694,7 +694,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     }
     try {
       sessionStorage.setItem("mdp-print-payload", JSON.stringify(payload));
-    } catch (err) {
+    } catch {
       setPdfError("Impossibile preparare l'anteprima di stampa (memoria del browser piena).");
       return;
     }
@@ -932,7 +932,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
         </div>
       </div>
 
- {(savedAt || saveError) && (
+      {(savedAt || saveError) && (
         <div style={{
           padding: saveError ? "12px 20px" : "8px 20px",
           fontSize: saveError ? TYPE.body : TYPE.small,

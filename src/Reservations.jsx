@@ -111,7 +111,7 @@ function ReservationCalendar({ t, visibleMonth, onChangeMonth, selectedDate, onS
   );
 }
 
-function OverviewBar({ t, selectedDate, dayReservations }) {
+function OverviewBar({ t, dayReservations }) {
   const active = dayReservations.filter((r) => ACTIVE_STATUSES.includes(r.status));
   const adults = active.reduce((s, r) => s + (r.covers?.adults || 0), 0);
   const children = active.reduce((s, r) => s + (r.covers?.children || 0), 0);
@@ -540,7 +540,7 @@ function ReservationsPanel({ menu, session, onBack }) {
             selectedDate={selectedDate} onSelectDate={setSelectedDate} countsByDate={countsByDate}
           />
 
-          <OverviewBar t={t} selectedDate={selectedDate} dayReservations={dayReservations} />
+          <OverviewBar t={t} dayReservations={dayReservations} />
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18, marginBottom: 4 }}>
             <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink, textTransform: "capitalize" }}>
