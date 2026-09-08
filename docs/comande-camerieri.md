@@ -125,7 +125,7 @@ orders/{orderId}
   status: "open" | "closed" | "auto_closed"
   openedAt: Timestamp
   closedAt: Timestamp | null
-  expireAt: Timestamp          // = closedAt + 30 giorni — usato dalla pulizia lato client (§6.1)
+  expireAt: null               // sempre null dalle comande chiuse non scadono più (§6.1, §12)
 
   items: [
     {
@@ -183,7 +183,7 @@ tempo reale sul proprio schermo.
    sono uscite, senza dover tornare in cucina a chiedere.
 5. **Chiusura**: il cameriere chiude il tavolo manualmente (mostra il totale
    e l'elenco ordinato, nessuna stampa/pagamento) → `status: "closed"`,
-   `closedAt: now`, `expireAt: now + 30 giorni`.
+   `closedAt: now`, `expireAt: null` (nessuna scadenza, §6.1).
 6. **Chiusura automatica di sicurezza**: se una comanda resta `"open"` da più
    di 24 ore, viene chiusa automaticamente (§6) con `status: "auto_closed"`
    invece di `"closed"`, per poterla distinguere in futuro se servisse capire
@@ -196,32 +196,29 @@ tempo reale sul proprio schermo.
 Due meccanismi distinti, scelti per restare **interamente gratuiti** (nessun
 upgrade al piano Firebase a consumo):
 
-### 6.1 Cancellazione dopo 30 giorni — pulizia lato client (come §6.2)
+### 6.1 Nessuna cancellazione delle comande chiuse (storico permanente)
 
-Il piano in origine prevedeva una policy TTL nativa di Firestore sul campo
-`expireAt`. In fase di implementazione è emerso che **attivare** una policy
-TTL richiede il piano a consumo Blaze (carta di pagamento collegata al
-progetto), anche se l'uso della sola funzione resterebbe a costo zero — sul
-piano gratuito Spark il comando di attivazione viene rifiutato
-(`PERMISSION_DENIED: billing disabled`). Per restare interamente gratuiti,
-si usa quindi lo stesso pattern "pigro" lato client già scelto per la
-chiusura automatica a 24h (§6.2):
+In origine le comande chiuse venivano cancellate 30 giorni dopo la chiusura
+(pulizia lato client su `expireAt`, per restare sul piano gratuito Spark
+senza dover attivare una policy TTL nativa, che richiede il piano a consumo
+Blaze). Questo meccanismo è stato **rimosso** (§12): le comande chiuse restano
+per sempre, perché sono la base dati della Dashboard statistiche (analisi
+vendite/incassi su range temporali arbitrari, anche a distanza di anni).
 
-- Ogni volta che si apre l'area cameriere o l'area cucina, il codice
-  controlla (tramite `localStorage`, per dispositivo) se la pulizia è già
-  stata eseguita oggi; se no, interroga `orders` per i documenti con
-  `expireAt` nel passato e li cancella, poi segna la data odierna come
-  "già pulita" per non ripetere il controllo ad ogni apertura nello stesso
-  giorno sullo stesso dispositivo.
-- Implementato in `runDailyExpiredOrdersCleanup()` (`src/orders.js`),
-  richiamato all'apertura di `Waiter.jsx` e `Kitchen.jsx`.
-- Se in futuro si passasse al piano Blaze per altri motivi, si potrà
-  attivare la policy TTL nativa e rimuovere questo controllo lato client
-  senza cambiare il resto del modello dati.
-
-Come prima, l'unico compito del resto del codice applicativo è scrivere
-correttamente `expireAt` quando una comanda viene chiusa (manualmente o
-automaticamente) — invariato.
+- `closeOrder()` e `autoCloseStaleOrders()` scrivono ora `expireAt: null`
+  invece di calcolare una data di scadenza; il campo resta nello schema solo
+  per compatibilità con i documenti scritti prima di questo cambiamento (che
+  avevano un `expireAt` valorizzato, oggi semplicemente ignorato).
+- Impatto sui costi valutato trascurabile alla scala del locale (poche
+  decine di tavoli/giorno): crescita di storage nell'ordine di pochi MB/anno,
+  ben entro il GB gratuito del piano Spark; le query della dashboard restano
+  entro le quote gratuite di lettura giornaliere finché evitano di rileggere
+  l'intero storico ad ogni interazione (cache lato client per range già
+  caricato).
+- Se in futuro il volume di comande crescesse di ordini di grandezza, va
+  rivalutato lo storage/i costi di lettura, eventualmente introducendo
+  aggregati permanenti separati (es. un riepilogo per giorno) invece di
+  leggere sempre le comande grezze.
 
 ### 6.2 Chiusura automatica dopo 24 ore — controllo lato client
 
@@ -384,6 +381,13 @@ piano iniziale (già implementate):
   precedenza le comande di test, anche chiuse, restavano visibili per sempre
   nello Storico comande reale (fino alla scadenza dei 30 giorni), confondendo
   chi consultava lo storico con numeri di tavolo a 4 cifre senza senso.
+- **Rimossa la cancellazione delle comande chiuse dopo 30 giorni** (§6.1):
+  le comande restano per sempre, per poter alimentare una Dashboard
+  statistiche (incassi/piatti più venduti su range temporali arbitrari,
+  anche di più anni) senza perdere dati storici. `runDailyExpiredOrdersCleanup()`
+  è stata rimossa da `src/orders.js` (e le sue chiamate da `Waiter.jsx` e
+  `Kitchen.jsx`); `closeOrder()`/`autoCloseStaleOrders()` scrivono
+  `expireAt: null`. Vedi §6.1 per l'analisi costi.
 
 ---
 

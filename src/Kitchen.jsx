@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { LogOut, CheckCircle2, Clock, History } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, tableIdentity } from "./shared";
-import { subscribeOpenOrders, markCategoryOut, autoCloseStaleOrders, runDailyExpiredOrdersCleanup } from "./orders";
+import { subscribeOpenOrders, markCategoryOut, autoCloseStaleOrders } from "./orders";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
 } from "./staff-shared";
@@ -130,10 +130,6 @@ function KitchenPanel({ theme, menu, session }) {
       setReady(true);
     }, (err) => console.error("[kitchen] Errore lettura comande:", err));
     return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    runDailyExpiredOrdersCleanup();
   }, []);
 
   useEffect(() => {

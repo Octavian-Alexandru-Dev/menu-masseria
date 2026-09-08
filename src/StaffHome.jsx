@@ -7,7 +7,7 @@
 // per un dispositivo dedicato, es. il tablet fisso in cucina): questa
 // pagina è il punto d'ingresso comune, non l'unico.
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, ArrowLeft } from "lucide-react";
+import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, ArrowLeft, BarChart3 } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel, useUrlState } from "./shared";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
@@ -18,6 +18,7 @@ import Admin from "./Admin";
 import Waiter from "./Waiter";
 import Kitchen from "./Kitchen";
 import Reservations from "./Reservations";
+import Stats from "./Stats";
 
 const TODAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
@@ -126,6 +127,11 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   const dashboardOptions = [
     ...coreOptions,
     canReservations && { key: "reservations", label: "Prenotazioni", icon: CalendarDays },
+    // Statistiche: concerne solo Gestione menù (vendite/incassi), quindi
+    // richiede canAdmin come "admin" in coreOptions — non in coreOptions
+    // stesso per non alterare l'auto-skip della Dashboard per gli account
+    // mono-ruolo (stesso motivo per cui ci sta anche Prenotazioni).
+    canAdmin && { key: "stats", label: "Statistiche", icon: BarChart3 },
   ].filter(Boolean);
 
   const chosen = area || (coreOptions.length === 1 ? coreOptions[0].key : null);
@@ -208,7 +214,9 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
       ? <Waiter menu={menu} />
       : chosen === "kitchen"
         ? <Kitchen menu={menu} />
-        : <Reservations menu={menu} />;
+        : chosen === "reservations"
+          ? <Reservations menu={menu} />
+          : <Stats menu={menu} />;
 
   // Se c'è più di un'area core disponibile, mostra una barra per tornare
   // alla scelta (invariato rispetto a prima: un account solo-cameriere o

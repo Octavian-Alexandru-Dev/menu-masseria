@@ -4,7 +4,7 @@
 // File caricato SOLO dalle aree cameriere/cucina (Waiter.jsx/Kitchen.jsx,
 // entrambe lazy-load), mai dal sito pubblico.
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
+  collection, doc, addDoc, updateDoc, getDocs, onSnapshot, query, where,
   orderBy, limit, startAfter,
   arrayUnion, serverTimestamp, Timestamp,
 } from "firebase/firestore";
@@ -13,7 +13,6 @@ import { parsePriceToCents } from "./shared";
 
 export const ORDERS_COLLECTION = "orders";
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export function ordersRef() {
@@ -120,21 +119,19 @@ export async function markCategoryOut(orderId, currentItems, categoryId) {
   return updateDoc(orderRef(orderId), { items: updated });
 }
 
-function expireAtFromNow() {
-  return Timestamp.fromMillis(Date.now() + THIRTY_DAYS_MS);
-}
-
 // Modifica i coperti di un tavolo già aperto (persone arrivate/andate via
 // dopo l'apertura — non solo al momento della creazione).
 export async function updateCovers(orderId, { adults, children }) {
   return updateDoc(orderRef(orderId), { covers: { adults: adults || 0, children: children || 0 } });
 }
 
+// Le comande chiuse non scadono più: restano lo storico permanente su cui si
+// basa la Dashboard statistiche (src/Stats.jsx, src/statsData.js).
 export async function closeOrder(orderId) {
   return updateDoc(orderRef(orderId), {
     status: "closed",
     closedAt: serverTimestamp(),
-    expireAt: expireAtFromNow(),
+    expireAt: null,
   });
 }
 
@@ -177,7 +174,7 @@ export async function autoCloseStaleOrders(openOrders) {
       updateDoc(orderRef(o.id), {
         status: "auto_closed",
         closedAt: serverTimestamp(),
-        expireAt: expireAtFromNow(),
+        expireAt: null,
       }).catch((err) => {
         console.error(`[orders] Chiusura automatica fallita per ${o.id}:`, err);
       })
@@ -200,39 +197,11 @@ export function orderTotalCents(order) {
   return itemsTotalCents(order) + copertoTotalCents(order);
 }
 
-// Cancellazione dopo 30 giorni (§6.1 del documento) — lato client, come la
-// chiusura automatica a 24h: il piano Firebase gratuito (Spark) non permette
-// di configurare una policy TTL nativa (richiede il piano Blaze anche solo
-// per attivarla, pur restando l'uso effettivo a costo zero), quindi ogni
-// volta che l'area cameriere o cucina si apre si controlla se è già stata
-// eseguita una pulizia oggi su questo dispositivo (localStorage) e, se no,
-// si cancellano le comande chiuse con expireAt nel passato.
-const CLEANUP_STORAGE_KEY = "mdp-orders-last-cleanup";
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export async function runDailyExpiredOrdersCleanup() {
-  try {
-    if (localStorage.getItem(CLEANUP_STORAGE_KEY) === todayKey()) return;
-  } catch {
-    // localStorage non disponibile (es. navigazione privata): si procede
-    // comunque, il controllo verrà semplicemente ripetuto ad ogni apertura.
-  }
-  try {
-    const q = query(ordersRef(), where("expireAt", "<=", Timestamp.now()));
-    const snap = await getDocs(q);
-    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref).catch((err) => {
-      console.error(`[orders] Cancellazione comanda scaduta fallita per ${d.id}:`, err);
-    })));
-    try { localStorage.setItem(CLEANUP_STORAGE_KEY, todayKey()); } catch { /* ignore */ }
-  } catch (err) {
-    console.error("[orders] Pulizia comande scadute fallita:", err);
-  }
-}
-
 /* ============================== STORICO ============================== */
+// Le comande chiuse non vengono più cancellate: restano per sempre come
+// storico, base dati della Dashboard statistiche. Il campo `expireAt` resta
+// nello schema (sempre null per le nuove comande) solo per compatibilità con
+// documenti scritti prima di questo cambiamento.
 // Comande chiuse (manualmente o automaticamente), più recenti prima. Usa
 // closedAt sia per il filtro (!= null → solo le chiuse) sia per l'ordinamento:
 // stesso campo su entrambi, quindi Firestore non richiede un indice composito

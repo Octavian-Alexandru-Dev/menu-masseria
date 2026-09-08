@@ -6,7 +6,7 @@ import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableId
 import {
   subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
   autoCloseStaleOrders, orderTotalCents, copertoTotalCents,
-  runDailyExpiredOrdersCleanup, updateCovers,
+  updateCovers,
 } from "./orders";
 import {
   subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup, coversLabel,
@@ -671,7 +671,6 @@ function WaiterPanel({ menu, session }) {
   }, []);
 
   useEffect(() => {
-    runDailyExpiredOrdersCleanup();
     runDailyExpiredReservationsCleanup();
   }, []);
 
