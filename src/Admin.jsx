@@ -12,6 +12,7 @@ import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from ".
 import { db } from "./firebase-db";
 import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation, FALLBACK_STYLE, TYPE } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
+import { subscribeMenuCosts, saveMenuCosts } from "./menuCosts";
 
 // Legge e valida un file .json scelto per l'importazione: usato sia dal
 // pannello Admin normale ("Importa JSON") sia dalla schermata di bootstrap
@@ -473,6 +474,24 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   const [pdfShowFooter, setPdfShowFooter] = useState(true); // nota a piè di pagina + contatti social
   const [pdfShowDate, setPdfShowDate] = useState(false);
   const [pdfExcludedCats, setPdfExcludedCats] = useState(() => new Set()); // categorie deselezionate per l'export
+  const [menuCosts, setMenuCosts] = useState(null); // null = ancora in caricamento; {} = nessun costo impostato
+
+  // Costi dei piatti (src/menuCosts.js): documento separato da menu/data,
+  // mai letto dal menù pubblico (vedi firestore.rules). Si salva subito ad
+  // ogni modifica, non con il pulsante Salva del menù qui sotto — evita di
+  // legare un dato riservato allo stesso ciclo di bozza/annulla del menù.
+  useEffect(() => {
+    const unsubscribe = subscribeMenuCosts(setMenuCosts, (err) => console.error("[admin] Errore lettura costi piatti:", err));
+    return unsubscribe;
+  }, []);
+
+  const updateCost = (itemId, value) => {
+    setMenuCosts((prev) => {
+      const next = { ...(prev || {}), [itemId]: value };
+      saveMenuCosts(next).catch((err) => console.error("[admin] Salvataggio costo fallito:", err));
+      return next;
+    });
+  };
 
   const togglePdfCat = (catId) => {
     setPdfExcludedCats((prev) => {
@@ -1339,7 +1358,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                           </div>
                         </div>
 
-                        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr 1fr" }}>
+                        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr 1fr 1fr" }}>
                           <div>
                             <span style={labelStyle}>Nome piatto</span>
                             <input style={inputStyle} value={item.name} onChange={(e) => updateItem(cat.id, item.id, "name", e.target.value)} />
@@ -1347,6 +1366,17 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                           <div>
                             <span style={labelStyle}>Prezzo (o "SU RICHIESTA")</span>
                             <input style={inputStyle} value={item.price} onChange={(e) => updateItem(cat.id, item.id, "price", e.target.value)} />
+                          </div>
+                          <div>
+                            <span style={labelStyle} title="Usato solo per calcolare il margine in Statistiche — mai mostrato ai clienti">
+                              Costo interno <Lock size={9} style={{ verticalAlign: -1 }} />
+                            </span>
+                            <input
+                              data-testid={`item-cost-${item.id}`}
+                              style={inputStyle} placeholder="0,00" disabled={menuCosts === null}
+                              value={menuCosts?.[item.id] || ""}
+                              onChange={(e) => updateCost(item.id, e.target.value)}
+                            />
                           </div>
                           <div>
                             <span style={labelStyle}>Etichetta (facolt.)</span>

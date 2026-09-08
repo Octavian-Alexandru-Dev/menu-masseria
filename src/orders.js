@@ -88,7 +88,14 @@ export async function sendOrderLines(orderId, lines) {
 // di errori: es. un piatto aggiunto per sbaglio sotto "Bevande"), ma la
 // categoria del menù a cui il piatto appartiene davvero — categoryId/Name
 // sono uno snapshot al momento dell'invio, coerente con nome/prezzo.
-export function buildOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes }) {
+//
+// cost: costo interno del piatto (src/menuCosts.js), fotografato qui per lo
+// stesso motivo del prezzo — se il costo cambia dopo, il margine storico
+// resta corretto. null quando il piatto non ha un costo configurato (o per
+// comande inviate prima che questo campo esistesse) — la Dashboard
+// statistiche esclude quelle righe dal margine invece di trattarle come
+// margine zero, e segnala quanta parte dell'incasso non ha un costo noto.
+export function buildOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes, cost }) {
   return {
     lineId,
     menuItemId: menuItemId || null,
@@ -98,6 +105,7 @@ export function buildOrderLine({ lineId, menuItemId, name, price, quantity, cate
     categoryId: categoryId || null,
     categoryName: categoryName || "",
     notes: notes || "",
+    cost: cost || null,
     status: "sent",
     // arrayUnion non accetta serverTimestamp() per i singoli elementi: uso
     // un timestamp client, sufficiente per l'ordine di visualizzazione.

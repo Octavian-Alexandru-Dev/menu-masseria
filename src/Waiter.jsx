@@ -11,6 +11,7 @@ import {
 import {
   subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup, coversLabel,
 } from "./reservationsData";
+import { subscribeMenuCosts } from "./menuCosts";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
 } from "./staff-shared";
@@ -310,7 +311,7 @@ function CoversEditor({ t, order }) {
   );
 }
 
-function OrderDetail({ t, menu, order, onBack, staffName }) {
+function OrderDetail({ t, menu, menuCosts, order, onBack, staffName }) {
   const [draft, setDraft] = useState([]); // { lineId, menuItemId, name, price, categoryId, categoryName, quantity, notes }
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -352,7 +353,10 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
         return next;
       }
-      return [...d, { lineId: uid(), menuItemId: item.id, name: item.name, price: item.price, categoryId, categoryName, quantity: 1, notes: "" }];
+      return [...d, {
+        lineId: uid(), menuItemId: item.id, name: item.name, price: item.price,
+        cost: menuCosts?.[item.id] || null, categoryId, categoryName, quantity: 1, notes: "",
+      }];
     });
   };
 
@@ -649,7 +653,15 @@ function WaiterPanel({ menu, session }) {
   const [todaysReservations, setTodaysReservations] = useState([]);
   const [avviaTarget, setAvviaTarget] = useState(null);
   const [avviaBusy, setAvviaBusy] = useState(false);
+  const [menuCosts, setMenuCosts] = useState({});
   const closingRef = useRef(new Set());
+
+  // Costi dei piatti (src/menuCosts.js), per fotografarli sulle righe della
+  // comanda al momento dell'invio — vedi addToDraft in OrderDetail.
+  useEffect(() => {
+    const unsubscribe = subscribeMenuCosts(setMenuCosts, (err) => console.error("[waiter] Errore lettura costi piatti:", err));
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeOpenOrders((list) => {
@@ -775,7 +787,7 @@ function WaiterPanel({ menu, session }) {
         <NewTableForm t={t} onCancel={() => setView({ mode: "list" })} onCreate={createTable} busy={creating} />
       )}
       {ordersReady && view.mode === "detail" && currentOrder && (
-        <OrderDetail t={t} menu={menu} order={currentOrder} onBack={() => setView({ mode: "list" })} staffName={session.name} />
+        <OrderDetail t={t} menu={menu} menuCosts={menuCosts} order={currentOrder} onBack={() => setView({ mode: "list" })} staffName={session.name} />
       )}
       {ordersReady && view.mode === "detail" && !currentOrder && (
         <div style={{ textAlign: "center", padding: 40, color: t.inkSoft }}>

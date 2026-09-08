@@ -130,8 +130,22 @@ function dateAt(daysOffset, hour, minute) {
   return d;
 }
 
-function buildTestOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, sentAt }) {
-  return { lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes: "", status: "sent", sentAt: Timestamp.fromDate(sentAt), outAt: null };
+// DEMO_COSTS: costi interni dei piatti (src/menuCosts.js), mai esposti al
+// menù pubblico — vedi firestore.rules, menuCosts/data. La riga di
+// "stats-midnight-late" viene seedata SENZA cost apposta (vedi sotto), per
+// testare che un costo mancante escluda quella riga dal margine invece di
+// contarla come margine zero.
+const DEMO_COSTS = {
+  "item-bruschetta": "2,00",
+  "item-caprese": "2,50",
+  "item-orecchiette": "3,00",
+  "item-tiramisu": "1,50",
+  "item-acqua": "0,30",
+  "item-vino-casa": "4,00",
+};
+
+function buildTestOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, sentAt, cost = null }) {
+  return { lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes: "", cost, status: "sent", sentAt: Timestamp.fromDate(sentAt), outAt: null };
 }
 
 function buildTestOrder({ tableNumber, waiterUid, waiterName, adults, children, status, openedAt, closedAt, items }) {
@@ -157,8 +171,8 @@ async function seedTestOrders(uids) {
       tableNumber: 501, waiterUid, waiterName, adults: 2, children: 0, status: "closed",
       openedAt: dateAt(0, 12, 30), closedAt: dateAt(0, 13, 30),
       items: [
-        buildTestOrderLine({ lineId: "l1", menuItemId: "item-bruschetta", name: "Bruschetta", price: "6,00", quantity: 2, categoryId: "cat-antipasti", categoryName: "Antipasti", sentAt: dateAt(0, 12, 35) }),
-        buildTestOrderLine({ lineId: "l2", menuItemId: "item-acqua", name: "Acqua naturale", price: "2,00", quantity: 2, categoryId: "cat-bevande", categoryName: "Bevande", sentAt: dateAt(0, 12, 36) }),
+        buildTestOrderLine({ lineId: "l1", menuItemId: "item-bruschetta", name: "Bruschetta", price: "6,00", quantity: 2, categoryId: "cat-antipasti", categoryName: "Antipasti", sentAt: dateAt(0, 12, 35), cost: DEMO_COSTS["item-bruschetta"] }),
+        buildTestOrderLine({ lineId: "l2", menuItemId: "item-acqua", name: "Acqua naturale", price: "2,00", quantity: 2, categoryId: "cat-bevande", categoryName: "Bevande", sentAt: dateAt(0, 12, 36), cost: DEMO_COSTS["item-acqua"] }),
       ],
     }),
     // Oggi, admin, chiusa AUTOMATICAMENTE (tavolo dimenticato): serve a
@@ -167,7 +181,7 @@ async function seedTestOrders(uids) {
       tableNumber: 502, waiterUid: adminUid, waiterName: adminName, adults: 1, children: 0, status: "auto_closed",
       openedAt: dateAt(0, 10, 0), closedAt: dateAt(0, 14, 0),
       items: [
-        buildTestOrderLine({ lineId: "l1", menuItemId: "item-vino-casa", name: "Vino della casa", price: "12,00", quantity: 1, categoryId: "cat-bevande", categoryName: "Bevande", sentAt: dateAt(0, 10, 5) }),
+        buildTestOrderLine({ lineId: "l1", menuItemId: "item-vino-casa", name: "Vino della casa", price: "12,00", quantity: 1, categoryId: "cat-bevande", categoryName: "Bevande", sentAt: dateAt(0, 10, 5), cost: DEMO_COSTS["item-vino-casa"] }),
       ],
     }),
     // Ieri, cameriere di test: primo + dolce — copre Primi e Dolci, e dà un
@@ -176,13 +190,15 @@ async function seedTestOrders(uids) {
       tableNumber: 503, waiterUid, waiterName, adults: 3, children: 1, status: "closed",
       openedAt: dateAt(-1, 20, 0), closedAt: dateAt(-1, 21, 30),
       items: [
-        buildTestOrderLine({ lineId: "l1", menuItemId: "item-orecchiette", name: "Orecchiette", price: "10,00", quantity: 3, categoryId: "cat-primi", categoryName: "Primi", sentAt: dateAt(-1, 20, 10) }),
-        buildTestOrderLine({ lineId: "l2", menuItemId: "item-tiramisu", name: "Tiramisù", price: "5,00", quantity: 1, categoryId: "cat-dolci", categoryName: "Dolci", sentAt: dateAt(-1, 21, 0) }),
+        buildTestOrderLine({ lineId: "l1", menuItemId: "item-orecchiette", name: "Orecchiette", price: "10,00", quantity: 3, categoryId: "cat-primi", categoryName: "Primi", sentAt: dateAt(-1, 20, 10), cost: DEMO_COSTS["item-orecchiette"] }),
+        buildTestOrderLine({ lineId: "l2", menuItemId: "item-tiramisu", name: "Tiramisù", price: "5,00", quantity: 1, categoryId: "cat-dolci", categoryName: "Dolci", sentAt: dateAt(-1, 21, 0), cost: DEMO_COSTS["item-tiramisu"] }),
       ],
     }),
     // A cavallo della mezzanotte locale: verifica che "Ieri" e "Oggi" separino
     // correttamente i confini di giorno (mai UTC — vedi resolvePresetRange in
-    // src/statsData.js).
+    // src/statsData.js). Questa riga NON ha un costo (cost resta null): serve
+    // a testare che il margine escluda le righe senza costo noto invece di
+    // contarle a margine zero (vedi aggregateOrders in src/statsData.js).
     "stats-midnight-late": buildTestOrder({
       tableNumber: 504, waiterUid, waiterName, adults: 1, children: 0, status: "closed",
       openedAt: dateAt(-1, 23, 30), closedAt: dateAt(-1, 23, 58),
@@ -191,7 +207,7 @@ async function seedTestOrders(uids) {
     "stats-midnight-early": buildTestOrder({
       tableNumber: 505, waiterUid, waiterName, adults: 1, children: 0, status: "closed",
       openedAt: dateAt(0, 0, 2), closedAt: dateAt(0, 0, 20),
-      items: [buildTestOrderLine({ lineId: "l1", menuItemId: "item-caprese", name: "Caprese", price: "7,00", quantity: 1, categoryId: "cat-antipasti", categoryName: "Antipasti", sentAt: dateAt(0, 0, 5) })],
+      items: [buildTestOrderLine({ lineId: "l1", menuItemId: "item-caprese", name: "Caprese", price: "7,00", quantity: 1, categoryId: "cat-antipasti", categoryName: "Antipasti", sentAt: dateAt(0, 0, 5), cost: DEMO_COSTS["item-caprese"] })],
     }),
   };
 
@@ -211,6 +227,7 @@ async function main() {
   }
 
   await withRetry(() => setDoc(doc(db, "menu", "data"), DEMO_MENU));
+  await withRetry(() => setDoc(doc(db, "menuCosts", "data"), DEMO_COSTS));
   await seedTestOrders(uids);
 
   console.log("[seed-emulator] Fatto:", uids);

@@ -123,20 +123,33 @@ function DeltaBadge({ t, deltaInfo, positiveIsGood = true }) {
   );
 }
 
-function KpiCard({ t, id, label, value, deltaInfo }) {
+function KpiCard({ t, id, label, value, note, deltaInfo }) {
   return (
     <div style={{ ...cardStyle(t), padding: 16, minWidth: 140, flex: "1 1 140px" }}>
       <div style={{ fontSize: TYPE.tiny, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, marginBottom: 6 }}>{label}</div>
       <div data-testid={`kpi-value-${id}`} style={{ fontSize: TYPE.heading, fontWeight: 700, color: t.ink }}>{value}</div>
+      {note && <div style={{ fontSize: TYPE.tiny, color: t.inkSoft, marginTop: 2 }}>{note}</div>}
       {deltaInfo && <div style={{ marginTop: 4 }}><DeltaBadge t={t} deltaInfo={deltaInfo} /></div>}
     </div>
   );
 }
 
 function KpiCardsRow({ t, agg, comparisonKpi }) {
+  // marginCoverage è 0 o null quando nessun piatto venduto ha un costo
+  // impostato in Gestione menù: mostrare "€ 0,00" sarebbe fuorviante (letto
+  // come "nessun guadagno" invece di "dato mancante").
+  const hasMarginData = !!agg.marginCoverage;
+  const marginValue = hasMarginData ? `€ ${formatCentsAsPrice(agg.marginCents)}` : "—";
+  const marginNote = !hasMarginData
+    ? "nessun costo impostato in Gestione menù"
+    : agg.marginCoverage < 0.999
+      ? `su ${Math.round(agg.marginCoverage * 100)}% dell'incasso piatti`
+      : null;
+
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
       <KpiCard t={t} id="revenue" label="Incasso totale" value={`€ ${formatCentsAsPrice(agg.revenueCents)}`} deltaInfo={comparisonKpi?.revenueCents} />
+      <KpiCard t={t} id="margin" label="Margine sui piatti" value={marginValue} note={marginNote} deltaInfo={hasMarginData ? comparisonKpi?.marginCents : null} />
       <KpiCard t={t} id="avg-receipt" label="Scontrino medio" value={`€ ${formatCentsAsPrice(agg.avgReceiptCents)}`} deltaInfo={comparisonKpi?.avgReceiptCents} />
       <KpiCard t={t} id="covers" label="Coperti" value={agg.coversCount} deltaInfo={comparisonKpi?.coversCount} />
       <KpiCard t={t} id="dishes" label="Piatti venduti" value={agg.dishesCount} deltaInfo={comparisonKpi?.dishesCount} />
@@ -192,9 +205,11 @@ function VerticalBarChart({ t, data, xKey, valueKey, valueFormatter }) {
 
 /* ============================== SEZIONI ============================== */
 
-function TopDishesSection({ t, topDishesByQty, topDishesByRevenue }) {
+function TopDishesSection({ t, topDishesByQty, topDishesByRevenue, topDishesByMargin }) {
   const [mode, setMode] = useState("qty");
-  const data = (mode === "qty" ? topDishesByQty : topDishesByRevenue).map((d) => ({ name: d.name, qty: d.qty, revenueCents: d.revenueCents }));
+  const sourceByMode = { qty: topDishesByQty, revenue: topDishesByRevenue, margin: topDishesByMargin };
+  const data = sourceByMode[mode].map((d) => ({ name: d.name, qty: d.qty, revenueCents: d.revenueCents, marginCents: d.marginCents }));
+  const valueKeyByMode = { qty: "qty", revenue: "revenueCents", margin: "marginCents" };
   return (
     <div style={cardStyle(t)}>
       <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
@@ -202,13 +217,14 @@ function TopDishesSection({ t, topDishesByQty, topDishesByRevenue }) {
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => setMode("qty")} className="mdp-btn" style={btnGhost(t, mode === "qty")}>Per quantità</button>
           <button onClick={() => setMode("revenue")} className="mdp-btn" style={btnGhost(t, mode === "revenue")}>Per incasso</button>
+          <button onClick={() => setMode("margin")} className="mdp-btn" style={btnGhost(t, mode === "margin")}>Per margine</button>
         </div>
       </div>
       {data.length === 0 ? (
-        <EmptyNote t={t} text="Nessun piatto in questo periodo." />
+        <EmptyNote t={t} text={mode === "margin" ? "Nessun piatto con un costo impostato in questo periodo." : "Nessun piatto in questo periodo."} />
       ) : (
         <HorizontalBarChart
-          t={t} data={data} valueKey={mode === "qty" ? "qty" : "revenueCents"}
+          t={t} data={data} valueKey={valueKeyByMode[mode]}
           valueFormatter={(v) => (mode === "qty" ? `${v} venduti` : `€ ${formatCentsAsPrice(v)}`)}
         />
       )}
@@ -414,7 +430,7 @@ export default function Stats({ menu }) {
         {!loading && !error && agg.ordersCount > 0 && (
           <>
             <KpiCardsRow t={t} agg={agg} comparisonKpi={comparison?.kpi} />
-            <TopDishesSection t={t} topDishesByQty={agg.topDishesByQty} topDishesByRevenue={agg.topDishesByRevenue} />
+            <TopDishesSection t={t} topDishesByQty={agg.topDishesByQty} topDishesByRevenue={agg.topDishesByRevenue} topDishesByMargin={agg.topDishesByMargin} />
             {comparison && <DecliningDishesTable t={t} dishDeltas={comparison.dishDeltas} />}
             <CategoryBreakdownChart t={t} categoryBreakdown={agg.categoryBreakdown} />
             <HourlyWeekdayCharts t={t} hourlyDistribution={agg.hourlyDistribution} weekdayDistribution={agg.weekdayDistribution} />

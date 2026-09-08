@@ -125,7 +125,7 @@ function dishKey(line) {
 }
 
 function emptyDishStat(line) {
-  return { key: dishKey(line), name: line.name, categoryName: line.categoryName || "Altro", qty: 0, revenueCents: 0 };
+  return { key: dishKey(line), name: line.name, categoryName: line.categoryName || "Altro", qty: 0, revenueCents: 0, marginCents: 0, qtyWithKnownCost: 0 };
 }
 
 function weekdayIndexMonFirst(date) {
@@ -141,6 +141,16 @@ export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
   let revenueCents = 0;
   let coversCount = 0;
   let dishesCount = 0;
+  // Margine: solo sulle righe con un costo fotografato (line.cost, vedi
+  // buildOrderLine in orders.js) — mai sul coperto, che non ha un concetto
+  // di costo del piatto. itemsRevenueCents (tutte le righe) vs
+  // marginRevenueCents (solo quelle con costo noto) danno la % di copertura:
+  // se un piatto non ha un costo impostato in Gestione menù, o la comanda è
+  // precedente all'introduzione di questo campo, quella riga viene esclusa
+  // dal margine invece di essere trattata come margine zero.
+  let itemsRevenueCents = 0;
+  let marginCents = 0;
+  let marginRevenueCents = 0;
   const dishByKey = new Map();
   const categoryByName = new Map();
   const hourly = Array.from({ length: 24 }, (_, hour) => ({ hour, ordersCount: 0, revenueCents: 0 }));
@@ -171,6 +181,7 @@ export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
     for (const line of order.items || []) {
       const lineRevenue = parsePriceToCents(line.price) * line.quantity;
       dishesCount += line.quantity;
+      itemsRevenueCents += lineRevenue;
 
       const key = dishKey(line);
       if (!dishByKey.has(key)) dishByKey.set(key, emptyDishStat(line));
@@ -184,16 +195,29 @@ export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
       dishEntry.categoryName = line.categoryName || "Altro";
 
       const catName = line.categoryName || "Altro";
-      if (!categoryByName.has(catName)) categoryByName.set(catName, { categoryName: catName, qty: 0, revenueCents: 0 });
+      if (!categoryByName.has(catName)) categoryByName.set(catName, { categoryName: catName, qty: 0, revenueCents: 0, marginCents: 0 });
       const catEntry = categoryByName.get(catName);
       catEntry.qty += line.quantity;
       catEntry.revenueCents += lineRevenue;
+
+      if (line.cost != null) {
+        const lineMargin = lineRevenue - parsePriceToCents(line.cost) * line.quantity;
+        dishEntry.marginCents += lineMargin;
+        dishEntry.qtyWithKnownCost += line.quantity;
+        catEntry.marginCents += lineMargin;
+        marginCents += lineMargin;
+        marginRevenueCents += lineRevenue;
+      }
     }
   }
 
   const dishStats = Array.from(dishByKey.values());
   const topDishesByQty = [...dishStats].sort((a, b) => b.qty - a.qty).slice(0, TOP_N);
   const topDishesByRevenue = [...dishStats].sort((a, b) => b.revenueCents - a.revenueCents).slice(0, TOP_N);
+  // Esclude i piatti senza alcun costo noto: mostrarli a margine 0 sarebbe
+  // fuorviante (sembrerebbero i piatti meno profittevoli, mentre in realtà
+  // manca solo il dato in Gestione menù).
+  const topDishesByMargin = dishStats.filter((d) => d.qtyWithKnownCost > 0).sort((a, b) => b.marginCents - a.marginCents).slice(0, TOP_N);
   const categoryBreakdown = Array.from(categoryByName.values()).sort((a, b) => b.revenueCents - a.revenueCents);
   const perWaiter = Array.from(waiterByName.values())
     .map((w) => ({ ...w, avgReceiptCents: w.ordersCount > 0 ? Math.round(w.revenueCents / w.ordersCount) : 0 }))
@@ -211,10 +235,18 @@ export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
     dishStats,
     topDishesByQty,
     topDishesByRevenue,
+    topDishesByMargin,
     categoryBreakdown,
     hourlyDistribution: hourly,
     weekdayDistribution: weekday,
     perWaiter,
+    itemsRevenueCents,
+    marginCents,
+    marginRevenueCents,
+    // Quota di incasso piatti/bevande coperta da un costo noto (0..1, null se
+    // non ci sono piatti nel periodo) — usata in UI per segnalare quando il
+    // margine è calcolato solo su una parte dell'incasso.
+    marginCoverage: itemsRevenueCents > 0 ? marginRevenueCents / itemsRevenueCents : null,
   };
 }
 
@@ -236,6 +268,7 @@ export function compareAggregates(aggA, aggB) {
     coversCount: delta(aggA.coversCount, aggB.coversCount),
     ordersCount: delta(aggA.ordersCount, aggB.ordersCount),
     dishesCount: delta(aggA.dishesCount, aggB.dishesCount),
+    marginCents: delta(aggA.marginCents, aggB.marginCents),
   };
 
   const dishKeys = new Set([...aggA.dishStats.map((d) => d.key), ...aggB.dishStats.map((d) => d.key)]);

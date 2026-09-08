@@ -66,6 +66,19 @@ test.describe("Dashboard statistiche", () => {
     await expect(page.getByText(/nessuna comanda chiusa in questo periodo/i)).toBeVisible({ timeout: 10_000 });
   });
 
+  test("il preset 'Ieri' mostra il margine escludendo le righe senza costo noto", async ({ page }) => {
+    await page.getByRole("button", { name: "Ieri", exact: true }).click();
+    // stats-yesterday-1: Orecchiette (10,00-3,00)x3=21,00 + Tiramisù (5,00-1,50)x1=3,50 = 24,50.
+    // stats-midnight-late (Caprese) non ha un costo seedato: escluso dal margine
+    // (35,00 di incasso piatti con costo noto su 42,00 totali -> 83%).
+    await expect(page.getByTestId("kpi-value-margin")).toHaveText("€ 24,50", { timeout: 10_000 });
+    await expect(page.getByText(/su 83% dell'incasso piatti/i)).toBeVisible();
+
+    await page.getByRole("button", { name: "Per margine" }).click();
+    await expect(page.getByText("Orecchiette")).toBeVisible();
+    await expect(page.getByText("Caprese")).not.toBeVisible();
+  });
+
   test("il confronto tra periodi segnala un incasso nuovo rispetto a un Periodo A vuoto", async ({ page }) => {
     await page.getByRole("button", { name: "Ieri", exact: true }).click();
     await expect(page.getByTestId("kpi-value-revenue")).toHaveText("€ 51,00", { timeout: 10_000 });

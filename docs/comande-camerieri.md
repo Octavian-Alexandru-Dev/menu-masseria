@@ -136,6 +136,11 @@ orders/{orderId}
       quantity: number,
       categoryId: string,      // snapshot dell'id della categoria menù di appartenenza
       categoryName: string,    // snapshot del nome della categoria (es. "Antipasti", "Primi")
+      cost: string | null,     // snapshot del costo interno (src/menuCosts.js), stesso formato
+                                // prezzo; null se il piatto non ha un costo impostato o la
+                                // comanda è precedente a questo campo — usato solo per il
+                                // margine nella Dashboard statistiche, MAI letto da menu/data
+                                // (che è pubblico) — vedi §12 e firestore.rules
       notes: string,           // es. "senza cipolla"
       status: "sent" | "preparing" | "out",
       sentAt: Timestamp
@@ -388,6 +393,20 @@ piano iniziale (già implementate):
   è stata rimossa da `src/orders.js` (e le sue chiamate da `Waiter.jsx` e
   `Kitchen.jsx`); `closeOrder()`/`autoCloseStaleOrders()` scrivono
   `expireAt: null`. Vedi §6.1 per l'analisi costi.
+- **Margine sui piatti nella Dashboard statistiche**: aggiunto un costo
+  interno per piatto, impostabile in Gestione menù (`src/menuCosts.js`),
+  fotografato su ogni riga della comanda al momento dell'invio
+  (`buildOrderLine` in `orders.js`, campo `cost`) con lo stesso principio già
+  usato per nome/prezzo — se il costo cambia in seguito, il margine calcolato
+  sulle comande passate resta corretto. Il costo vive in un documento
+  Firestore separato da `menu/data` (`menuCosts/data`, richiede
+  autenticazione — vedi `firestore.rules`): `menu/data` è pubblico e
+  Firestore non ha regole per singolo campo, quindi il costo non può stare
+  lì senza diventare visibile a chiunque legga il menù senza autenticarsi.
+  Righe senza un costo noto (piatto senza costo impostato, o comanda
+  precedente a questo campo) sono escluse dal margine invece di contare come
+  margine zero — la Dashboard segnala quando il margine copre solo una parte
+  dell'incasso.
 
 ---
 
