@@ -3,16 +3,10 @@
 // parallelo nello stesso run (fullyParallel: true) contro lo stesso
 // emulatore. Usa il client SDK di Firebase direttamente in Node, connesso
 // all'emulatore locale (mai al progetto reale — vedi tests/global-setup.js).
-import { initializeApp, getApps } from "firebase/app";
-import { getAuth, connectAuthEmulator, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator, collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { TEST_WAITER } from "./test-env.js";
-
-const app = getApps()[0] || initializeApp({ apiKey: "demo-key", projectId: "demo-masseria-test" });
-const auth = getAuth(app);
-const db = getFirestore(app);
-connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
-connectFirestoreEmulator(db, "localhost", 8080);
+import { auth, db } from "./helpers/emulatorApp.js";
 
 let signInPromise = null;
 function ensureSignedIn() {

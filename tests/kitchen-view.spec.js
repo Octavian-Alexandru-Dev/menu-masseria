@@ -1,10 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { TEST_WAITER, TEST_KITCHEN } from "./test-env";
 import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
+import { staffLogin } from "./helpers/staffLogin";
 
 // Range distinto da waiter-order.spec.js per evitare collisioni quando i
 // file di test girano in parallelo.
 const TABLE_NUMBER = 9500 + Math.floor(Math.random() * 500);
+// Range distinto anche da quello usato più sotto e da waiter-order.spec.js
+// (che ne usa uno proprio per i test aggiunti nel gruppo Waiter).
+const NOTES_TABLE_NUMBER = 11000 + Math.floor(Math.random() * 500);
 
 test.describe("Area cucina", () => {
   test("mostra il login per l'area cucina", async ({ page }) => {
@@ -75,6 +79,41 @@ test.describe("Area cucina", () => {
       // tutto (indipendentemente dal fatto che sia rimasta aperta per
       // un'asserzione fallita, o già chiusa con successo).
       await deleteTestOrderByTableNumber(TABLE_NUMBER);
+      await waiterContext.close();
+      await kitchenContext.close();
+    }
+  });
+
+  test("una comanda con note mostra l'avviso e il tempo trascorso sulla card in cucina", async ({ browser }) => {
+    test.setTimeout(30_000);
+    const waiterContext = await browser.newContext();
+    const kitchenContext = await browser.newContext();
+    const waiterPage = await waiterContext.newPage();
+    const kitchenPage = await kitchenContext.newPage();
+
+    try {
+      await waiterPage.goto("/cameriere");
+      await staffLogin(waiterPage, TEST_WAITER);
+      await waiterPage.getByRole("button", { name: /nuovo tavolo/i }).click();
+      await waiterPage.locator('input[type="number"]').first().fill(String(NOTES_TABLE_NUMBER));
+      await waiterPage.getByRole("textbox", { name: "Note (allergie, richieste…)" }).fill("Allergia alle noci");
+      await waiterPage.getByRole("button", { name: /apri tavolo/i }).click();
+      await expect(waiterPage.getByText(`Tavolo ${NOTES_TABLE_NUMBER}`, { exact: true })).toBeVisible({ timeout: 10_000 });
+
+      const firstDish = waiterPage.locator("button", { hasText: "€" }).first();
+      await firstDish.click();
+      await waiterPage.getByRole("button", { name: /invia comanda/i }).click();
+      await expect(waiterPage.getByText(/sincronizzata/i)).toBeVisible({ timeout: 15_000 });
+
+      await kitchenPage.goto("/cucina");
+      await staffLogin(kitchenPage, TEST_KITCHEN);
+      const kitchenCard = kitchenPage.getByTestId(`table-card-${NOTES_TABLE_NUMBER}`);
+      await expect(kitchenCard).toBeVisible({ timeout: 15_000 });
+
+      await expect(kitchenCard.getByText("Allergia alle noci")).toBeVisible();
+      await expect(kitchenCard.getByText(/appena arrivata|min fa/i)).toBeVisible();
+    } finally {
+      await deleteTestOrderByTableNumber(NOTES_TABLE_NUMBER);
       await waiterContext.close();
       await kitchenContext.close();
     }

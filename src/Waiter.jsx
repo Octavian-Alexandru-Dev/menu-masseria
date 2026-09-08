@@ -251,7 +251,7 @@ function NewTableForm({ t, onCancel, onCreate, busy }) {
       </div>
 
       <label style={labelStyle}>Note (allergie, richieste…)</label>
-      <textarea rows={2} style={{ ...inputStyle, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <textarea aria-label="Note (allergie, richieste…)" rows={2} style={{ ...inputStyle, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} />
 
       <button
         disabled={!tableNumber || busy}
