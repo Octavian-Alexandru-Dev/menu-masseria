@@ -87,6 +87,89 @@ test.describe("Area prenotazioni", () => {
     await expect(monthLabel).not.toHaveText(before);
   });
 
+  test("il modulo richiede nome e data prima di poter salvare", async ({ page }) => {
+    await login(page);
+    await page.getByRole("button", { name: /^nuova$/i }).click();
+
+    const saveAndConfirm = page.getByRole("button", { name: /^salva e conferma$/i });
+    const saveOnly = page.getByRole("button", { name: /^salva \(da confermare\)$/i });
+    // Data è precompilata con il giorno selezionato nel calendario, Nome no:
+    // inizialmente disabilitato solo per il nome mancante.
+    await expect(saveAndConfirm).toBeDisabled();
+    await expect(saveOnly).toBeDisabled();
+
+    await page.getByPlaceholder("es. Famiglia Rossi").fill("Prova Validazione");
+    await expect(saveAndConfirm).toBeEnabled();
+    await expect(saveOnly).toBeEnabled();
+
+    await page.locator('input[type="date"]').fill("");
+    await expect(saveAndConfirm).toBeDisabled();
+    await expect(saveOnly).toBeDisabled();
+  });
+
+  test("il modulo nuova prenotazione compila tutti i campi e li mantiene in modifica", async ({ page }) => {
+    await login(page);
+    const name = randomName();
+    createdNames.push(name);
+
+    await page.getByRole("button", { name: /^nuova$/i }).click();
+    await page.getByPlaceholder("es. Famiglia Rossi").fill(name);
+    await page.locator('input[type="time"]').fill("20:30");
+    await page.locator('input[type="tel"]').fill("3331234567");
+    await page.locator('input[type="number"]').nth(0).fill("4"); // Adulti
+    await page.locator('input[type="number"]').nth(1).fill("2"); // Bambini
+    await page.locator('input[type="number"]').nth(2).fill("12"); // Numero tavolo
+    await page.getByRole("textbox", { name: "Note (allergie, richieste…)" }).fill("Tavolo vicino alla finestra");
+    await page.getByRole("button", { name: /^salva \(da confermare\)$/i }).click();
+    await expect(page.getByText(name).first()).toBeVisible({ timeout: 10_000 });
+
+    // Riapre la stessa prenotazione (bottone che apre la modifica, primo
+    // nella riga — Conferma/Rifiuta sono bottoni successivi con lo stesso
+    // nome nell'aria-label, "di <nome>").
+    await page.getByRole("button", { name: new RegExp(name) }).first().click();
+    await expect(page.getByText("Modifica prenotazione")).toBeVisible();
+    await expect(page.locator('input[type="time"]')).toHaveValue("20:30");
+    await expect(page.locator('input[type="tel"]')).toHaveValue("3331234567");
+    await expect(page.locator('input[type="number"]').nth(0)).toHaveValue("4");
+    await expect(page.locator('input[type="number"]').nth(1)).toHaveValue("2");
+    await expect(page.locator('input[type="number"]').nth(2)).toHaveValue("12");
+    await expect(page.getByRole("textbox", { name: "Note (allergie, richieste…)" })).toHaveValue("Tavolo vicino alla finestra");
+  });
+
+  test("modifica una prenotazione esistente e salva le modifiche", async ({ page }) => {
+    await login(page);
+    const name = randomName();
+    createdNames.push(name);
+    await createReservation(page, name);
+
+    await page.getByRole("button", { name: new RegExp(name) }).first().click();
+    await page.locator('input[type="tel"]').fill("3339876543");
+    await page.getByRole("button", { name: /^salva modifiche$/i }).click();
+    await expect(page.getByText("Modifica prenotazione")).toHaveCount(0);
+
+    await page.getByRole("button", { name: new RegExp(name) }).first().click();
+    await expect(page.locator('input[type="tel"]')).toHaveValue("3339876543");
+  });
+
+  test("annulla una prenotazione confermata dal modulo di modifica", async ({ page }) => {
+    await login(page);
+    const name = randomName();
+    createdNames.push(name);
+    await createReservation(page, name);
+    await page.getByRole("button", { name: new RegExp(`Conferma prenotazione di ${name}`, "i") }).click();
+    await expect(page.getByRole("button", { name: new RegExp(`Avvia prenotazione di ${name}`, "i") })).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole("button", { name: new RegExp(name) }).first().click();
+    await expect(page.getByRole("button", { name: /^annulla prenotazione$/i })).toBeVisible();
+    await page.getByRole("button", { name: /^annulla prenotazione$/i }).click();
+    await expect(page.getByText("Modifica prenotazione")).toHaveCount(0);
+
+    await expect(page.getByRole("button", { name: new RegExp(`Avvia prenotazione di ${name}`, "i") })).toHaveCount(0);
+    await page.getByRole("button", { name: /rifiutate.*annullate.*no-show/i }).click();
+    await expect(page.getByText(name).first()).toBeVisible();
+    await expect(page.getByText(/annullata/i)).toBeVisible();
+  });
+
   test("avvia una prenotazione confermata di oggi dalla Sala e apre la comanda", async ({ page }) => {
     await login(page);
     const name = randomName();

@@ -243,7 +243,7 @@ function ReservationForm({ t, selectedDate, initial, onCancel, onSave, onSaveAnd
       <input style={inputStyle} type="number" min="1" inputMode="numeric" value={tableNumber} onChange={(e) => setTableNumber(e.target.value)} />
 
       <label style={labelStyle}>Note (allergie, richieste…)</label>
-      <textarea rows={2} style={{ ...inputStyle, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <textarea aria-label="Note (allergie, richieste…)" rows={2} style={{ ...inputStyle, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} />
 
       {!isEdit && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 20 }}>
