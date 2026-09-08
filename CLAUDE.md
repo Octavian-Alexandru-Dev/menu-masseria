@@ -13,7 +13,9 @@ Requires Docker running (`docker` CLI available). `playwright.config.js`'s `glob
 
 For manual local development against the same emulator (e.g. to try the app without a real Firebase project — useful for a portfolio demo), use `npm run dev:local` instead of `npm run dev`.
 
-Test accounts (seeded fresh into the emulator on every run, see `tests/test-env.js` / `scripts/seed-emulator.js`): `TEST_ADMIN`, `TEST_WAITER`, `TEST_KITCHEN` — fixed, non-secret credentials, meaningless outside the ephemeral local emulator.
+The emulator container starts already populated — `Dockerfile.emulator` bakes in a snapshot (`seed-data/`, imported via `--import` on `firebase emulators:start`) with the demo menu and test accounts, so `docker compose -f docker-compose.emulator.yml up` alone never leaves the local menu empty, even without running `npm run seed:emulator` separately. That script still runs automatically in `test:e2e`/`dev:local` as an idempotent safety net. If you change the demo menu's shape in `scripts/seed-emulator.js`, regenerate the baked-in snapshot with `npm run seed:export` and rebuild the image (see `seed-data/README.md`) — otherwise the image drifts from the seed script.
+
+Test accounts (`TEST_ADMIN`, `TEST_WAITER`, `TEST_KITCHEN`, see `tests/test-env.js` / `scripts/seed-emulator.js`): fixed, non-secret credentials, meaningless outside the ephemeral local emulator.
 
 Notes:
 - `tests/client-view.spec.js` / `tests/admin-login.spec.js` / `tests/kitchen-view.spec.js` / `tests/waiter-order.spec.js` / `tests/reservations.spec.js` cover the public menu, staff login screens, and full authenticated flows (waiter↔kitchen realtime order handling, reservations lifecycle). Assertions favor structure/role/text over hardcoded content.

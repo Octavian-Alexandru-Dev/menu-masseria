@@ -15,7 +15,12 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY firebase.json firestore.rules .firebaserc ./
+# Menù demo + account admin/waiter/kitchen già pronti (vedi seed-data/README.md
+# per come rigenerarli): l'emulatore riparte già popolato ad ogni avvio, senza
+# dover ricordarsi di lanciare separatamente `npm run seed:emulator` — così
+# `docker compose up` da solo non lascia mai il menù locale vuoto.
+COPY seed-data ./seed-data
 
 EXPOSE 8080 9099 4000
 
-CMD ["firebase", "emulators:start", "--project", "demo-masseria-test"]
+CMD ["firebase", "emulators:start", "--project", "demo-masseria-test", "--import=/app/seed-data"]
