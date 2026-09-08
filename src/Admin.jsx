@@ -937,19 +937,19 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
             <div>
               <span style={labelStyle}>Nome del ristorante</span>
-              <input style={inputStyle} value={menu.restaurantName} onChange={(e) => updateField("restaurantName", e.target.value)} />
+              <input aria-label="Nome del ristorante" style={inputStyle} value={menu.restaurantName} onChange={(e) => updateField("restaurantName", e.target.value)} />
             </div>
             <div>
               <span style={labelStyle}>Località</span>
-              <input style={inputStyle} value={menu.location} onChange={(e) => updateField("location", e.target.value)} />
+              <input aria-label="Località" style={inputStyle} value={menu.location} onChange={(e) => updateField("location", e.target.value)} />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <span style={labelStyle}>Frase di apertura</span>
-              <input style={inputStyle} value={menu.tagline} onChange={(e) => updateField("tagline", e.target.value)} />
+              <input aria-label="Frase di apertura" style={inputStyle} value={menu.tagline} onChange={(e) => updateField("tagline", e.target.value)} />
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
               <span style={labelStyle}>Nota a piè di pagina</span>
-              <input style={inputStyle} value={menu.footerNote || ""} onChange={(e) => updateField("footerNote", e.target.value)} />
+              <input aria-label="Nota a piè di pagina" style={inputStyle} value={menu.footerNote || ""} onChange={(e) => updateField("footerNote", e.target.value)} />
             </div>
           </div>
 

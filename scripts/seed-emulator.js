@@ -62,7 +62,7 @@ async function ensureUser({ email, password }) {
 
 const DEMO_MENU = {
   theme: "rustica",
-  name: "Masseria Demo",
+  restaurantName: "Masseria Demo",
   location: "Località Demo",
   tagline: "Menù di prova — dati seed dell'emulatore",
   footerNote: "Ambiente locale, nessun dato reale",

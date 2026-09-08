@@ -31,6 +31,14 @@ export default defineConfig({
       VITE_USE_FIREBASE_EMULATOR: "true",
       VITE_FIREBASE_API_KEY: "demo-key",
       VITE_FIREBASE_PROJECT_ID: "demo-masseria-test",
+      // Azzerate esplicitamente: senza questo, Vite le leggerebbe comunque
+      // dal vero ".env" dello sviluppatore (queste due non vengono
+      // sovrascritte sopra come le VITE_FIREBASE_*), facendo sì che il
+      // pulsante "Carica foto" di Admin.jsx tenti un upload reale verso
+      // Cloudinary durante i test invece di fallire in modo deterministico
+      // con "Upload immagini non configurato" (cloudinary.js).
+      VITE_CLOUDINARY_CLOUD_NAME: "",
+      VITE_CLOUDINARY_UPLOAD_PRESET: "",
     },
   },
 });
