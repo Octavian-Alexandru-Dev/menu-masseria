@@ -1,7 +1,7 @@
-// Pannello di gestione del menù (login + editor). Questo file viene
-// scaricato SOLO quando qualcuno clicca "Gestione menù" nel sito pubblico
-// (caricamento differito, vedi React.lazy in MenuApp.jsx) — così i clienti
-// che guardano solo il menù non scaricano mai Firebase Authentication.
+// Menu management panel (login + editor). This file is downloaded ONLY
+// when someone clicks "Gestione menù" on the public site (deferred
+// loading, see React.lazy in MenuApp.jsx) — so customers just looking at
+// the menu never download Firebase Authentication.
 import React, { useState, useEffect } from "react";
 import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X, Users, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
@@ -14,11 +14,11 @@ import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTransla
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 import { subscribeMenuCosts, saveMenuCosts } from "./menuCosts";
 
-// Legge e valida un file .json scelto per l'importazione: usato sia dal
-// pannello Admin normale ("Importa JSON") sia dalla schermata di bootstrap
-// quando il documento del menù non esiste ancora su Firestore. Controlla
-// solo la forma minima necessaria a non mandare in crash l'editor o a
-// salvare dati corrotti — non valida ogni singolo campo.
+// Reads and validates a .json file chosen for import: used both by the
+// regular Admin panel ("Importa JSON") and by the bootstrap screen when the
+// menu document doesn't exist yet on Firestore. Only checks the minimal
+// shape needed to avoid crashing the editor or saving corrupted data — it
+// doesn't validate every single field.
 function parseMenuJsonFile(file) {
   return new Promise((resolve, reject) => {
     if (!file) { reject(new Error("Nessun file selezionato.")); return; }
@@ -47,11 +47,11 @@ function parseMenuJsonFile(file) {
   });
 }
 
-// Rimuove da tutte le lingue salvate la traduzione di una voce (o, se itemId
-// è omesso, dell'intera categoria) appena eliminata dal menù italiano —
-// altrimenti resterebbe come dato orfano in `menu.translations`, mai più
-// letto da nessuno (applyTranslation scorre solo le categorie/voci ancora
-// presenti) ma comunque salvato ad ogni "Salva".
+// Removes, from every saved language, the translation of an entry (or, if
+// itemId is omitted, of the whole category) just deleted from the Italian
+// menu — otherwise it would stay as orphaned data in `menu.translations`,
+// never read again by anything (applyTranslation only walks the
+// categories/entries still present) but still saved on every "Salva".
 function pruneTranslations(translations, catId, itemId) {
   if (!translations) return translations;
   let changed = false;
@@ -80,10 +80,10 @@ function pruneTranslations(translations, catId, itemId) {
   return changed ? next : translations;
 }
 
-// Sposta la traduzione di una voce da una categoria all'altra in tutte le
-// lingue salvate, quando la voce stessa viene spostata di categoria — senza
-// questo, pruneTranslations-style logic la scambierebbe per orfana e la
-// perderebbe alla prossima modifica.
+// Moves an entry's translation from one category to another in every saved
+// language, when the entry itself is moved to a different category —
+// without this, pruneTranslations-style logic would mistake it for orphaned
+// data and lose it on the next edit.
 function moveTranslationItem(translations, fromCatId, toCatId, itemId) {
   if (!translations) return translations;
   let changed = false;
@@ -106,11 +106,11 @@ function moveTranslationItem(translations, fromCatId, toCatId, itemId) {
   return changed ? next : translations;
 }
 
-// Rilevamento delle "collisioni" per il drag&drop (dnd-kit): limita i
-// bersagli validi allo stesso tipo dell'elemento trascinato (una categoria
-// può agganciarsi solo a un'altra categoria, una voce solo a un'altra voce o
-// a un contenitore vuoto) — altrimenti trascinare una categoria sopra le voci
-// di un'altra categoria aperta la farebbe agganciare per errore a quelle.
+// Collision detection for drag&drop (dnd-kit): restricts valid drop targets
+// to the same type as the dragged element (a category can only attach to
+// another category, an entry only to another entry or to an empty
+// container) — otherwise dragging a category over the entries of another,
+// open category would make it attach to those by mistake.
 function dragCollisionDetection(args) {
   const activeType = args.active.data.current?.type;
   const droppableContainers = args.droppableContainers.filter((c) => {
@@ -120,10 +120,10 @@ function dragCollisionDetection(args) {
   return closestCenter({ ...args, droppableContainers });
 }
 
-// Wrapper generico che rende un elemento riordinabile via drag&drop: espone
-// ref/stile/listener del maniglione tramite render-prop, così il markup di
-// categorie e voci resta quasi invariato rispetto alla versione coi soli
-// pulsanti su/giù.
+// Generic wrapper that makes an element reorderable via drag&drop: exposes
+// the handle's ref/style/listeners through a render prop, so the markup for
+// categories and entries stays nearly unchanged from the up/down-buttons-only
+// version.
 function SortableSlot({ id, data, children }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, data });
   return children({
@@ -153,9 +153,9 @@ function DragHandle({ t, size, dragHandleProps, label }) {
   );
 }
 
-// Area su cui rilasciare una voce trascinata da un'altra categoria, mostrata
-// solo quando la categoria di destinazione non ha ancora voci proprie
-// (altrimenti non ci sarebbe nessuna voce esistente su cui rilasciarla).
+// Area to drop an entry dragged from another category, shown only when the
+// destination category doesn't have any entries of its own yet (otherwise
+// there would be no existing entry to drop it onto).
 function EmptyCategoryDropZone({ t, catId }) {
   const { setNodeRef, isOver } = useDroppable({ id: `empty-${catId}`, data: { type: "container", catId } });
   return (
@@ -185,8 +185,8 @@ function AdminLogin({ onBack, theme }) {
     setError("");
     setBusy(true);
     try {
-      // onAuthStateChanged nel componente App si accorgerà del login riuscito
-      // e passerà automaticamente alla vista di gestione.
+      // onAuthStateChanged in the App component will notice the successful
+      // login and automatically switch to the management view.
       await signInWithEmailAndPassword(auth, email.trim(), pass);
     } catch (err) {
       const code = err && err.code;
@@ -258,11 +258,10 @@ function AdminLogin({ onBack, theme }) {
   );
 }
 
-// Mostrata dopo il login quando il documento del menù non esiste ancora su
-// Firestore (prima configurazione, o database ripristinato): non c'è più un
-// menù di esempio da caricare al suo posto (rimosso volutamente), quindi
-// l'unico modo di procedere è importare un backup JSON esportato in
-// precedenza da questo stesso pannello.
+// Shown after login when the menu document doesn't exist yet on Firestore
+// (first-time setup, or a restored database): there's no longer a sample
+// menu to load in its place (removed on purpose), so the only way forward
+// is importing a JSON backup previously exported from this same panel.
 function AdminBootstrap({ onImport, onExit, importError }) {
   const t = THEMES.minimal;
   return (
@@ -301,13 +300,13 @@ const STAFF_ROLES = [
   { value: "admin", label: "Amministratore" },
 ];
 
-// Gestione ruoli del personale (docs/comande-camerieri.md, §3). Collection
-// a parte rispetto al menù (staff/{uid}), quindi legge/scrive Firestore per
-// conto proprio invece di passare da menu/setMenu/onSave.
+// Staff role management (docs/comande-camerieri.md, §3). A separate
+// collection from the menu (staff/{uid}), so it reads/writes Firestore on
+// its own instead of going through menu/setMenu/onSave.
 //
-// Gli account Firebase Auth vanno creati a mano dalla console Firebase
-// (Authentication → Aggiungi utente): questa sezione serve solo ad
-// assegnare nome e ruolo a un uid già esistente.
+// Firebase Auth accounts must be created by hand from the Firebase console
+// (Authentication → Aggiungi utente): this section only assigns a name and
+// role to an already-existing uid.
 function StaffSection({ t }) {
   const [staff, setStaff] = useState(null);
   const [uidInput, setUidInput] = useState("");
@@ -445,10 +444,10 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   const t = THEMES[menu.theme] || THEMES.minimal;
   const [openCats, setOpenCats] = useState(() => new Set());
   const [confirmDelete, setConfirmDelete] = useState(null); // {type:'cat'|'item', catId, itemId}
-  const [uploadingItem, setUploadingItem] = useState(null); // id della voce con upload in corso
-  const [uploadErrors, setUploadErrors] = useState({}); // { [itemId]: messaggio }
-  const [lang, setLang] = useState("it"); // lingua correntemente mostrata/editata nell'editor
-  const [newItemId, setNewItemId] = useState(null); // ultima voce aggiunta: mostra l'avviso "traduzione mancante" finché non si passa a un'altra lingua o si chiude a mano
+  const [uploadingItem, setUploadingItem] = useState(null); // id of the entry with an upload in progress
+  const [uploadErrors, setUploadErrors] = useState({}); // { [itemId]: message }
+  const [lang, setLang] = useState("it"); // language currently shown/edited in the editor
+  const [newItemId, setNewItemId] = useState(null); // last entry added: shows the "missing translation" notice until another language is picked or it's closed by hand
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
   const [confirmDeleteTranslation, setConfirmDeleteTranslation] = useState(false);
@@ -456,30 +455,29 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   const [pdfLang, setPdfLang] = useState("it");
   const [pdfImages, setPdfImages] = useState(false);
   const [pdfError, setPdfError] = useState("");
-  // Opzioni di impaginazione/contenuto del PDF, lasciate all'amministratore
-  // che stampa (non c'è un unico layout giusto per tutti: dipende da quante
-  // pagine si vogliono, se serve un menù senza prezzi per un evento, ecc.).
-  // Di default una categoria può continuare su una nuova pagina se non entra
-  // tutta in quella corrente (le voci che entrano restano al loro posto,
-  // niente spazio bianco lasciato apposta). Attivando questa opzione si
-  // torna al comportamento "una categoria non si spezza mai": se non entra
-  // tutta, salta per intero alla pagina dopo, lasciando eventualmente spazio
-  // vuoto in quella precedente.
+  // PDF layout/content options, left to the admin who's printing (there's
+  // no single right layout for everyone: it depends on how many pages are
+  // wanted, whether a price-less menu is needed for an event, etc.).
+  // By default a category can continue on a new page if it doesn't all fit
+  // on the current one (the entries that fit stay in place, no whitespace
+  // left on purpose). Enabling this option reverts to "a category never
+  // splits" behavior: if it doesn't all fit, the whole thing jumps to the
+  // next page, possibly leaving empty space on the previous one.
   const [pdfAvoidCategorySplit, setPdfAvoidCategorySplit] = useState(false);
-  const [pdfColumns, setPdfColumns] = useState(1); // 1 o 2 colonne per le voci di ogni categoria
+  const [pdfColumns, setPdfColumns] = useState(1); // 1 or 2 columns for each category's entries
   const [pdfPaperSize, setPdfPaperSize] = useState("A4");
   const [pdfShowPrices, setPdfShowPrices] = useState(true);
   const [pdfShowTags, setPdfShowTags] = useState(true);
   const [pdfShowSubtitles, setPdfShowSubtitles] = useState(true);
-  const [pdfShowFooter, setPdfShowFooter] = useState(true); // nota a piè di pagina + contatti social
+  const [pdfShowFooter, setPdfShowFooter] = useState(true); // footer note + social contacts
   const [pdfShowDate, setPdfShowDate] = useState(false);
-  const [pdfExcludedCats, setPdfExcludedCats] = useState(() => new Set()); // categorie deselezionate per l'export
-  const [menuCosts, setMenuCosts] = useState(null); // null = ancora in caricamento; {} = nessun costo impostato
+  const [pdfExcludedCats, setPdfExcludedCats] = useState(() => new Set()); // categories deselected for the export
+  const [menuCosts, setMenuCosts] = useState(null); // null = still loading; {} = no cost set
 
-  // Costi dei piatti (src/menuCosts.js): documento separato da menu/data,
-  // mai letto dal menù pubblico (vedi firestore.rules). Si salva subito ad
-  // ogni modifica, non con il pulsante Salva del menù qui sotto — evita di
-  // legare un dato riservato allo stesso ciclo di bozza/annulla del menù.
+  // Dish costs (src/menuCosts.js): a document separate from menu/data,
+  // never read by the public menu (see firestore.rules). Saved immediately
+  // on every edit, not with the menu's Salva button below — this avoids
+  // tying sensitive data to the menu's same draft/undo cycle.
   useEffect(() => {
     const unsubscribe = subscribeMenuCosts(setMenuCosts, (err) => console.error("[admin] Errore lettura costi piatti:", err));
     return unsubscribe;
@@ -518,8 +516,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   const updateField = (field, value) => setMenu((m) => ({ ...m, [field]: value }));
   const updateCoperto = (key, value) => setMenu((m) => ({ ...m, coperto: { ...(m.coperto || {}), [key]: value } }));
 
-  // Aggiorna un link esterno (url o visibilità) dentro un gruppo di link del
-  // menù, es. group="reviewLinks", key="google" oppure group="socialLinks", key="instagram".
+  // Updates an external link (url or visibility) inside a menu link group,
+  // e.g. group="reviewLinks", key="google" or group="socialLinks", key="instagram".
   const updateLink = (group, key, field, value) => {
     setMenu((m) => {
       const current = m[group] || {};
@@ -552,7 +550,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     }));
   };
 
-  // Aggiorna un campo tradotto (lingua correntemente selezionata, mai l'italiano).
+  // Updates a translated field (the currently selected language, never Italian).
   const updateTranslationField = (field, value) => {
     setMenu((m) => ({
       ...m,
@@ -611,9 +609,9 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     }
   };
 
-  // Elimina l'intera bozza di traduzione della lingua corrente (in modo che si
-  // possa rigenerare da capo con "Genera traduzione automatica"). Non tocca
-  // l'italiano: il pulsante è disponibile solo quando lang !== "it".
+  // Deletes the entire translation draft for the current language (so it can
+  // be regenerated from scratch with "Genera traduzione automatica"). Never
+  // touches Italian: the button is only available when lang !== "it".
   const handleDeleteTranslation = () => {
     setMenu((m) => {
       if (!m.translations || !(lang in m.translations)) return m;
@@ -644,12 +642,11 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
       .catch((err) => setImportError(err.message || "File non valido."));
   };
 
-  // Apre in una nuova scheda l'anteprima di stampa (src/PrintMenu.jsx) con
-  // solo le voci visibili ai clienti, nella lingua e con le immagini scelte
-  // qui. Il menù viene passato tramite sessionStorage (condiviso con la
-  // nuova scheda perché aperta via window.open dalla stessa origine) invece
-  // che rileggendolo da Firestore, così riflette anche modifiche non ancora
-  // salvate.
+  // Opens the print preview (src/PrintMenu.jsx) in a new tab with only the
+  // entries visible to customers, in the language and with the images
+  // chosen here. The menu is passed via sessionStorage (shared with the new
+  // tab because it's opened via window.open from the same origin) instead
+  // of rereading it from Firestore, so it also reflects unsaved changes.
   const handleExportPdf = () => {
     const translated = pdfLang === "it" ? menu : applyTranslation(menu, menu.translations?.[pdfLang]);
     const categories = translated.categories
@@ -755,7 +752,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     setConfirmDelete(null);
   };
 
-  // direction: -1 (su) o +1 (giù). Nessun effetto se già al bordo dell'elenco.
+  // direction: -1 (up) or +1 (down). No effect if already at the edge of the list.
   const moveCategory = (catId, direction) => {
     setMenu((m) => {
       const idx = m.categories.findIndex((c) => c.id === catId);
@@ -782,8 +779,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     }));
   };
 
-  // Sposta una voce dalla categoria fromCatId alla fine di toCatId, portando
-  // con sé anche le traduzioni già presenti.
+  // Moves an entry from category fromCatId to the end of toCatId, carrying
+  // along any translations already present.
   const moveItemToCategory = (fromCatId, itemId, toCatId) => {
     if (!toCatId || fromCatId === toCatId) return;
     setMenu((m) => {
@@ -806,11 +803,11 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
     setOpenCats((prev) => new Set(prev).add(toCatId));
   };
 
-  // Riordino via drag&drop (dnd-kit), alternativa ai pulsanti su/giù sopra.
-  // PointerSensor con una piccola soglia di spostamento, così un click
-  // normale sul maniglione non parte come drag.
+  // Reordering via drag&drop (dnd-kit), an alternative to the up/down
+  // buttons above. PointerSensor with a small movement threshold, so a
+  // normal click on the handle doesn't start as a drag.
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  const [activeDrag, setActiveDrag] = useState(null); // { label } dell'elemento trascinato, per il DragOverlay
+  const [activeDrag, setActiveDrag] = useState(null); // { label } of the dragged element, for the DragOverlay
 
   const handleDragStart = (event) => {
     const data = event.active.data.current;
@@ -1130,8 +1127,9 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
 
         <StaffSection t={t} />
 
-        {/* Selettore lingua: sceglie se sotto si edita il testo italiano (sorgente,
-            struttura completa) o la traduzione di una lingua (solo testo). */}
+        {/* Language selector: chooses whether the Italian text (source,
+            full structure) or a language's translation (text only) gets
+            edited below. */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: TYPE.label, color: t.inkSoft }}>
             <Languages size={13} /> Lingua:
@@ -1188,12 +1186,12 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           />
         )}
 
-        {/* Categories (testo sorgente in italiano + struttura: aggiungere/eliminare
-            voci, caricare foto, riordinare la visibilità — tutto ciò che le
-            traduzioni condividono per riferimento tramite id). Riordino sia
-            coi pulsanti su/giù sia trascinando dal maniglione ⠿ — le voci
-            anche tra categorie diverse, purché quella di destinazione sia
-            aperta (altrimenti usa "Sposta in categoria…"). */}
+        {/* Categories (Italian source text + structure: adding/deleting
+            entries, uploading photos, visibility, reordering — everything
+            translations share by reference via id). Reordering both with
+            the up/down buttons and by dragging the ⠿ handle — entries can
+            also move between categories, as long as the destination one is
+            open (otherwise use "Sposta in categoria…"). */}
         {lang === "it" && (
           <DndContext sensors={dndSensors} collisionDetection={dragCollisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <SortableContext items={menu.categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
@@ -1475,9 +1473,8 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           </button>
         )}
 
-        {/* Esportazione/importazione JSON (backup manuale) e versione
-            stampabile in PDF (tramite la finestra di stampa del browser,
-            vedi src/PrintMenu.jsx). */}
+        {/* JSON export/import (manual backup) and the printable PDF
+            version (via the browser's print dialog, see src/PrintMenu.jsx). */}
         <div style={{ ...cardStyle(t), marginTop: 24 }}>
           <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14 }}>
             Esportazione e backup
@@ -1589,11 +1586,11 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   );
 }
 
-// Editor di una lingua di traduzione: stessa struttura dell'editor italiano
-// (identità, categorie, voci), ma solo testo — niente prezzo, foto, visibilità
-// o aggiunta/eliminazione: quelle sono decisioni strutturali che valgono per
-// tutte le lingue insieme e si prendono nella scheda "IT". Se la lingua non ha
-// ancora nessuna traduzione salvata, mostra solo il pulsante di generazione.
+// Editor for one translation language: same structure as the Italian
+// editor (identity, categories, entries), but text only — no price, photo,
+// visibility, or add/delete: those are structural decisions that apply to
+// all languages together and are made in the "IT" tab. If the language has
+// no saved translation yet, only the generation button is shown.
 function TranslationEditor({
   t, menu, lang, translation, generating, generateError, onGenerate,
   confirmDelete, onRequestDelete, onCancelDelete, onConfirmDelete,
@@ -1719,10 +1716,10 @@ function TranslationEditor({
   );
 }
 
-// Piccolo raggruppamento con etichetta per le opzioni di esportazione PDF
-// (Contenuto / Impaginazione / Categorie da includere): stessa idea visiva
-// delle sezioni della pagina, ma più compatta perché sono tutte nella stessa
-// card "Esportazione e backup".
+// Small labeled grouping for the PDF export options (Contenuto /
+// Impaginazione / Categorie da includere): the same visual idea as the
+// page's sections, but more compact since they're all within the same
+// "Esportazione e backup" card.
 function PdfOptionsGroup({ title, t, children }) {
   return (
     <div style={{ marginBottom: 16 }}>
@@ -1736,8 +1733,8 @@ function PdfOptionsGroup({ title, t, children }) {
   );
 }
 
-// Selettore a pillole per una scelta esclusiva tra poche opzioni (colonne,
-// formato carta): stesso stile pill già usato per il selettore di lingua.
+// Pill selector for an exclusive choice among a few options (columns, paper
+// size): the same pill style already used for the language selector.
 function PdfPillGroup({ t, label, options, value, onChange }) {
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, color: t.inkSoft }}>
@@ -1765,9 +1762,9 @@ function PdfPillGroup({ t, label, options, value, onChange }) {
 }
 
 function Toggle({ t, checked, onChange, label }) {
-  // Un solo elemento interattivo (l'input) copre l'intera area del cursore;
-  // gli span decorativi sotto sono puramente visivi (pointer-events: none),
-  // così il click viene gestito una volta sola in modo affidabile.
+  // A single interactive element (the input) covers the whole clickable
+  // area; the decorative spans below are purely visual (pointer-events:
+  // none), so the click is handled exactly once, reliably.
   return (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: TYPE.smallPlus, cursor: "pointer", color: t.inkSoft }}>
       <span className="mdp-toggle" style={{ position: "relative", width: 36, height: 21, flexShrink: 0, display: "inline-block" }}>
@@ -1820,8 +1817,8 @@ function cardStyle(t) {
 }
 
 /* ============================== ADMIN (login + pannello) ============================== */
-// Componente unico esportato: gestisce da sé lo stato di accesso (login/logout)
-// e mostra il modulo di accesso o il pannello di gestione a seconda dei casi.
+// Single exported component: manages its own auth state (login/logout) and
+// shows the login form or the management panel depending on the case.
 export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo }) {
   const [authed, setAuthed] = useState(false);
   const [authReady, setAuthReady] = useState(false);
@@ -1835,9 +1832,9 @@ export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveErro
     return unsubscribe;
   }, []);
 
-  // Si arriva qui dal link "Gestione menù" in fondo alla pagina pubblica:
-  // senza questo reset, il pannello Admin comparirebbe a metà pagina invece
-  // che dall'inizio.
+  // Reached from the "Gestione menù" link at the bottom of the public page:
+  // without this reset, the Admin panel would show up mid-page instead of
+  // from the top.
   React.useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -1854,8 +1851,8 @@ export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveErro
     return <AdminLogin onBack={onExit} theme={menu?.theme} />;
   }
 
-  // Il documento non esiste ancora su Firestore (vedi MenuApp.jsx): niente
-  // menù di esempio da mostrare al suo posto, solo un modo di importarne uno.
+  // The document doesn't exist yet on Firestore (see MenuApp.jsx): no
+  // sample menu to show in its place, only a way to import one.
   if (!menu) {
     return (
       <AdminBootstrap
