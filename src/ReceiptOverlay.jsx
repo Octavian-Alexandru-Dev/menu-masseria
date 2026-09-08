@@ -1,9 +1,9 @@
-// Preconto — riepilogo stampabile (non fiscale, via
-// stampa del browser) sovrapposto al resto della schermata. Componente
-// condiviso: usato dal dettaglio di un tavolo ancora aperto (Waiter.jsx,
-// modificabile) e dalle righe di comande già chiuse — sezione "Chiusi nel
-// turno" e Storico (OrderHistory.jsx, sola lettura: una comanda chiusa non
-// si modifica più, si può solo ristampare).
+// Receipt — printable summary (not a fiscal receipt, via the browser's
+// print) overlaid on the rest of the screen. Shared component: used by the
+// detail view of a still-open table (Waiter.jsx, editable) and by rows of
+// already-closed orders — the "Chiusi nel turno" section and History
+// (OrderHistory.jsx, read-only: a closed order can no longer be edited,
+// only reprinted).
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Printer, Pencil, Check } from "lucide-react";

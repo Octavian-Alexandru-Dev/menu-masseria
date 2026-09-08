@@ -1,7 +1,7 @@
-// Area prenotazioni tavoli — calendario, conferma/rifiuto, avvio comanda
-// (vedi docs/prenotazioni.md). Caricato solo su /prenotazioni o dalla
-// scorciatoia in Sala (lazy, vedi MenuApp.jsx/Waiter.jsx), mai dal sito
-// pubblico. Accessibile a cameriere e amministrazione.
+// Table reservations area — calendar, confirm/reject, starting an order
+// (see docs/prenotazioni.md). Loaded only at /prenotazioni or from the
+// shortcut in Sala (lazy, see MenuApp.jsx/Waiter.jsx), never from the
+// public site. Accessible to waiters and admins.
 import React, { useState, useEffect } from "react";
 import {
   ChevronLeft, ChevronRight, ArrowLeft, LogOut, Plus, Check, X,
@@ -32,8 +32,8 @@ function monthRangeKeys(date) {
   const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
   return { startKey: dateKey(start), endKey: dateKey(end) };
 }
-// Griglia lunedì-first: getDay() è 0=domenica..6=sabato, la convertiamo a
-// 0=lunedì..6=domenica.
+// Monday-first grid: getDay() is 0=Sunday..6=Saturday, we convert it to
+// 0=Monday..6=Sunday.
 function firstWeekdayOffset(date) {
   return (new Date(date.getFullYear(), date.getMonth(), 1).getDay() + 6) % 7;
 }
@@ -66,7 +66,7 @@ function ReservationCalendar({ t, visibleMonth, onChangeMonth, selectedDate, onS
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
         {[0, 1, 2, 3, 4, 5, 6].map((i) => {
-          const d = new Date(2024, 0, 1 + i); // lunedì 1 gennaio 2024, per i soli nomi giorno
+          const d = new Date(2024, 0, 1 + i); // Monday Jan 1st 2024, only used for the weekday names
           return (
             <div key={i} style={{ textAlign: "center", fontSize: TYPE.tiny, color: t.inkSoft, textTransform: "uppercase", padding: "2px 0" }}>
               {WEEKDAY_LABEL.format(d)}
@@ -411,7 +411,7 @@ function ReservationsPanel({ menu, session, onBack }) {
   const [selectedDate, setSelectedDate] = useState(dateKey());
   const [monthReservations, setMonthReservations] = useState([]);
   const [dayReservations, setDayReservations] = useState([]);
-  const [view, setView] = useState({ mode: "day" }); // day | new | edit
+  const [view, setView] = useState({ mode: "day" }); // day | new | edit (view mode)
   const [busyId, setBusyId] = useState(null);
   const [avviaTarget, setAvviaTarget] = useState(null);
   const [avviaBusy, setAvviaBusy] = useState(false);
