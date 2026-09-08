@@ -1,8 +1,8 @@
-// Helper Firestore per le comande dei tavoli (area cameriere/cucina).
-// Vedi docs/comande-camerieri.md per il modello dati completo.
+// Firestore helpers for table orders (waiter/kitchen area).
+// See docs/comande-camerieri.md for the full data model.
 //
-// File caricato SOLO dalle aree cameriere/cucina (Waiter.jsx/Kitchen.jsx,
-// entrambe lazy-load), mai dal sito pubblico.
+// File loaded ONLY by the waiter/kitchen areas (Waiter.jsx/Kitchen.jsx,
+// both lazy-loaded), never by the public site.
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
   orderBy, limit, startAfter, writeBatch,
@@ -23,11 +23,11 @@ export function orderRef(orderId) {
   return doc(db, ORDERS_COLLECTION, orderId);
 }
 
-// Sottoscrizione realtime a tutte le comande aperte (status "open"), usata
-// sia dall'area cameriere sia dall'area cucina. includeMetadataChanges:true
-// è necessario perché l'indicatore "invio in corso" (§7 del documento) si
-// basa sul metadato hasPendingWrites di ciascun documento, che altrimenti
-// non farebbe ripartire il listener quando la scrittura viene confermata.
+// Realtime subscription to all open orders (status "open"), used by both the
+// waiter and kitchen areas. includeMetadataChanges:true is required because
+// the "sending in progress" indicator (§7 of the doc) relies on each
+// document's hasPendingWrites metadata, which otherwise wouldn't re-trigger
+// the listener when the write is confirmed.
 export function subscribeOpenOrders(onChange, onError) {
   const q = query(ordersRef(), where("status", "==", "open"));
   return onSnapshot(q, { includeMetadataChanges: true }, (snap) => {
@@ -40,12 +40,11 @@ export function subscribeOpenOrders(onChange, onError) {
   }, onError);
 }
 
-// Comande chiuse (manualmente o automaticamente) durante il turno di
-// servizio in corso: a differenza dello Storico, restano visibili in sala
-// senza dover cambiare schermata, e in tempo reale — un altro cameriere le
-// vede sparire dai tavoli aperti e comparire qui appena chiuse. closedAt >=
-// inizio turno + orderBy sullo stesso campo: nessun indice composito
-// necessario.
+// Orders closed (manually or automatically) during the current service
+// shift: unlike the history, these stay visible in the dining room without
+// switching screens, and in realtime — another waiter sees them disappear
+// from the open tables and show up here as soon as they're closed. closedAt
+// >= shift start + orderBy on the same field: no composite index needed.
 export function subscribeShiftClosedOrders(sinceDate, onChange, onError) {
   const q = query(
     ordersRef(),
@@ -57,10 +56,10 @@ export function subscribeShiftClosedOrders(sinceDate, onChange, onError) {
   }, onError);
 }
 
-// Il prezzo del coperto (adulti/bambini) viene fissato al momento
-// dell'apertura del tavolo, come snapshot dal menù — se in futuro il prezzo
-// cambia in Gestione menù, le comande già aperte o nello storico restano
-// coerenti con quanto effettivamente applicato quel giorno.
+// The cover charge (adults/children) is fixed when the table is opened, as a
+// snapshot from the menu — if the price changes later in Gestione menù,
+// orders already open or in the history stay consistent with what was
+// actually charged that day.
 export async function openOrder({ tableNumber, tableName, adults, children, notes, waiterUid, waiterName, coperto }) {
   return addDoc(ordersRef(), {
     tableNumber,
@@ -78,23 +77,23 @@ export async function openOrder({ tableNumber, tableName, adults, children, note
   });
 }
 
-// Aggiunge righe a una comanda già aperta. Ogni riga arriva già completa
-// (snapshot di nome/prezzo/categoria, note, quantità — vedi buildOrderLine).
+// Adds lines to an already-open order. Each line arrives already complete
+// (snapshot of name/price/category, notes, quantity — see buildOrderLine).
 export async function sendOrderLines(orderId, lines) {
   return updateDoc(orderRef(orderId), { items: arrayUnion(...lines) });
 }
 
-// La "portata" di una riga non è più una scelta manuale del cameriere (fonte
-// di errori: es. un piatto aggiunto per sbaglio sotto "Bevande"), ma la
-// categoria del menù a cui il piatto appartiene davvero — categoryId/Name
-// sono uno snapshot al momento dell'invio, coerente con nome/prezzo.
+// A line's "course" is no longer a manual choice by the waiter (a source of
+// errors: e.g. a dish added by mistake under "Drinks"), but the menu
+// category the dish actually belongs to — categoryId/Name are a snapshot at
+// send time, consistent with name/price.
 //
-// cost: costo interno del piatto (src/menuCosts.js), fotografato qui per lo
-// stesso motivo del prezzo — se il costo cambia dopo, il margine storico
-// resta corretto. null quando il piatto non ha un costo configurato (o per
-// comande inviate prima che questo campo esistesse) — la Dashboard
-// statistiche esclude quelle righe dal margine invece di trattarle come
-// margine zero, e segnala quanta parte dell'incasso non ha un costo noto.
+// cost: the dish's internal cost (src/menuCosts.js), snapshotted here for
+// the same reason as the price — if the cost changes later, the historical
+// margin stays correct. null when the dish has no configured cost (or for
+// orders sent before this field existed) — the statistics Dashboard excludes
+// those lines from the margin instead of treating them as zero margin, and
+// reports how much of the revenue has no known cost.
 export function buildOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes, cost }) {
   return {
     lineId,
@@ -107,18 +106,18 @@ export function buildOrderLine({ lineId, menuItemId, name, price, quantity, cate
     notes: notes || "",
     cost: cost || null,
     status: "sent",
-    // arrayUnion non accetta serverTimestamp() per i singoli elementi: uso
-    // un timestamp client, sufficiente per l'ordine di visualizzazione.
+    // arrayUnion doesn't accept serverTimestamp() for individual elements: we
+    // use a client timestamp, good enough for display ordering.
     sentAt: Timestamp.now(),
     outAt: null,
   };
 }
 
-// La cucina marca come "uscita" un intero gruppo (una categoria del menù,
-// es. tutti gli antipasti del tavolo) con un solo tocco (§5 punto 3 del
-// documento). Gli array di Firestore non supportano l'aggiornamento di un
-// singolo elemento, quindi riscriviamo l'intero array `items` con lo stato
-// aggiornato solo sulle righe della categoria scelta che non sono già uscite.
+// The kitchen marks a whole group (a menu category, e.g. all starters for
+// the table) as "sent out" with a single tap (§5 point 3 of the doc).
+// Firestore arrays don't support updating a single element, so we rewrite
+// the entire `items` array with the updated status only on the lines of the
+// chosen category that aren't already out.
 export async function markCategoryOut(orderId, currentItems, categoryId) {
   const outAt = Timestamp.now();
   const updated = currentItems.map((line) =>
@@ -127,14 +126,14 @@ export async function markCategoryOut(orderId, currentItems, categoryId) {
   return updateDoc(orderRef(orderId), { items: updated });
 }
 
-// Modifica i coperti di un tavolo già aperto (persone arrivate/andate via
-// dopo l'apertura — non solo al momento della creazione).
+// Changes the covers for an already-open table (people arriving/leaving
+// after opening — not only at creation time).
 export async function updateCovers(orderId, { adults, children }) {
   return updateDoc(orderRef(orderId), { covers: { adults: adults || 0, children: children || 0 } });
 }
 
-// Le comande chiuse non scadono più: restano lo storico permanente su cui si
-// basa la Dashboard statistiche (src/Stats.jsx, src/statsData.js).
+// Closed orders no longer expire: they remain the permanent history the
+// statistics Dashboard is built on (src/Stats.jsx, src/statsData.js).
 export async function closeOrder(orderId) {
   return updateDoc(orderRef(orderId), {
     status: "closed",
@@ -143,17 +142,17 @@ export async function closeOrder(orderId) {
   });
 }
 
-// Rimuove una riga già inviata (correzione di un errore di battitura, non
-// più recuperabile con lo "storno" — usata dal flusso del preconto).
+// Removes an already-sent line (fixing a typo, no longer recoverable via a
+// "void" — used by the receipt flow).
 export async function removeOrderLine(orderId, currentItems, lineId) {
   const updated = currentItems.filter((line) => line.lineId !== lineId);
   return updateDoc(orderRef(orderId), { items: updated });
 }
 
-// Preconto (non fiscale — vedi docs, §9): il cameriere genera un riepilogo
-// stampabile via browser, può correggere la comanda (righe perse, errori) e
-// poi confermare uno stato "finale". Tutto salvato sulla comanda stessa,
-// sincronizzato in tempo reale su ogni client.
+// Receipt (not a fiscal receipt — see docs, §9): the waiter generates a
+// printable summary via the browser, can correct the order (missing lines,
+// mistakes) and then confirm a "final" state. Everything is saved on the
+// order itself, synced in realtime to every client.
 export async function markReceiptPrinted(orderId) {
   return updateDoc(orderRef(orderId), { "receipt.printedAt": serverTimestamp() });
 }
@@ -166,11 +165,11 @@ export async function confirmFinalReceipt(orderId, order) {
   });
 }
 
-// Chiusura automatica "pigra" lato client (§6.2 del documento): ogni volta
-// che l'area cameriere o cucina carica l'elenco delle comande aperte,
-// chiude quelle rimaste aperte da più di 24 ore. Nessun job schedulato,
-// niente piano Blaze — converge al risultato corretto al successivo
-// utilizzo dell'app.
+// "Lazy" automatic closing on the client side (§6.2 of the doc): every time
+// the waiter or kitchen area loads the list of open orders, it closes any
+// that have been open for more than 24 hours. No scheduled job, no Blaze
+// plan required — it converges to the correct result the next time the app
+// is used.
 export async function autoCloseStaleOrders(openOrders) {
   const now = Date.now();
   const stale = openOrders.filter((o) => {
@@ -205,16 +204,16 @@ export function orderTotalCents(order) {
   return itemsTotalCents(order) + copertoTotalCents(order);
 }
 
-/* ============================== STORICO ============================== */
-// Le comande chiuse non vengono più cancellate: restano per sempre come
-// storico, base dati della Dashboard statistiche. Il campo `expireAt` resta
-// nello schema (sempre null per le nuove comande) solo per compatibilità con
-// documenti scritti prima di questo cambiamento.
-// Comande chiuse (manualmente o automaticamente), più recenti prima. Usa
-// closedAt sia per il filtro (!= null → solo le chiuse) sia per l'ordinamento:
-// stesso campo su entrambi, quindi Firestore non richiede un indice composito
-// dedicato. Caricamento a pagine (non realtime: uno storico non ha bisogno
-// di aggiornarsi da solo) con "carica altri" tramite cursore su closedAt.
+/* ============================== HISTORY ============================== */
+// Closed orders are no longer deleted: they stay forever as the history that
+// backs the statistics Dashboard. The `expireAt` field stays in the schema
+// (always null for new orders) only for compatibility with documents
+// written before this change.
+// Closed orders (manually or automatically), most recent first. Uses
+// closedAt both for the filter (!= null → only closed ones) and the
+// ordering: same field on both, so Firestore doesn't require a dedicated
+// composite index. Paginated loading (not realtime: a history doesn't need
+// to update itself) with "load more" via a cursor on closedAt.
 export const HISTORY_PAGE_SIZE = 20;
 
 export async function loadClosedOrdersPage(afterClosedAt) {
@@ -228,19 +227,18 @@ export async function loadClosedOrdersPage(afterClosedAt) {
   return { orders, lastClosedAt, hasMore: orders.length === HISTORY_PAGE_SIZE };
 }
 
-// Elimina una singola comanda dallo storico (correzione mirata di una
-// comanda creata per errore). Riservato agli admin lato interfaccia — vedi
+// Deletes a single order from the history (targeted correction of an order
+// created by mistake). Reserved for admins on the UI side — see
 // OrderHistory.jsx.
 export async function deleteOrder(orderId) {
   return deleteDoc(orderRef(orderId));
 }
 
-// Svuota per intero lo storico (es. dopo prove/dimostrazioni fatte con
-// l'app, quando le comande di test non sono più distinguibili da quelle
-// vere). Le comande chiuse non sono altrimenti mai cancellate (vedi nota
-// sopra), quindi questa è un'operazione volutamente distruttiva e
-// irreversibile, riservata agli admin lato interfaccia. writeBatch è
-// limitato a 500 scritture: si procede a blocchi.
+// Wipes the entire history (e.g. after trying out/demoing the app, when test
+// orders are no longer distinguishable from real ones). Closed orders are
+// otherwise never deleted (see note above), so this is a deliberately
+// destructive and irreversible operation, reserved for admins on the UI
+// side. writeBatch is limited to 500 writes: we proceed in chunks.
 const DELETE_BATCH_SIZE = 400;
 
 export async function deleteAllClosedOrders() {

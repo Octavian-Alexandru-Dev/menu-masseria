@@ -1,7 +1,7 @@
-// Storico delle comande chiuse — condiviso tra area cameriere e area cucina
-// (entrambe devono poter risalire alle comande dei giorni precedenti, non
-// solo l'ultimo cameriere che le ha servite). Caricamento a pagine, non
-// realtime: vedi loadClosedOrdersPage in orders.js.
+// History of closed orders — shared between the waiter and kitchen areas
+// (both need to be able to look back at previous days' orders, not just
+// whoever last served them). Paginated loading, not realtime: see
+// loadClosedOrdersPage in orders.js.
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, Clock, CheckCircle2, Timer, Printer, Trash2 } from "lucide-react";
 import { ital, TYPE, formatCentsAsPrice, tableIdentity } from "./shared";
@@ -116,7 +116,7 @@ export function OrderRow({ t, order, expanded, onToggle, onPrint, onDelete, conf
 }
 
 export default function OrderHistory({ t, menu, onBack, isAdmin }) {
-  const [pages, setPages] = useState([]); // array di array di ordini (una per pagina caricata)
+  const [pages, setPages] = useState([]); // array of order arrays (one per loaded page)
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -143,9 +143,9 @@ export default function OrderHistory({ t, menu, onBack, isAdmin }) {
     }
   }, []);
 
-  // Guardia contro il doppio richiamo dell'effetto in React.StrictMode (solo
-  // sviluppo): senza, la prima pagina verrebbe caricata due volte, con righe
-  // duplicate (e chiavi React duplicate).
+  // Guard against the effect firing twice in React.StrictMode (dev only):
+  // without it, the first page would be loaded twice, with duplicate rows
+  // (and duplicate React keys).
   const didLoadRef = useRef(false);
   useEffect(() => {
     if (didLoadRef.current) return;
@@ -194,8 +194,8 @@ export default function OrderHistory({ t, menu, onBack, isAdmin }) {
 
   const allOrders = pages.flat();
 
-  // Raggruppa per giorno, in ordine (i risultati arrivano già dal più
-  // recente al più vecchio, quindi i gruppi restano contigui).
+  // Group by day, in order (results already come back newest to oldest, so
+  // the groups stay contiguous).
   const groups = [];
   for (const order of allOrders) {
     const label = formatDayLabel(order.closedAt);

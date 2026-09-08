@@ -1,8 +1,8 @@
-// Configurazione Firebase — SOLO Firestore (il database del menù).
-// Questo file NON importa "firebase/auth": viene incluso in ogni visita
-// del sito pubblico, quindi lo teniamo il più leggero possibile.
-// L'accesso admin (firebase/auth, molto più pesante) sta in firebase-auth.js
-// e viene scaricato solo quando qualcuno clicca "Gestione menù".
+// Firebase configuration — Firestore ONLY (the menu database).
+// This file does NOT import "firebase/auth": it is included on every visit
+// to the public site, so we keep it as light as possible.
+// Admin access (firebase/auth, much heavier) lives in firebase-auth.js
+// and is only downloaded when someone clicks "Gestione menù".
 import { initializeApp } from "firebase/app";
 import {
   initializeFirestore,
@@ -11,12 +11,12 @@ import {
   persistentMultipleTabManager,
 } from "firebase/firestore";
 
-// Modalità emulatore locale (Docker, vedi docker-compose.emulator.yml): usata
-// da `npm run dev:local` e dalla suite Playwright, per non toccare mai il
-// progetto Firebase reale e per poter eseguire l'app senza credenziali vere
-// (utile anche per far provare il progetto ad altri senza un proprio account
-// Firebase). I valori VITE_FIREBASE_* sono ignorati dall'emulatore: bastano
-// placeholder (vedi .env.example).
+// Local emulator mode (Docker, see docker-compose.emulator.yml): used by
+// `npm run dev:local` and the Playwright suite, so we never touch the real
+// Firebase project and can run the app without real credentials (also
+// useful for letting others try the project without their own Firebase
+// account). The VITE_FIREBASE_* values are ignored by the emulator: any
+// placeholder works (see .env.example).
 const USE_EMULATOR = import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true";
 
 const firebaseConfig = {
@@ -30,18 +30,18 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 
-// Cache locale persistente (IndexedDB): il menù, una volta scaricato, resta
-// salvato sul telefono del cliente. Alle visite successive si vede subito,
-// anche con connessione lenta o assente, mentre in sottofondo si controlla
-// se ci sono aggiornamenti più recenti da scaricare.
+// Persistent local cache (IndexedDB): once downloaded, the menu stays saved
+// on the customer's phone. On later visits it shows up instantly, even on a
+// slow or absent connection, while checking for newer updates in the
+// background.
 //
-// Usiamo persistentMultipleTabManager (non persistentSingleTabManager): con la
-// versione "single tab", se il sito è aperto in più schede/pagine dello
-// stesso browser contemporaneamente (es. "Menù" e "Gestione menù" aperte
-// insieme, o due schede durante un test), la seconda scheda non riesce ad
-// attivare la cache e le operazioni di salvataggio restano bloccate in
-// attesa per sempre, senza mostrare alcun errore. La versione "multi tab"
-// coordina correttamente le schede tra loro ed evita questo blocco.
+// We use persistentMultipleTabManager (not persistentSingleTabManager):
+// with the "single tab" version, if the site is open in more than one
+// tab/page of the same browser at once (e.g. "Menù" and "Gestione menù"
+// open together, or two tabs during a test), the second tab fails to
+// acquire the cache and save operations stay pending forever, with no
+// visible error. The "multi tab" version correctly coordinates the tabs
+// with each other and avoids this deadlock.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });

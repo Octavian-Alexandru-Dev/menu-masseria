@@ -1,8 +1,7 @@
-// Pezzi condivisi tra area cameriere (Waiter.jsx) e area cucina
-// (Kitchen.jsx): login con Firebase Auth + verifica del ruolo in
-// staff/{uid} (vedi docs/comande-camerieri.md, §3). File caricato solo da
-// queste due aree (entrambe lazy-load in MenuApp.jsx), mai dal sito
-// pubblico.
+// Pieces shared between the waiter area (Waiter.jsx) and the kitchen area
+// (Kitchen.jsx): login with Firebase Auth + role check in staff/{uid} (see
+// docs/comande-camerieri.md, §3). File loaded only by these two areas (both
+// lazy-loaded in MenuApp.jsx), never by the public site.
 import React, { useState, useEffect } from "react";
 import { Lock, AlertCircle, LogOut } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -10,13 +9,13 @@ import { db } from "./firebase-db";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, FALLBACK_STYLE } from "./shared";
 
-// Stato della sessione di un membro dello staff:
-//  - "loading": non sappiamo ancora se è autenticato / non conosciamo ancora il suo ruolo
-//  - "signed-out": nessun utente autenticato
-//  - "no-role": autenticato, ma senza un documento staff/{uid} con un ruolo valido
-//  - "ready": autenticato e con un ruolo assegnato
+// A staff member's session state:
+//  - "loading": don't know yet whether they're authenticated / don't know their role yet
+//  - "signed-out": no authenticated user
+//  - "no-role": authenticated, but no staff/{uid} document with a valid role
+//  - "ready": authenticated and with an assigned role
 export function useStaffSession() {
-  const [fbUser, setFbUser] = useState(undefined); // undefined = non ancora noto
+  const [fbUser, setFbUser] = useState(undefined); // undefined = not known yet
   const [staffDoc, setStaffDoc] = useState(undefined);
 
   useEffect(() => onAuthStateChanged(auth, (u) => setFbUser(u || null)), []);

@@ -1,17 +1,17 @@
-// Upload immagini piatti su Cloudinary (upload "unsigned": il browser carica
-// direttamente sul bucket Cloudinary, senza passare da un server nostro).
-// Richiede due variabili d'ambiente, prese dalla console Cloudinary:
-//   VITE_CLOUDINARY_CLOUD_NAME   → nome del cloud (in alto a destra nel Dashboard)
-//   VITE_CLOUDINARY_UPLOAD_PRESET → nome di un upload preset "Unsigned"
-// Vedi GUIDA.md per i passaggi di configurazione.
+// Dish photo upload to Cloudinary ("unsigned" upload: the browser uploads
+// directly to the Cloudinary bucket, without going through a server of ours).
+// Requires two environment variables, taken from the Cloudinary console:
+//   VITE_CLOUDINARY_CLOUD_NAME   → cloud name (top right of the Dashboard)
+//   VITE_CLOUDINARY_UPLOAD_PRESET → name of an "Unsigned" upload preset
+// See GUIDA.md for the setup steps.
 
 const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
 const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
-const MAX_FILE_BYTES = 8 * 1024 * 1024; // 8 MB, margine ampio per foto da telefono
+const MAX_FILE_BYTES = 8 * 1024 * 1024; // 8 MB, generous margin for phone photos
 
-// Carica un file immagine su Cloudinary e restituisce il suo URL pubblico
-// (già ottimizzato in fase di consegna tramite optimizedImageUrl, non in upload).
+// Uploads an image file to Cloudinary and returns its public URL (already
+// optimized at delivery time via optimizedImageUrl, not at upload time).
 export async function uploadMenuImage(file) {
   if (!CLOUD_NAME || !UPLOAD_PRESET) {
     throw new Error("Upload immagini non configurato (mancano le variabili Cloudinary in .env).");
@@ -46,10 +46,10 @@ export async function uploadMenuImage(file) {
   return data.secure_url;
 }
 
-// Costruisce un URL di consegna ottimizzato (formato moderno + compressione
-// automatica + ridimensionamento) a partire da un secure_url di Cloudinary,
-// inserendo i parametri di trasformazione dopo "/upload/". Se l'URL non è di
-// Cloudinary (es. incollato a mano da un altro sito), viene restituito invariato.
+// Builds an optimized delivery URL (modern format + automatic compression +
+// resizing) from a Cloudinary secure_url, inserting the transform
+// parameters after "/upload/". If the URL isn't a Cloudinary one (e.g.
+// pasted by hand from another site), it is returned unchanged.
 export function optimizedImageUrl(url, { width } = {}) {
   if (!url || !url.includes("/upload/")) return url;
   const transforms = ["f_auto", "q_auto"];

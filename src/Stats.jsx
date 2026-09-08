@@ -1,8 +1,7 @@
-// Dashboard statistiche vendite — area riservata solo admin (vedi
-// StaffHome.jsx: canAdmin gate). Raggiunta solo dalla Dashboard interna,
-// nessuna URL diretta (a differenza di Waiter/Kitchen/Reservations): non
-// gestisce da sé login o ruolo, si affida al gate di StaffHome (stesso
-// principio di Admin.jsx).
+// Sales statistics Dashboard — admin-only restricted area (see StaffHome.jsx:
+// canAdmin gate). Reached only from the internal Dashboard, no direct URL
+// (unlike Waiter/Kitchen/Reservations): it doesn't manage login or role
+// itself, it relies on StaffHome's gate (same principle as Admin.jsx).
 import React, { useState, useEffect, useMemo } from "react";
 import { BarChart3, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -12,7 +11,7 @@ import {
   fetchClosedOrdersInRange, aggregateOrders, compareAggregates,
 } from "./statsData";
 
-/* ============================== STILE (locale, come Reservations.jsx) ============================== */
+/* ============================== STYLE (local, like Reservations.jsx) ============================== */
 
 function cardStyle(t) {
   return { background: t.card, border: `1px solid ${t.line}`, borderRadius: 10, padding: 20 };
@@ -35,7 +34,7 @@ function EmptyNote({ t, text }) {
   return <div style={{ textAlign: "center", color: t.inkSoft, fontSize: TYPE.body, padding: "24px 0" }}>{text}</div>;
 }
 
-/* ============================== DATE HELPERS (solo UI: input type=date) ============================== */
+/* ============================== DATE HELPERS (UI only: input type=date) ============================== */
 
 function toInputDateValue(d) {
   const y = d.getFullYear();
@@ -49,7 +48,7 @@ function parseInputDateValue(value) {
   return new Date(y, m - 1, d);
 }
 
-/* ============================== SELETTORE PERIODO ============================== */
+/* ============================== PERIOD PICKER ============================== */
 
 function PeriodPicker({ t, preset, onPresetChange, customStart, customEnd, onCustomChange }) {
   return (
@@ -101,10 +100,10 @@ function AutoClosedToggle({ t, checked, onChange, autoClosedCount }) {
 
 /* ============================== KPI ============================== */
 
-// Colori di stato già usati altrove nell'app (OrderRow.jsx: t.secondary per
-// stati positivi/confermati, t.accent2 per l'avviso "chiusura automatica") —
-// riusati qui per lo stesso significato, sempre affiancati da un'icona,
-// mai solo colore.
+// Status colors already used elsewhere in the app (OrderRow.jsx: t.secondary
+// for positive/confirmed states, t.accent2 for the "auto-closed" warning) —
+// reused here for the same meaning, always paired with an icon, never color
+// alone.
 function DeltaBadge({ t, deltaInfo, positiveIsGood = true }) {
   if (!deltaInfo) return null;
   const isFlat = deltaInfo.delta === 0;
@@ -112,9 +111,9 @@ function DeltaBadge({ t, deltaInfo, positiveIsGood = true }) {
   const good = isFlat ? null : isUp === positiveIsGood;
   const color = isFlat ? t.inkSoft : good ? t.secondary : t.accent2;
   const Icon = isFlat ? Minus : isUp ? ArrowUpRight : ArrowDownRight;
-  // deltaPct è Infinity quando il periodo di confronto parte da zero (una
-  // percentuale finita non avrebbe senso) — mostrato come "nuovo" invece di
-  // un'assurda "+Infinity%".
+  // deltaPct is Infinity when the comparison period starts at zero (a finite
+  // percentage wouldn't make sense) — shown as "new" instead of an absurd
+  // "+Infinity%".
   const label = isFlat ? "invariato" : deltaInfo.deltaPct === Infinity ? "nuovo" : `${isUp ? "+" : "-"}${Math.round(Math.abs(deltaInfo.deltaPct) * 100)}%`;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: TYPE.tinyPlus, fontWeight: 600, color }}>
@@ -135,9 +134,9 @@ function KpiCard({ t, id, label, value, note, deltaInfo }) {
 }
 
 function KpiCardsRow({ t, agg, comparisonKpi }) {
-  // marginCoverage è 0 o null quando nessun piatto venduto ha un costo
-  // impostato in Gestione menù: mostrare "€ 0,00" sarebbe fuorviante (letto
-  // come "nessun guadagno" invece di "dato mancante").
+  // marginCoverage is 0 or null when no dish sold has a cost set in Gestione
+  // menù: showing "€ 0,00" would be misleading (read as "no profit" instead
+  // of "data missing").
   const hasMarginData = !!agg.marginCoverage;
   const marginValue = hasMarginData ? `€ ${formatCentsAsPrice(agg.marginCents)}` : "—";
   const marginNote = !hasMarginData
@@ -158,12 +157,12 @@ function KpiCardsRow({ t, agg, comparisonKpi }) {
   );
 }
 
-/* ============================== GRAFICI A BARRE (magnitudine, tinta unica) ==============================
-   Forma scelta seguendo la skill dataviz: classifiche/ripartizioni per
-   grandezza -> barre a tinta unica (t.primary), mai un colore per categoria
-   (l'identità è già portata dall'etichetta sull'asse, non serve una palette
-   categoriale). Assi/griglia/tooltip sempre sui token del tema, non i
-   default di Recharts, così restano leggibili anche sul tema scuro "ciro". */
+/* ============================== BAR CHARTS (magnitude, single tint) ==============================
+   Shape chosen following the dataviz skill: rankings/breakdowns by magnitude
+   -> single-tint bars (t.primary), never one color per category (identity
+   is already carried by the axis label, no need for a categorical palette).
+   Axes/grid/tooltip always on the theme's tokens, not Recharts' defaults, so
+   they stay legible on the dark "ciro" theme too. */
 
 function HorizontalBarChart({ t, data, valueKey, valueFormatter }) {
   return (
@@ -203,7 +202,7 @@ function VerticalBarChart({ t, data, xKey, valueKey, valueFormatter }) {
   );
 }
 
-/* ============================== SEZIONI ============================== */
+/* ============================== SECTIONS ============================== */
 
 function TopDishesSection({ t, topDishesByQty, topDishesByRevenue, topDishesByMargin }) {
   const [mode, setMode] = useState("qty");
@@ -232,8 +231,8 @@ function TopDishesSection({ t, topDishesByQty, topDishesByRevenue, topDishesByMa
   );
 }
 
-// Solo quando è attivo il confronto tra periodi (comparison non nullo).
-// dishDeltas è già ordinato per qtyDelta crescente da compareAggregates.
+// Only shown when period comparison is enabled (comparison not null).
+// dishDeltas already comes sorted by ascending qtyDelta from compareAggregates.
 function DecliningDishesTable({ t, dishDeltas }) {
   const declining = dishDeltas.filter((d) => d.qtyDelta < 0).slice(0, 10);
   if (declining.length === 0) return null;
@@ -322,9 +321,10 @@ export default function Stats({ menu }) {
 
   const range = useMemo(() => resolvePresetRange(preset, { customStart, customEnd }), [preset, customStart, customEnd]);
 
-  // Periodo A di default = periodo precedente equivalente, solo alla prima
-  // attivazione del confronto — resta poi liberamente modificabile (range
-  // arbitrario, non ricalcolato automaticamente ad ogni cambio di Periodo B).
+  // Periodo A defaults to the equivalent previous period, only the first
+  // time comparison is enabled — after that it stays freely editable
+  // (arbitrary range, not automatically recalculated on every change to
+  // Periodo B).
   useEffect(() => {
     if (compareEnabled && !compareStart && !compareEnd) {
       const prev = previousEquivalentRange(range.start, range.end);
@@ -375,8 +375,8 @@ export default function Stats({ menu }) {
     return () => { cancelled = true; };
   }, [compareRange]);
 
-  // Il toggle "includi auto-chiuse" ricalcola solo queste useMemo: nessuna
-  // nuova richiesta a Firestore (rawOrders/rawOrdersCompare non cambiano).
+  // The "include auto-closed" toggle only recomputes these useMemo: no new
+  // Firestore request (rawOrders/rawOrdersCompare don't change).
   const agg = useMemo(() => aggregateOrders(rawOrders, { includeAutoClosed }), [rawOrders, includeAutoClosed]);
   const aggCompare = useMemo(
     () => (compareRange ? aggregateOrders(rawOrdersCompare, { includeAutoClosed }) : null),

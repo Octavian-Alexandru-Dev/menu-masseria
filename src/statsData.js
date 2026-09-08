@@ -1,11 +1,11 @@
-// Livello dati della Dashboard statistiche (src/Stats.jsx): lettura delle
-// comande chiuse da Firestore + tutta l'aggregazione (pura, senza I/O).
-// Stessa separazione dati/UI di orders.js e reservationsData.js.
+// Data layer for the statistics Dashboard (src/Stats.jsx): reads closed
+// orders from Firestore + all the aggregation (pure, no I/O). Same
+// data/UI separation as orders.js and reservationsData.js.
 import { query, where, orderBy, limit, startAfter, getDocs, Timestamp } from "firebase/firestore";
 import { ordersRef, orderTotalCents } from "./orders";
 import { parsePriceToCents } from "./shared";
 
-/* ============================ RANGE TEMPORALI ============================ */
+/* ============================ TIME RANGES ============================ */
 
 export const PRESETS = ["today", "yesterday", "last7days", "lastMonth", "currentMonth", "currentYear", "custom"];
 
@@ -31,9 +31,9 @@ function endOfDay(d) {
   return r;
 }
 
-// Confini sempre in ora locale (mai UTC — stesso principio di dateKey() in
-// reservationsData.js): un turno serale che passa la mezzanotte UTC ma non
-// quella locale non deve finire nel giorno sbagliato.
+// Boundaries always in local time (never UTC — same principle as dateKey()
+// in reservationsData.js): an evening shift crossing UTC midnight but not
+// local midnight must not end up in the wrong day.
 export function resolvePresetRange(preset, { customStart, customEnd } = {}) {
   const now = new Date();
   switch (preset) {
@@ -68,8 +68,8 @@ export function resolvePresetRange(preset, { customStart, customEnd } = {}) {
   }
 }
 
-// Range immediatamente precedente, stessa durata (in giorni) del range dato
-// — default di "Periodo A" quando si attiva il confronto tra periodi.
+// The immediately preceding range, same duration (in days) as the given
+// range — default for "Periodo A" when period comparison is enabled.
 export function previousEquivalentRange(start, end) {
   const durationMs = end.getTime() - start.getTime();
   const prevEnd = new Date(start.getTime() - 1);
@@ -77,17 +77,17 @@ export function previousEquivalentRange(start, end) {
   return { start: startOfDay(prevStart), end: endOfDay(prevEnd) };
 }
 
-/* ============================== LETTURA DATI ============================== */
+/* ============================== DATA READS ============================== */
 
-// Comande chiuse o auto-chiuse con closedAt in [start, end] (estremi
-// inclusi). Un ordine "open" ha closedAt: null, che Firestore non fa mai
-// combaciare con un filtro >=/<= su Timestamp, quindi non serve un filtro
-// status esplicito. closedAt >= / closedAt <= / orderBy(closedAt) restano
-// sullo STESSO campo → nessun indice composito necessario (stesso principio
-// di subscribeShiftClosedOrders/loadClosedOrdersPage in orders.js).
-// Paginazione interna di sicurezza per range molto ampi: inutile al volume
-// attuale (poche decine di comande/giorno) ma evita di dover riscrivere la
-// funzione se il volume crescesse molto.
+// Orders closed or auto-closed with closedAt in [start, end] (inclusive). An
+// "open" order has closedAt: null, which Firestore never matches against a
+// >=/<= filter on a Timestamp, so no explicit status filter is needed.
+// closedAt >= / closedAt <= / orderBy(closedAt) all stay on the SAME field →
+// no composite index needed (same principle as
+// subscribeShiftClosedOrders/loadClosedOrdersPage in orders.js).
+// Internal safety pagination for very wide ranges: unnecessary at current
+// volume (a few dozen orders/day) but avoids having to rewrite the function
+// if volume grows a lot.
 const RANGE_PAGE_SIZE = 500;
 
 export async function fetchClosedOrdersInRange(start, end) {
@@ -112,14 +112,14 @@ export async function fetchClosedOrdersInRange(start, end) {
   return all;
 }
 
-/* ============================== AGGREGAZIONE ============================== */
+/* ============================== AGGREGATION ============================== */
 
 const TOP_N = 10;
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
-// Chiave di raggruppamento piatto: preferisce menuItemId (stabile anche se il
-// piatto viene rinominato), altrimenti il nome come snapshot — non interroga
-// mai il menù corrente, coerente con lo snapshot già salvato su ogni riga.
+// Dish grouping key: prefers menuItemId (stable even if the dish is
+// renamed), otherwise the name as a snapshot — never queries the current
+// menu, consistent with the snapshot already saved on each line.
 function dishKey(line) {
   return line.menuItemId ? `id:${line.menuItemId}` : `name:${line.name}`;
 }
@@ -129,11 +129,11 @@ function emptyDishStat(line) {
 }
 
 function weekdayIndexMonFirst(date) {
-  return (date.getDay() + 6) % 7; // getDay(): 0=domenica → 0=lunedì
+  return (date.getDay() + 6) % 7; // getDay(): 0=Sunday → 0=Monday
 }
 
-// orders: array grezzo da fetchClosedOrdersInRange. includeAutoClosed=false
-// esclude gli status "auto_closed" — ricalcolo puro, nessuna nuova query.
+// orders: raw array from fetchClosedOrdersInRange. includeAutoClosed=false
+// excludes "auto_closed" statuses — pure recomputation, no new query.
 export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
   const autoClosedCount = orders.filter((o) => o.status === "auto_closed").length;
   const included = includeAutoClosed ? orders : orders.filter((o) => o.status !== "auto_closed");
@@ -141,13 +141,13 @@ export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
   let revenueCents = 0;
   let coversCount = 0;
   let dishesCount = 0;
-  // Margine: solo sulle righe con un costo fotografato (line.cost, vedi
-  // buildOrderLine in orders.js) — mai sul coperto, che non ha un concetto
-  // di costo del piatto. itemsRevenueCents (tutte le righe) vs
-  // marginRevenueCents (solo quelle con costo noto) danno la % di copertura:
-  // se un piatto non ha un costo impostato in Gestione menù, o la comanda è
-  // precedente all'introduzione di questo campo, quella riga viene esclusa
-  // dal margine invece di essere trattata come margine zero.
+  // Margin: only on lines with a snapshotted cost (line.cost, see
+  // buildOrderLine in orders.js) — never on the cover charge, which has no
+  // notion of dish cost. itemsRevenueCents (all lines) vs
+  // marginRevenueCents (only those with a known cost) give the coverage %:
+  // if a dish has no cost set in Gestione menù, or the order predates this
+  // field, that line is excluded from the margin instead of being treated
+  // as zero margin.
   let itemsRevenueCents = 0;
   let marginCents = 0;
   let marginRevenueCents = 0;
@@ -188,9 +188,9 @@ export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
       const dishEntry = dishByKey.get(key);
       dishEntry.qty += line.quantity;
       dishEntry.revenueCents += lineRevenue;
-      // Nome/categoria aggiornati all'occorrenza più recente vista (per riga
-      // più recente, coerente con lo snapshot al momento dell'ordine se il
-      // piatto è stato rinominato durante il range).
+      // Name/category updated to the most recent occurrence seen (most
+      // recent line, consistent with the snapshot at order time if the
+      // dish was renamed during the range).
       dishEntry.name = line.name;
       dishEntry.categoryName = line.categoryName || "Altro";
 
@@ -214,9 +214,9 @@ export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
   const dishStats = Array.from(dishByKey.values());
   const topDishesByQty = [...dishStats].sort((a, b) => b.qty - a.qty).slice(0, TOP_N);
   const topDishesByRevenue = [...dishStats].sort((a, b) => b.revenueCents - a.revenueCents).slice(0, TOP_N);
-  // Esclude i piatti senza alcun costo noto: mostrarli a margine 0 sarebbe
-  // fuorviante (sembrerebbero i piatti meno profittevoli, mentre in realtà
-  // manca solo il dato in Gestione menù).
+  // Excludes dishes with no known cost at all: showing them at zero margin
+  // would be misleading (they'd look like the least profitable dishes, when
+  // really the data is just missing in Gestione menù).
   const topDishesByMargin = dishStats.filter((d) => d.qtyWithKnownCost > 0).sort((a, b) => b.marginCents - a.marginCents).slice(0, TOP_N);
   const categoryBreakdown = Array.from(categoryByName.values()).sort((a, b) => b.revenueCents - a.revenueCents);
   const perWaiter = Array.from(waiterByName.values())
@@ -243,24 +243,24 @@ export function aggregateOrders(orders, { includeAutoClosed = true } = {}) {
     itemsRevenueCents,
     marginCents,
     marginRevenueCents,
-    // Quota di incasso piatti/bevande coperta da un costo noto (0..1, null se
-    // non ci sono piatti nel periodo) — usata in UI per segnalare quando il
-    // margine è calcolato solo su una parte dell'incasso.
+    // Share of dish/drink revenue covered by a known cost (0..1, null if
+    // there are no dishes in the period) — used in the UI to flag when the
+    // margin is only computed on part of the revenue.
     marginCoverage: itemsRevenueCents > 0 ? marginRevenueCents / itemsRevenueCents : null,
   };
 }
 
 function delta(a, b) {
   const d = b - a;
-  // a===0: una percentuale finita non ha senso (crescita "da zero") — usare
-  // Infinity per farlo distinguere in UI da un vero 0% (nessuna variazione).
+  // a===0: a finite percentage doesn't make sense ("growth from zero") — use
+  // Infinity so the UI can tell it apart from an actual 0% (no change).
   const deltaPct = a > 0 ? d / a : b > 0 ? Infinity : 0;
   return { a, b, delta: d, deltaPct };
 }
 
-// Unico meccanismo di confronto: usato sia per il confronto libero tra due
-// periodi scelti dall'utente, sia per individuare i piatti in calo (in quel
-// caso aggA è di default previousEquivalentRange(...) del periodo B).
+// The single comparison mechanism: used both for a free comparison between
+// two user-chosen periods, and to find declining dishes (in that case aggA
+// defaults to previousEquivalentRange(...) of period B).
 export function compareAggregates(aggA, aggB) {
   const kpi = {
     revenueCents: delta(aggA.revenueCents, aggB.revenueCents),

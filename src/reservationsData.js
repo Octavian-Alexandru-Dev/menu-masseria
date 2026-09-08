@@ -1,13 +1,13 @@
-// Helper Firestore per le prenotazioni tavoli (area cameriere/amministrazione).
-// Vedi docs/prenotazioni.md per il modello dati completo.
+// Firestore helpers for table reservations (waiter/admin area).
+// See docs/prenotazioni.md for the full data model.
 //
-// File caricato SOLO dalle aree cameriere/prenotazioni (Waiter.jsx/
-// Reservations.jsx, entrambe lazy-load), mai dal sito pubblico.
+// File loaded ONLY by the waiter/reservations areas (Waiter.jsx/
+// Reservations.jsx, both lazy-loaded), never by the public site.
 //
-// Nome scelto deliberatamente diverso da Reservations.jsx: un nome che
-// differisce solo per maiuscola/minuscola crea un import ambiguo su
-// filesystem case-insensitive (macOS/Windows), dove Vite può risolvere
-// "./Reservations" verso questo file invece del componente.
+// Name deliberately different from Reservations.jsx: a name that only
+// differs by case creates an ambiguous import on case-insensitive
+// filesystems (macOS/Windows), where Vite could resolve "./Reservations"
+// to this file instead of the component.
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
   orderBy, serverTimestamp, Timestamp,
@@ -27,11 +27,11 @@ export function reservationRef(id) {
   return doc(db, RESERVATIONS_COLLECTION, id);
 }
 
-// "YYYY-MM-DD" locale (non UTC): il calendario ragiona per giorno, non per
-// istante, quindi salviamo la data come stringa invece che come Timestamp —
-// evita bug di fuso orario e rende la query per intervallo di giorni una
-// semplice where/orderBy sullo stesso campo, senza indice composito (stesso
-// trucco già usato per closedAt in orders.js).
+// Local "YYYY-MM-DD" (not UTC): the calendar reasons in days, not instants,
+// so we store the date as a string instead of a Timestamp — this avoids
+// timezone bugs and makes querying a range of days a simple where/orderBy on
+// the same field, without a composite index (same trick already used for
+// closedAt in orders.js).
 export function dateKey(date = new Date()) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -43,9 +43,8 @@ function expireAtFromNow() {
   return Timestamp.fromMillis(Date.now() + THIRTY_DAYS_MS);
 }
 
-// Riepilogo testuale dei coperti di una prenotazione ("3 adulti, 1 bambino"),
-// usato sia in Reservations.jsx sia nella sezione "Prenotazioni di oggi" di
-// Waiter.jsx.
+// Text summary of a reservation's covers ("3 adults, 1 child"), used both in
+// Reservations.jsx and in the "Today's reservations" section of Waiter.jsx.
 export function coversLabel(covers) {
   const adults = covers?.adults || 0;
   const children = covers?.children || 0;
@@ -55,7 +54,7 @@ export function coversLabel(covers) {
   return parts.length > 0 ? parts.join(", ") : "0 coperti";
 }
 
-/* ============================== SCRITTURA ============================== */
+/* ============================== WRITES ============================== */
 
 export async function createReservation({ date, time, name, phone, covers, notes, tableNumber, createdByUid, createdByName }) {
   return addDoc(reservationsRef(), {
@@ -78,8 +77,8 @@ export async function createReservation({ date, time, name, phone, covers, notes
   });
 }
 
-// Modifica i campi di una prenotazione ancora attiva (pending/confirmed):
-// stesso form usato per crearla, riutilizzato per l'editing.
+// Edits the fields of a still-active reservation (pending/confirmed): same
+// form used to create it, reused for editing.
 export async function updateReservation(id, fields) {
   return updateDoc(reservationRef(id), fields);
 }
@@ -102,9 +101,9 @@ export async function cancelReservation(id, by) {
   });
 }
 
-// "Avvia": riusa openOrder() di orders.js con i dati già presenti sulla
-// prenotazione (tavolo/coperti/note), così il cameriere non deve ridigitare
-// nulla, poi collega la comanda appena aperta alla prenotazione.
+// "Start": reuses orders.js's openOrder() with the data already on the
+// reservation (table/covers/notes), so the waiter doesn't have to retype
+// anything, then links the newly opened order to the reservation.
 export async function startReservation(reservation, { waiterUid, waiterName, coperto, tableNumber }) {
   const orderDocRef = await openOrder({
     tableNumber: tableNumber ?? reservation.tableNumber,
@@ -122,11 +121,11 @@ export async function startReservation(reservation, { waiterUid, waiterName, cop
   return orderDocRef;
 }
 
-/* ============================== LETTURA ============================== */
+/* ============================== READS ============================== */
 
-// Un solo listener per un intervallo di giorni (es. il mese visibile nel
-// calendario): filtro e ordinamento sullo stesso campo `date`, quindi
-// nessun indice composito necessario.
+// A single listener for a date range (e.g. the visible month in the
+// calendar): filter and ordering on the same `date` field, so no composite
+// index is needed.
 export function subscribeReservationsForRange(startDateKey, endDateKey, onChange, onError) {
   const q = query(
     reservationsRef(),
@@ -139,13 +138,13 @@ export function subscribeReservationsForRange(startDateKey, endDateKey, onChange
   }, onError);
 }
 
-// Caso particolare (un solo giorno) — usato sia da Reservations.jsx sia da
-// Waiter.jsx ("prenotazioni di oggi" in Sala).
+// Special case (a single day) — used both by Reservations.jsx and by
+// Waiter.jsx ("today's reservations" in the dining room view).
 export function subscribeReservationsForDate(dateStr, onChange, onError) {
   return subscribeReservationsForRange(dateStr, dateStr, onChange, onError);
 }
 
-// Conteggio "da confermare", per il badge in Dashboard (StaffHome.jsx).
+// "To confirm" count, for the badge in the Dashboard (StaffHome.jsx).
 export function subscribePendingReservations(onChange, onError) {
   const q = query(reservationsRef(), where("status", "==", "pending"));
   return onSnapshot(q, (snap) => {
@@ -153,11 +152,11 @@ export function subscribePendingReservations(onChange, onError) {
   }, onError);
 }
 
-/* ======================= PULIZIA AUTOMATICA "PIGRA" ======================= */
+/* ======================= "LAZY" AUTOMATIC CLEANUP ======================= */
 
-// No-show automatico (lazy, stesso pattern di autoCloseStaleOrders in
-// orders.js): le prenotazioni "confirmed" con data ormai passata e mai
-// avviate diventano "no_show" al successivo caricamento del calendario.
+// Automatic no-show (lazy, same pattern as autoCloseStaleOrders in
+// orders.js): "confirmed" reservations whose date has already passed and
+// were never started become "no_show" the next time the calendar is loaded.
 export async function autoFlagNoShows(reservationsInView) {
   const today = dateKey();
   const stale = reservationsInView.filter((r) => r.status === "confirmed" && r.date < today);
@@ -173,16 +172,16 @@ export async function autoFlagNoShows(reservationsInView) {
   return stale.map((r) => r.id);
 }
 
-// Cancellazione dopo 30 giorni delle prenotazioni in stato terminale, stesso
-// meccanismo lazy/localStorage di runDailyExpiredOrdersCleanup in orders.js.
+// Deletion after 30 days of reservations in a terminal state, same
+// lazy/localStorage mechanism as runDailyExpiredOrdersCleanup in orders.js.
 const CLEANUP_STORAGE_KEY = "mdp-reservations-last-cleanup";
 
 export async function runDailyExpiredReservationsCleanup() {
   try {
     if (localStorage.getItem(CLEANUP_STORAGE_KEY) === dateKey()) return;
   } catch {
-    // localStorage non disponibile (es. navigazione privata): si procede
-    // comunque, il controllo verrà semplicemente ripetuto ad ogni apertura.
+    // localStorage unavailable (e.g. private browsing): proceed anyway, the
+    // check will simply be repeated on the next open.
   }
   try {
     const q = query(reservationsRef(), where("expireAt", "<=", Timestamp.now()));
