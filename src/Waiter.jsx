@@ -800,7 +800,7 @@ function WaiterPanel({ menu, session }) {
         </div>
       )}
       {view.mode === "history" && (
-        <OrderHistory t={t} menu={menu} onBack={() => setView({ mode: "list" })} />
+        <OrderHistory t={t} menu={menu} onBack={() => setView({ mode: "list" })} isAdmin={session.role === "admin"} />
       )}
       {view.mode === "reservations" && (
         <Suspense fallback={<div style={{ textAlign: "center", padding: 40, color: t.inkSoft }}>Caricamento…</div>}>

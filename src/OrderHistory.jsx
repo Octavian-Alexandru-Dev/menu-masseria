@@ -3,10 +3,18 @@
 // solo l'ultimo cameriere che le ha servite). Caricamento a pagine, non
 // realtime: vedi loadClosedOrdersPage in orders.js.
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, Clock, CheckCircle2, Timer, Printer } from "lucide-react";
+import { ArrowLeft, Clock, CheckCircle2, Timer, Printer, Trash2 } from "lucide-react";
 import { ital, TYPE, formatCentsAsPrice, tableIdentity } from "./shared";
-import { loadClosedOrdersPage, orderTotalCents, copertoTotalCents } from "./orders";
+import { loadClosedOrdersPage, deleteOrder, deleteAllClosedOrders, orderTotalCents, copertoTotalCents } from "./orders";
 import ReceiptOverlay from "./ReceiptOverlay";
+
+function btnDanger(t) {
+  return {
+    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px",
+    background: "none", color: t.accent2, border: `1px solid ${t.line}`, borderRadius: 6,
+    fontSize: TYPE.smallPlus, cursor: "pointer",
+  };
+}
 
 function formatTime(ts) {
   return ts?.toDate ? ts.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—";
@@ -24,7 +32,7 @@ function formatDayLabel(ts) {
   return d.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
 }
 
-export function OrderRow({ t, order, expanded, onToggle, onPrint }) {
+export function OrderRow({ t, order, expanded, onToggle, onPrint, onDelete, confirmingDelete }) {
   const total = orderTotalCents(order);
   return (
     <div style={{ border: `1px solid ${t.line}`, borderRadius: 8, background: t.card, overflow: "hidden" }}>
@@ -63,6 +71,21 @@ export function OrderRow({ t, order, expanded, onToggle, onPrint }) {
             <Printer size={14} />
           </button>
         )}
+        {onDelete && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(order); }}
+            className="mdp-btn"
+            title={confirmingDelete ? "Conferma eliminazione comanda" : "Elimina comanda"}
+            aria-label={confirmingDelete ? "Conferma eliminazione comanda" : "Elimina comanda"}
+            style={{
+              padding: confirmingDelete ? "0 12px" : "0 14px", background: "none", border: "none",
+              borderLeft: `1px solid ${t.line}`, color: t.accent2, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.tinyPlus, whiteSpace: "nowrap",
+            }}
+          >
+            <Trash2 size={14} /> {confirmingDelete ? "Conferma?" : ""}
+          </button>
+        )}
       </div>
 
       {expanded && (
@@ -92,7 +115,7 @@ export function OrderRow({ t, order, expanded, onToggle, onPrint }) {
   );
 }
 
-export default function OrderHistory({ t, menu, onBack }) {
+export default function OrderHistory({ t, menu, onBack, isAdmin }) {
   const [pages, setPages] = useState([]); // array di array di ordini (una per pagina caricata)
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -100,6 +123,9 @@ export default function OrderHistory({ t, menu, onBack }) {
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
 
   const loadPage = useCallback(async (after) => {
     setLoading(true);
@@ -128,6 +154,44 @@ export default function OrderHistory({ t, menu, onBack }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleDeleteClick = useCallback(async (order) => {
+    if (confirmDeleteId !== order.id) {
+      setConfirmDeleteId(order.id);
+      return;
+    }
+    setError("");
+    try {
+      await deleteOrder(order.id);
+      setPages((prev) => prev.map((page) => page.filter((o) => o.id !== order.id)));
+    } catch (err) {
+      console.error("[storico] Eliminazione comanda fallita:", err);
+      setError("Eliminazione non riuscita. Riprova.");
+    } finally {
+      setConfirmDeleteId(null);
+    }
+  }, [confirmDeleteId]);
+
+  const handleClearAllClick = useCallback(async () => {
+    if (!confirmClearAll) {
+      setConfirmClearAll(true);
+      return;
+    }
+    setClearingAll(true);
+    setError("");
+    try {
+      await deleteAllClosedOrders();
+      setPages([]);
+      setCursor(null);
+      setHasMore(false);
+    } catch (err) {
+      console.error("[storico] Svuotamento storico fallito:", err);
+      setError("Svuotamento non riuscito. Riprova.");
+    } finally {
+      setClearingAll(false);
+      setConfirmClearAll(false);
+    }
+  }, [confirmClearAll]);
+
   const allOrders = pages.flat();
 
   // Raggruppa per giorno, in ordine (i risultati arrivano già dal più
@@ -148,8 +212,21 @@ export default function OrderHistory({ t, menu, onBack }) {
       <button onClick={onBack} className="mdp-btn" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.smallPlus, marginBottom: 14 }}>
         <ArrowLeft size={14} /> Indietro
       </button>
-      <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary, marginBottom: 14 }}>
-        Storico comande
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
+        <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary }}>
+          Storico comande
+        </div>
+        {isAdmin && allOrders.length > 0 && (
+          <button
+            onClick={handleClearAllClick}
+            disabled={clearingAll}
+            className="mdp-btn"
+            style={{ ...btnDanger(t), opacity: clearingAll ? 0.6 : 1, flexShrink: 0 }}
+          >
+            <Trash2 size={13} />
+            {clearingAll ? "Eliminazione…" : confirmClearAll ? "Confermi? Elimina tutto" : "Svuota storico"}
+          </button>
+        )}
       </div>
 
       {groups.length === 0 && !loading && (
@@ -173,6 +250,8 @@ export default function OrderHistory({ t, menu, onBack }) {
                   expanded={expandedId === order.id}
                   onToggle={() => setExpandedId((id) => (id === order.id ? null : order.id))}
                   onPrint={setPrintingOrder}
+                  onDelete={isAdmin ? handleDeleteClick : undefined}
+                  confirmingDelete={confirmDeleteId === order.id}
                 />
               ))}
             </div>

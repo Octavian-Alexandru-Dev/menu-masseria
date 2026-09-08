@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { TEST_WAITER } from "./test-env";
+import { TEST_WAITER, TEST_ADMIN } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
 import { seedClosedOrders, deleteOrdersByWaiterName } from "./helpers/seedClosedOrders";
 
@@ -64,6 +64,92 @@ test.describe("Storico comande", () => {
       await expect(page.getByRole("button", { name: /^conferma preconto$/i })).toHaveCount(0);
       await page.getByRole("button", { name: "Chiudi preconto" }).click();
       await expect(page.getByText("Documento non fiscale")).toHaveCount(0);
+    } finally {
+      await deleteOrdersByWaiterName(marker);
+    }
+  });
+
+  test("il cameriere non vede alcun pulsante per eliminare le comande", async ({ page }) => {
+    const marker = `NoDelTest${Date.now()}`;
+    await seedClosedOrders(1, marker);
+    try {
+      await page.goto("/cameriere");
+      await staffLogin(page, TEST_WAITER);
+      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+      await page.getByRole("button", { name: /storico/i }).click();
+
+      const toggle = page.getByRole("button", { name: new RegExp(marker) });
+      await expect(toggle).toBeVisible({ timeout: 10_000 });
+      // Solo il pulsante di stampa (fratello del toggle) è presente: niente
+      // pulsante Elimina per un ruolo diverso da admin (OrderHistory.jsx).
+      await expect(toggle.locator("xpath=following-sibling::button")).toHaveCount(1);
+      await expect(page.getByRole("button", { name: /svuota storico/i })).toHaveCount(0);
+    } finally {
+      await deleteOrdersByWaiterName(marker);
+    }
+  });
+
+  test("l'admin elimina una singola comanda dallo storico con doppia conferma", async ({ page }) => {
+    const marker = `DelTest${Date.now()}`;
+    await seedClosedOrders(1, marker);
+    try {
+      await page.goto("/cameriere");
+      await staffLogin(page, TEST_ADMIN);
+      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+      await page.getByRole("button", { name: /storico/i }).click();
+
+      const toggle = page.getByRole("button", { name: new RegExp(marker) });
+      await expect(toggle).toBeVisible({ timeout: 10_000 });
+      // Elimina comanda è il secondo pulsante fratello del toggle (dopo
+      // Stampa preconto, sempre presente — vedi test sopra).
+      const deleteBtn = toggle.locator("xpath=following-sibling::button[2]");
+      await expect(deleteBtn).toBeVisible();
+
+      // Primo click: arma la conferma, non elimina ancora.
+      await deleteBtn.click();
+      await expect(toggle).toBeVisible();
+      await expect(page.getByRole("button", { name: /conferma eliminazione comanda/i })).toBeVisible();
+
+      // Secondo click: elimina davvero.
+      await page.getByRole("button", { name: /conferma eliminazione comanda/i }).click();
+      await expect(toggle).toHaveCount(0);
+
+      // Persistita: ricaricando la pagina la comanda resta sparita (non era
+      // solo uno stato locale).
+      await page.reload();
+      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+      await page.getByRole("button", { name: /storico/i }).click();
+      await expect(page.getByRole("button", { name: new RegExp(marker) })).toHaveCount(0);
+    } finally {
+      await deleteOrdersByWaiterName(marker);
+    }
+  });
+
+  test("il pulsante 'Svuota storico' è visibile solo all'admin e richiede una doppia conferma prima di eliminare", async ({ page }) => {
+    // Non si esegue mai la seconda conferma in questo test: "Svuota storico"
+    // elimina TUTTE le comande chiuse dell'emulatore (non solo quelle con
+    // questo marker), quindi eseguirlo davvero comprometterebbe altri test
+    // in esecuzione in parallelo (fullyParallel, vedi playwright.config.js)
+    // che dipendono su comande chiuse proprie o sui dati seminati di
+    // default (es. stats-dashboard.spec.js). Qui si verifica solo che il
+    // pulsante sia riservato all'admin e che il primo click armi la
+    // conferma senza cancellare nulla.
+    const marker = `ClearAllTest${Date.now()}`;
+    await seedClosedOrders(1, marker);
+    try {
+      await page.goto("/cameriere");
+      await staffLogin(page, TEST_ADMIN);
+      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+      await page.getByRole("button", { name: /storico/i }).click();
+
+      const clearAll = page.getByRole("button", { name: /^svuota storico$/i });
+      await expect(clearAll).toBeVisible({ timeout: 10_000 });
+      await clearAll.click();
+      await expect(page.getByRole("button", { name: /confermi\? elimina tutto/i })).toBeVisible();
+
+      // La comanda seminata per questo test è ancora lì: nessuna
+      // eliminazione è avvenuta con un solo click.
+      await expect(page.getByRole("button", { name: new RegExp(marker) })).toBeVisible();
     } finally {
       await deleteOrdersByWaiterName(marker);
     }

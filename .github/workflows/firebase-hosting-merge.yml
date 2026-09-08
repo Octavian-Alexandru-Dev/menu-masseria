@@ -39,3 +39,16 @@ jobs:
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MENU_MASSERIA_DELLA_PIAN }}"
           channelId: live
           projectId: menu-masseria-della-pian
+      # action-hosting-deploy sopra pubblica solo l'hosting (i file statici):
+      # firestore.rules non viene mai toccato da quello step. Senza questo,
+      # una regola aggiunta/modificata nel repo resta "solo sulla carta" sul
+      # progetto reale finché qualcuno non lancia `firebase deploy --only
+      # firestore:rules` a mano — con il rischio concreto che una collection
+      # nuova resti bloccata dalla regola di fallback ("allow read, write: if
+      # false") anche se il codice e i test la danno per raggiungibile.
+      - name: Write Firebase service account key
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_MENU_MASSERIA_DELLA_PIAN }}' > "${{ runner.temp }}/firebase-sa.json"
+      - name: Deploy Firestore rules
+        run: npx firebase-tools deploy --only firestore:rules --project menu-masseria-della-pian --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json

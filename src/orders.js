@@ -4,8 +4,8 @@
 // File caricato SOLO dalle aree cameriere/cucina (Waiter.jsx/Kitchen.jsx,
 // entrambe lazy-load), mai dal sito pubblico.
 import {
-  collection, doc, addDoc, updateDoc, getDocs, onSnapshot, query, where,
-  orderBy, limit, startAfter,
+  collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
+  orderBy, limit, startAfter, writeBatch,
   arrayUnion, serverTimestamp, Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase-db";
@@ -226,4 +226,30 @@ export async function loadClosedOrdersPage(afterClosedAt) {
   const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const lastClosedAt = orders.length > 0 ? orders[orders.length - 1].closedAt : null;
   return { orders, lastClosedAt, hasMore: orders.length === HISTORY_PAGE_SIZE };
+}
+
+// Elimina una singola comanda dallo storico (correzione mirata di una
+// comanda creata per errore). Riservato agli admin lato interfaccia — vedi
+// OrderHistory.jsx.
+export async function deleteOrder(orderId) {
+  return deleteDoc(orderRef(orderId));
+}
+
+// Svuota per intero lo storico (es. dopo prove/dimostrazioni fatte con
+// l'app, quando le comande di test non sono più distinguibili da quelle
+// vere). Le comande chiuse non sono altrimenti mai cancellate (vedi nota
+// sopra), quindi questa è un'operazione volutamente distruttiva e
+// irreversibile, riservata agli admin lato interfaccia. writeBatch è
+// limitato a 500 scritture: si procede a blocchi.
+const DELETE_BATCH_SIZE = 400;
+
+export async function deleteAllClosedOrders() {
+  const snap = await getDocs(query(ordersRef(), where("closedAt", "!=", null)));
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += DELETE_BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const d of docs.slice(i, i + DELETE_BATCH_SIZE)) batch.delete(d.ref);
+    await batch.commit();
+  }
+  return docs.length;
 }

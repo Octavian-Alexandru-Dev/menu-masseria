@@ -33,6 +33,14 @@ Notes:
 > 4. Non eliminare o disabilitare test esistenti senza segnalarlo esplicitamente e motivarlo (es. funzionalità rimossa — non "test che dava fastidio").
 > 5. Mantieni la matrice di copertura aggiornata: se una modifica introduce nuovi stati o interazioni, aggiorna la checklist di copertura, non solo il codice dei test.
 
+# Deploy — firestore.rules
+
+`.github/workflows/firebase-hosting-merge.yml` deploys to the real Firebase project on every push to `main`. It builds and deploys **hosting** (`FirebaseExtended/action-hosting-deploy`), and then a separate step deploys **Firestore rules** (`npx firebase-tools deploy --only firestore:rules`, authenticated via the same `FIREBASE_SERVICE_ACCOUNT_MENU_MASSERIA_DELLA_PIAN` secret written to a temp file and passed as `GOOGLE_APPLICATION_CREDENTIALS`). Both steps run automatically — you don't need to deploy manually after a merge to `main`.
+
+Whenever a change touches `firestore.rules` (a new collection, a widened/narrowed rule, a new `match` block), **call this out explicitly** in your summary to the user: say what changed in the rules and confirm it will go out with the next merge to `main` via that workflow. If you need it live *before* a merge (e.g. testing against the real project, or an out-of-band hotfix), it must be deployed by hand with `firebase deploy --only firestore:rules` (Firebase CLI, authenticated) — flag that explicitly too, since Claude Code cannot run this itself (no local Firebase CLI login).
+
+Why this matters: rules changes are easy to miss because they cause no build error and no local-emulator symptom — `npm run test:e2e` runs entirely against the emulator, which loads `firestore.rules` fresh from the repo on every run, so a rule that was never actually deployed to production still looks "tested and green" locally. The failure mode is a silent `permission-denied` on the real project only, often surfacing much later as a UI element that inexplicably stays disabled/empty (e.g. `menuCosts/data` was added to `firestore.rules` in commit `5283d94` but the deploy workflow at the time only published hosting, not rules — the "Costo interno" field in Admin.jsx stayed disabled in production because `subscribeMenuCosts` kept getting denied and `menuCosts` never left its initial `null`, with nothing surfaced beyond a `console.error`).
+
 # Working directory
 
 This repo is sometimes open in more than one Claude Code session at once. Before deleting or reverting files that look like unfamiliar scaffolding (especially untracked ones), check `git log`/recent activity or ask — a sibling session may be mid-task. If you find conflicting concurrent edits, use `ListAgents`/`SendMessage` to coordinate before cleaning anything up.

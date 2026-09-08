@@ -172,7 +172,7 @@ function KitchenPanel({ theme, menu, session }) {
         </div>
       </div>
 
-      {showHistory && <OrderHistory t={t} menu={menu} onBack={() => setShowHistory(false)} />}
+      {showHistory && <OrderHistory t={t} menu={menu} onBack={() => setShowHistory(false)} isAdmin={session.role === "admin"} />}
 
       {!showHistory && !ready && <div style={{ textAlign: "center", padding: 40, color: t.inkSoft }}>Caricamento comande…</div>}
 
