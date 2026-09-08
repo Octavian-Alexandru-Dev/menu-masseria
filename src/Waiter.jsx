@@ -291,15 +291,15 @@ function CoversEditor({ t, order }) {
     <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: TYPE.tinyPlus, color: t.inkSoft, marginTop: 4 }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <Users size={12} /> Adulti
-        <button disabled={busy} onClick={() => change("adults", -1)} className="mdp-btn" style={stepperStyle}><Minus size={10} /></button>
+        <button aria-label="Diminuisci adulti" disabled={busy} onClick={() => change("adults", -1)} className="mdp-btn" style={stepperStyle}><Minus size={10} /></button>
         <span style={{ minWidth: 12, textAlign: "center", color: t.ink }}>{order.covers?.adults || 0}</span>
-        <button disabled={busy} onClick={() => change("adults", 1)} className="mdp-btn" style={stepperStyle}><Plus size={10} /></button>
+        <button aria-label="Aumenta adulti" disabled={busy} onClick={() => change("adults", 1)} className="mdp-btn" style={stepperStyle}><Plus size={10} /></button>
       </span>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
         Bambini
-        <button disabled={busy} onClick={() => change("children", -1)} className="mdp-btn" style={stepperStyle}><Minus size={10} /></button>
+        <button aria-label="Diminuisci bambini" disabled={busy} onClick={() => change("children", -1)} className="mdp-btn" style={stepperStyle}><Minus size={10} /></button>
         <span style={{ minWidth: 12, textAlign: "center", color: t.ink }}>{order.covers?.children || 0}</span>
-        <button disabled={busy} onClick={() => change("children", 1)} className="mdp-btn" style={stepperStyle}><Plus size={10} /></button>
+        <button aria-label="Aumenta bambini" disabled={busy} onClick={() => change("children", 1)} className="mdp-btn" style={stepperStyle}><Plus size={10} /></button>
       </span>
       {(order.coperto?.adults || order.coperto?.children) && (
         <span style={{ color: t.inkSoft }}>
@@ -550,16 +550,16 @@ function OrderDetail({ t, menu, order, onBack, staffName }) {
               {draft.map((l) => (
                 <div key={l.lineId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
                   <span style={{ flex: 1, fontSize: TYPE.smallPlus }}>{l.name} <span style={{ color: t.inkSoft, fontSize: TYPE.tinyPlus }}>· {l.categoryName}</span></span>
-                  <button onClick={() => changeQty(l.lineId, -1)} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 22, height: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Minus size={11} /></button>
+                  <button aria-label={`Diminuisci quantità di ${l.name}`} onClick={() => changeQty(l.lineId, -1)} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 22, height: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Minus size={11} /></button>
                   <span style={{ fontSize: TYPE.smallPlus, minWidth: 14, textAlign: "center" }}>{l.quantity}</span>
-                  <button onClick={() => changeQty(l.lineId, 1)} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 22, height: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Plus size={11} /></button>
+                  <button aria-label={`Aumenta quantità di ${l.name}`} onClick={() => changeQty(l.lineId, 1)} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 22, height: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Plus size={11} /></button>
                   <input
                     placeholder="nota"
                     value={l.notes}
                     onChange={(e) => setDraftNote(l.lineId, e.target.value)}
                     style={{ width: 70, fontSize: TYPE.tinyPlus, padding: "3px 6px", border: `1px solid ${t.line}`, borderRadius: 4, background: t.bg, color: t.ink }}
                   />
-                  <button onClick={() => removeDraftLine(l.lineId)} className="mdp-btn" style={{ background: "none", border: "none", cursor: "pointer", color: t.accent2 }}><X size={14} /></button>
+                  <button aria-label={`Rimuovi ${l.name} dalla comanda`} onClick={() => removeDraftLine(l.lineId)} className="mdp-btn" style={{ background: "none", border: "none", cursor: "pointer", color: t.accent2 }}><X size={14} /></button>
                 </div>
               ))}
             </div>

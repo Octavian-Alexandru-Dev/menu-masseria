@@ -64,7 +64,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
       `}</style>
       <div className="mdp-receipt-print" style={{ background: t.card, borderRadius: 12, padding: 24, maxWidth: 380, width: "100%", fontFamily: "'Work Sans', sans-serif" }}>
         <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: 14 }}>
-          <button onClick={onClose} className="mdp-btn mdp-receipt-noprint" style={{ background: "none", border: "none", cursor: "pointer", color: t.inkSoft }}>
+          <button aria-label="Chiudi preconto" onClick={onClose} className="mdp-btn mdp-receipt-noprint" style={{ background: "none", border: "none", cursor: "pointer", color: t.inkSoft }}>
             <X size={16} />
           </button>
         </div>
