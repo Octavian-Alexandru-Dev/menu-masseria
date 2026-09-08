@@ -79,6 +79,23 @@ test.describe("Dashboard statistiche", () => {
     await expect(page.getByText("Caprese")).not.toBeVisible();
   });
 
+  test("gli assi dei grafici di incasso mostrano euro formattati, non i centesimi grezzi", async ({ page }) => {
+    // Bug corretto in questa modifica: XAxis/YAxis non avevano tickFormatter,
+    // quindi mostravano revenueCents grezzo (es. "5100" invece di "€ 51").
+    // formatCentsCompact (shared.jsx) è ora passato come tickFormatter ai
+    // grafici di incasso — qui si verifica sia la presenza di etichette in
+    // euro sia l'assenza dei valori grezzi noti dei dati seed di "Ieri".
+    await page.getByRole("button", { name: "Ieri", exact: true }).click();
+    await expect(page.getByTestId("kpi-value-revenue")).toHaveText("€ 51,00", { timeout: 10_000 });
+
+    const axisTicks = page.locator(".recharts-cartesian-axis-tick-value");
+    await expect(axisTicks.filter({ hasText: "€" }).first()).toBeVisible({ timeout: 10_000 });
+    // revenueCents grezzo del preset "Ieri" (51,00€) e del margine (24,50€)
+    // seedati: se il tickFormatter mancasse, questi comparirebbero come tick.
+    await expect(axisTicks.getByText("5100", { exact: true })).toHaveCount(0);
+    await expect(axisTicks.getByText("2450", { exact: true })).toHaveCount(0);
+  });
+
   test("il confronto tra periodi segnala un incasso nuovo rispetto a un Periodo A vuoto", async ({ page }) => {
     await page.getByRole("button", { name: "Ieri", exact: true }).click();
     await expect(page.getByTestId("kpi-value-revenue")).toHaveText("€ 51,00", { timeout: 10_000 });

@@ -160,6 +160,17 @@ export function formatCentsAsPrice(cents) {
   return (cents / 100).toFixed(2).replace(".", ",");
 }
 
+// Per le etichette degli assi dei grafici (Stats.jsx): valori interi in
+// centesimi (es. 125000) letti direttamente come tick sarebbero fuorvianti
+// rispetto all'importo reale in euro mostrato nel tooltip — questo formatta
+// in modo compatto ("€ 1,2 mila") così l'asse resta leggibile anche con
+// importi grandi, senza i decimali di formatCentsAsPrice (superflui su un
+// asse con pochi tick).
+const compactEuroFormatter = new Intl.NumberFormat("it-IT", { notation: "compact", maximumFractionDigits: 1 });
+export function formatCentsCompact(cents) {
+  return `€ ${compactEuroFormatter.format(cents / 100)}`;
+}
+
 // Turno di servizio corrente (pranzo/cena), determinato in automatico
 // dall'orario — nessuna configurazione richiesta. Soglia fissata alle 17:00:
 // prima è pranzo, da quell'ora in poi è cena. Se gli orari reali del locale

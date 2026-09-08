@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { BarChart3, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { THEMES, ital, GlobalStyle, TYPE, formatCentsAsPrice } from "./shared";
+import { THEMES, ital, GlobalStyle, TYPE, formatCentsAsPrice, formatCentsCompact } from "./shared";
 import {
   PRESETS, PRESET_LABELS, resolvePresetRange, previousEquivalentRange,
   fetchClosedOrdersInRange, aggregateOrders, compareAggregates,
@@ -165,12 +165,12 @@ function KpiCardsRow({ t, agg, comparisonKpi }) {
    categoriale). Assi/griglia/tooltip sempre sui token del tema, non i
    default di Recharts, così restano leggibili anche sul tema scuro "ciro". */
 
-function HorizontalBarChart({ t, data, valueKey, valueFormatter }) {
+function HorizontalBarChart({ t, data, valueKey, valueFormatter, tickFormatter }) {
   return (
     <ResponsiveContainer width="100%" height={Math.max(160, data.length * 34)}>
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
         <CartesianGrid horizontal={false} stroke={t.line} />
-        <XAxis type="number" tick={{ fill: t.inkSoft, fontSize: TYPE.tiny }} axisLine={{ stroke: t.line }} tickLine={false} />
+        <XAxis type="number" tickFormatter={tickFormatter} tick={{ fill: t.inkSoft, fontSize: TYPE.tiny }} axisLine={{ stroke: t.line }} tickLine={false} />
         <YAxis type="category" dataKey="name" width={140} tick={{ fill: t.ink, fontSize: TYPE.tinyPlus }} axisLine={{ stroke: t.line }} tickLine={false} />
         <Tooltip
           formatter={(value) => [valueFormatter(value), ""]}
@@ -184,13 +184,13 @@ function HorizontalBarChart({ t, data, valueKey, valueFormatter }) {
   );
 }
 
-function VerticalBarChart({ t, data, xKey, valueKey, valueFormatter }) {
+function VerticalBarChart({ t, data, xKey, valueKey, valueFormatter, tickFormatter }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
         <CartesianGrid vertical={false} stroke={t.line} />
         <XAxis dataKey={xKey} tick={{ fill: t.inkSoft, fontSize: TYPE.tiny }} axisLine={{ stroke: t.line }} tickLine={false} />
-        <YAxis tick={{ fill: t.inkSoft, fontSize: TYPE.tiny }} axisLine={false} tickLine={false} width={30} />
+        <YAxis tickFormatter={tickFormatter} tick={{ fill: t.inkSoft, fontSize: TYPE.tiny }} axisLine={false} tickLine={false} width={48} />
         <Tooltip
           formatter={(value) => [valueFormatter(value), ""]}
           contentStyle={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 8, fontSize: TYPE.tinyPlus, color: t.ink }}
@@ -226,6 +226,7 @@ function TopDishesSection({ t, topDishesByQty, topDishesByRevenue, topDishesByMa
         <HorizontalBarChart
           t={t} data={data} valueKey={valueKeyByMode[mode]}
           valueFormatter={(v) => (mode === "qty" ? `${v} venduti` : `€ ${formatCentsAsPrice(v)}`)}
+          tickFormatter={mode === "qty" ? (v) => String(v) : formatCentsCompact}
         />
       )}
     </div>
@@ -263,7 +264,7 @@ function CategoryBreakdownChart({ t, categoryBreakdown }) {
     <div style={cardStyle(t)}>
       <div style={sectionTitleStyle(t)}>Incasso per categoria</div>
       <div style={{ marginTop: 10 }}>
-        <HorizontalBarChart t={t} data={data} valueKey="revenueCents" valueFormatter={(v) => `€ ${formatCentsAsPrice(v)}`} />
+        <HorizontalBarChart t={t} data={data} valueKey="revenueCents" valueFormatter={(v) => `€ ${formatCentsAsPrice(v)}`} tickFormatter={formatCentsCompact} />
       </div>
     </div>
   );
@@ -276,11 +277,11 @@ function HourlyWeekdayCharts({ t, hourlyDistribution, weekdayDistribution }) {
     <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
       <div style={cardStyle(t)}>
         <div style={sectionTitleStyle(t)}>Incasso per ora di apertura tavolo</div>
-        <VerticalBarChart t={t} data={hourly} xKey="label" valueKey="revenueCents" valueFormatter={(v) => `€ ${formatCentsAsPrice(v)}`} />
+        <VerticalBarChart t={t} data={hourly} xKey="label" valueKey="revenueCents" valueFormatter={(v) => `€ ${formatCentsAsPrice(v)}`} tickFormatter={formatCentsCompact} />
       </div>
       <div style={cardStyle(t)}>
         <div style={sectionTitleStyle(t)}>Incasso per giorno della settimana</div>
-        <VerticalBarChart t={t} data={weekday} xKey="label" valueKey="revenueCents" valueFormatter={(v) => `€ ${formatCentsAsPrice(v)}`} />
+        <VerticalBarChart t={t} data={weekday} xKey="label" valueKey="revenueCents" valueFormatter={(v) => `€ ${formatCentsAsPrice(v)}`} tickFormatter={formatCentsCompact} />
       </div>
     </div>
   );
