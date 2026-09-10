@@ -145,7 +145,15 @@ Firebase Hosting and updates Firestore security rules
 firestore.rules" section in [`CLAUDE.md`](CLAUDE.md) for a gotcha worth
 knowing (a rules change needs that workflow to run at least once before
 it's live). The landing page (static, `landing_page/` folder) is published
-separately via FTP to the Tophost hosting for the main domain.
+separately via FTP to the Tophost hosting for the main domain, through a
+local `pre-push` git hook (`.githooks/pre-push` +
+`scripts/ftp-deploy-landing.sh`) — never from CI, since Tophost blocks FTP
+from GitHub Actions runner IPs. Like the app's own `.env` (see
+[Developing against the real Firebase project](#developing-against-the-real-firebase-project)),
+the hook pulls the Tophost FTP credentials from the `Menu-masseria`
+Bitwarden Secrets Manager project when `.bws-token` is present, falling
+back to a local `.ftp-credentials` file otherwise (format in
+`.ftp-credentials.example`).
 
 Full operational documentation, written for the restaurant owner (no
 technical prerequisites): [`GUIDA.md`](GUIDA.md).
