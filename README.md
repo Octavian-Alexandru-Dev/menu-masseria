@@ -74,6 +74,15 @@ Apri l'URL stampato in console. Account di staff disponibili nell'emulatore
 | Cameriere | `waiter@test.local` | `Test1234!` |
 | Cucina | `kitchen@test.local` | `Test1234!` |
 
+## Sviluppo contro il progetto Firebase reale
+
+Per lavorare con `npm run dev` (non l'emulatore) serve un file `.env` con la
+configurazione Firebase/Cloudinary — vedi `GUIDA.md` per come recuperare
+questi valori dalla console Firebase. Se hai accesso al progetto Bitwarden
+Secrets Manager `Menu-masseria` (vedi `.bws-token.example`),
+`scripts/bws-env.sh` genera `.env` al posto della copia manuale di
+`.env.example`.
+
 ## Test automatici
 
 ```bash
