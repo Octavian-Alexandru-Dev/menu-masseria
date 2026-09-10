@@ -22,7 +22,6 @@ if [ -z "${FTP_HOST:-}" ] || [ -z "${FTP_USERNAME:-}" ] || [ -z "${FTP_PASSWORD:
   # shellcheck disable=SC1090
   source "$CRED_FILE"
 fi
-REMOTE_DIR="${FTP_REMOTE_DIR:-}"
 
 cd "$REPO_ROOT/landing_page"
 
@@ -38,7 +37,7 @@ for f in *; do
   # -k: il certificato del server FTP è un wildcard condiviso (*.th.seeweb.it),
   # non specifico per questo dominio: è atteso su hosting condiviso.
   if ! curl -sS --connect-timeout 10 --ssl-reqd -k --tlsv1.2 --tls-max 1.2 \
-    -T "$f" "ftp://${FTP_HOST}${REMOTE_DIR}/$f" \
+    -T "$f" "ftp://${FTP_HOST}/$f" \
     --user "${FTP_USERNAME}:${FTP_PASSWORD}"; then
     echo "FTP deploy: upload di $f fallito." >&2
     if [ "$FIRST" = "1" ]; then
@@ -55,4 +54,4 @@ if [ "$FAILED" = "1" ]; then
   exit 0
 fi
 
-echo "FTP deploy: landing_page/ pubblicata su ${FTP_HOST}${REMOTE_DIR}."
+echo "FTP deploy: landing_page/ pubblicata su ${FTP_HOST}."

@@ -229,7 +229,6 @@ computer nuovo dove questo file non esiste, crealo così:
 FTP_HOST='ftp.masseria-della-piana.it'
 FTP_USERNAME='masseria-della-piana.it'
 FTP_PASSWORD='la-password-ftp-di-tophost'
-FTP_REMOTE_DIR='/htdocs'
 ```
 
 E attiva l'hook automatico sul push (va fatto una sola volta per ciascun
