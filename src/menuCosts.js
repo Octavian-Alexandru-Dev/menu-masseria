@@ -1,15 +1,15 @@
-// Costi interni dei piatti — mai esposti al menù pubblico. Vivono in un
-// documento Firestore SEPARATO da menu/data apposta: menu/data è leggibile
-// da chiunque senza autenticazione (serve al menù cliente), e Firestore non
-// supporta regole a livello di singolo campo — mettere il costo dentro
-// menu/data lo renderebbe visibile a chiunque ispezioni il traffico di rete,
-// anche se l'interfaccia non lo mostrasse. Vedi firestore.rules: menuCosts/data
-// richiede autenticazione, come staff/orders/reservations.
+// Internal dish costs — never exposed to the public menu. They live in a
+// Firestore document SEPARATE from menu/data on purpose: menu/data is
+// readable by anyone without authentication (needed for the customer menu),
+// and Firestore has no field-level security rules — putting the cost inside
+// menu/data would make it visible to anyone inspecting network traffic,
+// even if the UI didn't show it. See firestore.rules: menuCosts/data
+// requires authentication, like staff/orders/reservations.
 //
-// Il costo viene "fotografato" su ogni riga della comanda al momento
-// dell'invio (src/orders.js, buildOrderLine), esattamente come il prezzo di
-// vendita — così il margine calcolato nella Dashboard statistiche resta
-// corretto anche se il costo di un piatto cambia dopo (src/statsData.js).
+// The cost is "snapshotted" onto every order line at send time
+// (src/orders.js, buildOrderLine), exactly like the sale price — so the
+// margin computed in the statistics Dashboard stays correct even if a
+// dish's cost changes later (src/statsData.js).
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase-db";
 
@@ -19,8 +19,8 @@ export function menuCostsRef() {
   return doc(db, ...MENU_COSTS_DOC_PATH);
 }
 
-// costs: { [menuItemId]: "3,50" } — stesso formato prezzo di menu item.price
-// (parsePriceToCents in shared.jsx). Nessun documento ancora creato -> {}.
+// costs: { [menuItemId]: "3,50" } — same price format as menu item.price
+// (parsePriceToCents in shared.jsx). No document created yet -> {}.
 export function subscribeMenuCosts(onChange, onError) {
   return onSnapshot(menuCostsRef(), (snap) => onChange(snap.exists() ? snap.data() : {}), onError);
 }

@@ -257,7 +257,7 @@ test.describe("Admin — editor menù (solo in memoria, mai salvato su Firestore
     await openAdmin(page);
     const fixture = makeFixtureMenu("i18n" + Date.now());
     const [catA] = fixture.categories;
-    const [itemA1, itemA2] = catA.items;
+    const [itemA1] = catA.items;
     // Traduzione DE completa per item A1, deliberatamente assente per A2 —
     // così il contatore "voci mancanti" e "Genera traduzione mancante"
     // hanno qualcosa da mostrare.

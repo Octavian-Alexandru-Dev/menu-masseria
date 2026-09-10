@@ -1,18 +1,18 @@
-// Guscio principale dell'app.
+// Main app shell.
 //
-// Pensato per essere leggero sul cellulare dei clienti, con connessione
-// spesso debole (siamo in un agriturismo):
-//  - il pannello di gestione (Admin.jsx, che include Firebase Authentication)
-//    NON viene scaricato finché qualcuno non clicca "Gestione menù";
-//  - il menù viene letto con onSnapshot + cache locale persistente
-//    (vedi firebase-db.js): una volta visto, resta salvato sul telefono e
-//    riappare all'istante anche offline, mentre si aggiorna in sottofondo;
-//  - se il primo caricamento in assoluto è lento (rete scarsa) o il
-//    documento non esiste ancora su Firestore, non c'è più un menù di
-//    esempio da mostrare al suo posto (rimosso volutamente): si mostra uno
-//    spinner e si tenta la connessione fino a MAX_LOAD_ATTEMPTS volte
-//    (ogni tentativo ha il suo timeout); solo dopo l'ultimo tentativo
-//    fallito si resta su un messaggio esplicito con un pulsante di reload.
+// Designed to be light on the customer's phone, on a connection that's
+// often weak (we're at a countryside farmhouse restaurant):
+//  - the management panel (Admin.jsx, which includes Firebase Authentication)
+//    is NOT downloaded until someone clicks "Gestione menù";
+//  - the menu is read with onSnapshot + a persistent local cache (see
+//    firebase-db.js): once seen, it stays saved on the phone and reappears
+//    instantly even offline, while updating in the background;
+//  - if the very first load is slow (poor connection) or the document
+//    doesn't exist yet on Firestore, there's no longer a sample menu to
+//    show in its place (removed on purpose): a spinner is shown and the
+//    connection is retried up to MAX_LOAD_ATTEMPTS times (each attempt has
+//    its own timeout); only after the last failed attempt do we settle on
+//    an explicit message with a reload button.
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase-db";
@@ -25,40 +25,39 @@ const Waiter = lazy(() => import("./Waiter"));
 const Kitchen = lazy(() => import("./Kitchen"));
 const Reservations = lazy(() => import("./Reservations"));
 
-const LOAD_ATTEMPT_TIMEOUT_MS = 5000; // timeout di ciascun tentativo
-const MAX_LOAD_ATTEMPTS = 3; // numero di tentativi automatici prima del messaggio finale
+const LOAD_ATTEMPT_TIMEOUT_MS = 5000; // timeout for each attempt
+const MAX_LOAD_ATTEMPTS = 3; // number of automatic retries before the final message
 const SAVE_TIMEOUT_MS = 8000;
 const MAX_UNDO_STEPS = 20;
 
 export default function App() {
   const [menu, setMenuState] = useState(null);
-  // client | staff — sincronizzato con ?area=staff nell'URL, così il
-  // pulsante Indietro del browser torna al menù pubblico invece di non fare
-  // nulla (vedi useUrlState in shared.jsx).
+  // client | staff — synced with ?area=staff in the URL, so the browser's
+  // Back button returns to the public menu instead of doing nothing (see
+  // useUrlState in shared.jsx).
   const [view, setView] = useUrlState("area", "client");
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [loadNotice, setLoadNotice] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(1);
-  const [undoStack, setUndoStack] = useState([]); // stati precedenti di menu, il più recente in fondo
+  const [undoStack, setUndoStack] = useState([]); // previous states of menu, most recent at the end
 
   const viewRef = useRef(view);
   useEffect(() => { viewRef.current = view; }, [view]);
 
   const menuDocRef = doc(db, ...MENU_DOC_PATH);
 
-  // Scheda aperta apposta dal pannello Admin ("Esporta PDF / Stampa") solo
-  // per mostrare l'anteprima di stampa: non deve aprire una propria
-  // connessione a Firestore, legge il menù già pronto da sessionStorage
-  // (vedi PrintMenu.jsx).
+  // Tab opened by the Admin panel ("Esporta PDF / Stampa") just to show the
+  // print preview: it must not open its own Firestore connection, it reads
+  // the menu already prepared in sessionStorage (see PrintMenu.jsx).
   const isPrintMode = typeof window !== "undefined"
     && new URLSearchParams(window.location.search).get("print") === "1";
 
-  // Aree riservate al personale (§2 di docs/comande-camerieri.md): route
-  // dedicate e "bookmarkabili" (es. per lo schermo fisso in cucina), non
-  // raggiungibili da un pulsante nel menù pubblico. Ognuna gestisce da sola
-  // login e verifica del ruolo (vedi staff-shared.jsx).
+  // Areas restricted to staff (§2 of docs/comande-camerieri.md): dedicated,
+  // bookmarkable routes (e.g. for the fixed kitchen screen), not reachable
+  // from a button in the public menu. Each handles its own login and role
+  // check (see staff-shared.jsx).
   const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
   const isWaiterPath = pathname.startsWith("/cameriere") || pathname.startsWith("/waiter");
   const isKitchenPath = pathname.startsWith("/cucina") || pathname.startsWith("/kitchen");
@@ -71,10 +70,10 @@ export default function App() {
     let unsubscribe = () => {};
     let timeoutId = null;
 
-    // Ogni tentativo apre una propria sottoscrizione onSnapshot con un
-    // timeout dedicato: se scade senza dati, chiude la sottoscrizione e ne
-    // apre una nuova (fino a MAX_LOAD_ATTEMPTS volte). Solo dopo l'ultimo
-    // tentativo fallito mostriamo il messaggio esplicito con reload manuale.
+    // Each attempt opens its own onSnapshot subscription with a dedicated
+    // timeout: if it expires with no data, it closes the subscription and
+    // opens a new one (up to MAX_LOAD_ATTEMPTS times). Only after the last
+    // failed attempt do we show the explicit message with a manual reload.
     const subscribe = (attempt) => {
       let gotAnyData = false;
       setLoadAttempt(attempt);
@@ -97,9 +96,9 @@ export default function App() {
           if (snap.exists()) {
             const loaded = snap.data();
             if (loaded && loaded.theme === "cirò") loaded.theme = "ciro";
-            // Se sei nell'area riservata (admin/cameriere/cucina), NON
-            // sovrascriviamo eventuali modifiche in corso nell'editor con un
-            // aggiornamento in arrivo dal server o dalla cache.
+            // If you're in the restricted area (admin/waiter/kitchen), do NOT
+            // overwrite any edits in progress in the editor with an update
+            // coming from the server or the cache.
             setMenuState((prev) => {
               if (!prev) return loaded;
               if (viewRef.current === "staff") return prev;
@@ -107,11 +106,11 @@ export default function App() {
             });
             setLoadNotice(null);
           } else if (!snap.metadata.fromCache) {
-            // Il documento non esiste ancora su Firestore (prima configurazione,
-            // o database ripristinato): non c'è più un menù di esempio locale
-            // da mostrare al suo posto. Va creato dal pannello Admin (login
-            // possibile anche senza menù caricato — vedi Admin.jsx), es.
-            // importando un backup JSON. Non ha senso ritentare in questo caso.
+            // The document doesn't exist yet on Firestore (first-time setup,
+            // or a restored database): there's no longer a local sample menu
+            // to show in its place. It must be created from the Admin panel
+            // (login is possible even with no menu loaded — see Admin.jsx),
+            // e.g. by importing a JSON backup. No point retrying in this case.
             setLoadNotice("Nessun menù trovato su Firestore. Accedi come amministratore per crearne uno (es. importando un backup JSON).");
           }
         },
@@ -139,11 +138,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Unico punto in cui lo stato menu cambia: ogni chiamata registra lo stato
-  // precedente in uno stack di annullamento (max MAX_UNDO_STEPS passi), così
-  // qualsiasi azione dell'Admin (modifica campo, generazione traduzione,
-  // importazione JSON, ...) diventa automaticamente annullabile senza dover
-  // toccare ogni singolo handler in Admin.jsx.
+  // The single place where the menu state changes: every call records the
+  // previous state onto an undo stack (max MAX_UNDO_STEPS steps), so any
+  // Admin action (field edit, translation generation, JSON import, ...)
+  // automatically becomes undoable without having to touch every single
+  // handler in Admin.jsx.
   const setMenu = useCallback((updater) => {
     setMenuState((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -154,13 +153,13 @@ export default function App() {
     });
   }, []);
 
-  // Uscita dall'area riservata (pulsanti "Esci"/"Anteprima" in Admin, o dal
-  // login cameriere/cucina/prenotazioni dentro StaffHome): oltre a tornare
-  // al menù pubblico, ripulisce anche ?sezione (la sotto-area scelta in
-  // StaffHome, vedi StaffHome.jsx) con una replaceState silenziosa — non
-  // deve restare nell'URL né generare una voce di cronologia propria,
-  // altrimenti riaprendo "Gestione menù" si salterebbe dritti all'ultima
-  // sezione invece di mostrare di nuovo la Dashboard.
+  // Exiting the restricted area ("Esci"/"Anteprima" buttons in Admin, or
+  // from the waiter/kitchen/reservations login inside StaffHome): besides
+  // returning to the public menu, this also clears ?sezione (the sub-area
+  // chosen in StaffHome, see StaffHome.jsx) with a silent replaceState — it
+  // must not stay in the URL nor generate its own history entry, otherwise
+  // reopening "Gestione menù" would jump straight back to the last section
+  // instead of showing the Dashboard again.
   const handleExitStaff = () => {
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -188,14 +187,14 @@ export default function App() {
         );
       }
 
-      // Auth obbligatoria prima di scrivere: con la cache persistente,
-      // setDoc senza auth può restare in attesa per sempre.
+      // Auth is required before writing: with the persistent cache, setDoc
+      // without auth can hang forever.
       const { auth } = await import("./firebase-auth");
       if (!auth.currentUser) {
- 	throw new Error("Sessione scaduta. Effettua di nuovo l'accesso e riprova.");
+        throw new Error("Sessione scaduta. Effettua di nuovo l'accesso e riprova.");
       }
-      // Forza refresh del token per evitare rifiuti silenziosi.
-      try { await auth.currentUser.getIdToken(true); } catch (_) { /* proseguiamo */ }
+      // Force a token refresh to avoid silent rejections.
+      try { await auth.currentUser.getIdToken(true); } catch (_) { /* proceed anyway */ }
 
       let timeoutId;
       const timeout = new Promise((_, reject) => {
@@ -252,9 +251,9 @@ export default function App() {
     );
   }
 
-  // L'area riservata può aprirsi anche senza un menù ancora caricato (il
-  // pannello Admin al suo interno permette di importare un backup JSON se il
-  // documento non esiste ancora su Firestore — vedi Admin.jsx).
+  // The restricted area can also open without a menu loaded yet (the Admin
+  // panel inside it lets you import a JSON backup if the document doesn't
+  // exist yet on Firestore — see Admin.jsx).
   if (view === "staff") {
     return (
       <Suspense

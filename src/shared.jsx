@@ -1,6 +1,7 @@
-// Pezzi condivisi tra il sito pubblico (ClientView) e il pannello di gestione (Admin):
-// temi grafici, dati di default del menù, utility di traduzione automatica, piccoli
-// componenti decorativi. Nessun import di Firebase qui: restano fuori dal bundle pubblico.
+// Pieces shared between the public site (ClientView) and the management
+// panel (Admin): visual themes, default menu data, auto-translation
+// utilities, small decorative components. No Firebase import here: they
+// stay out of the public bundle.
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
 /* ============================== THEME PRESETS ============================== */
@@ -43,9 +44,9 @@ export const THEMES = {
 export const ital = (t) => (t.italic === false ? "normal" : "italic");
 
 /* ============================== TYPE / SPACING SCALE ==============================
-   Nomi per le dimensioni di font e spaziatura già in uso in ClientView/Admin/
-   PrintMenu. Ogni valore qui sotto è un pixel già usato da qualche parte oggi:
-   questo raggruppa sotto un nome, non cambia nessuna dimensione visibile. */
+   Names for the font size / spacing values already in use in ClientView/Admin/
+   PrintMenu. Every value below is a pixel value already used somewhere today:
+   this just groups them under a name, it doesn't change any visible size. */
 export const TYPE = {
   micro: 9.5, tiny: 10, tinyPlus: 10.5, label: 11, labelPlus: 11.5,
   small: 12, smallPlus: 12.5, body: 13, bodyPlus: 13.5, bodyLg: 14,
@@ -55,19 +56,19 @@ export const TYPE = {
 
 export const SPACE = { xxs: 4, xs: 6, sm: 8, smPlus: 10, md: 12, mdPlus: 14, lg: 16, lgPlus: 18, xl: 20, xlPlus: 22, xxl: 24 };
 
-// Usato solo dalle schermate di caricamento/errore che compaiono PRIMA che
-// menu.theme sia noto (MenuApp.jsx, Admin.jsx, PrintMenu.jsx): non possono
-// usare un token di THEMES, serve un neutro leggibile su tutti e 4 gli sfondi.
+// Only used by the loading/error screens that appear BEFORE menu.theme is
+// known (MenuApp.jsx, Admin.jsx, PrintMenu.jsx): they can't use a THEMES
+// token, they need a neutral color readable on all 4 backgrounds.
 export const FALLBACK_STYLE = { color: "#3A3A3A", fontFamily: "'Work Sans', sans-serif", background: "#F7F5F1" };
 
-// Il documento Firestore che contiene l'intero menù.
+// The Firestore document holding the entire menu.
 export const MENU_DOC_PATH = ["menu", "data"];
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
-/* ============================== RICERCA PIATTI ============================== */
-// Confronto case/accento-insensibile ("crema di pomodoro" trova "Crémá"),
-// usato sia dal menù cliente sia dalla presa comande cameriere.
+/* ============================== DISH SEARCH ============================== */
+// Case/accent-insensitive comparison ("crema di pomodoro" matches "Crémá"),
+// used both by the customer menu and by the waiter's order-taking screen.
 function normalizeSearch(text) {
   return (text || "")
     .normalize("NFD")
@@ -75,12 +76,12 @@ function normalizeSearch(text) {
     .toLowerCase()
     .trim();
 }
-// Cerca un piatto per nome/descrizione in QUALSIASI lingua in cui il menù è
-// stato tradotto, non solo in quella mostrata a schermo in quel momento: un
-// cameriere che lavora sul menù in italiano può digitare "steak" e trovare
-// comunque "Costata" se la traduzione inglese esiste, utile con clienti
-// stranieri che chiedono un piatto nella propria lingua. Cerca per id
-// (stabile tra le lingue), non per il testo già visualizzato.
+// Searches for a dish by name/description in ANY language the menu has been
+// translated into, not just the one currently shown on screen: a waiter
+// working on the Italian menu can type "steak" and still find "Costata" if
+// the English translation exists, useful with foreign customers asking for
+// a dish by its name in their own language. Searches by id (stable across
+// languages), not by the text currently displayed.
 function candidateMatches(candidate, q) {
   return !!candidate && (normalizeSearch(candidate.name).includes(q) || normalizeSearch(candidate.description).includes(q));
 }
@@ -94,13 +95,13 @@ export function itemMatchesSearch(menu, categoryId, itemId, query) {
   return Object.values(translations).some((t) => candidateMatches(t?.categories?.[categoryId]?.items?.[itemId], q));
 }
 
-/* ============================== NAVIGAZIONE (cronologia browser) ============================== */
-// Sincronizza uno stato con un parametro della query string, così le
-// schermate principali (menù pubblico / area riservata / sezione scelta)
-// restano raggiungibili dall'URL e navigabili col pulsante Indietro del
-// browser — senza introdurre un router: ogni cambiamento fa un push nella
-// cronologia (a meno di passare { replace: true }), e un listener su
-// "popstate" riallinea lo stato quando l'utente va avanti/indietro.
+/* ============================== NAVIGATION (browser history) ============================== */
+// Syncs a piece of state with a query string parameter, so the main screens
+// (public menu / restricted area / chosen section) stay reachable from the
+// URL and navigable with the browser's Back button — without introducing a
+// router: every change pushes a history entry (unless { replace: true } is
+// passed), and a "popstate" listener realigns the state when the user goes
+// forward/back.
 export function useUrlState(paramName, defaultValue) {
   const readValue = () => {
     if (typeof window === "undefined") return defaultValue;
@@ -109,9 +110,9 @@ export function useUrlState(paramName, defaultValue) {
   };
 
   const [value, setValue] = useState(readValue);
-  // Specchia `value` per poterlo leggere in setUrlValue senza passare dalla
-  // forma funzionale di setState (vedi sotto): l'aggiornamento del ref è
-  // sincrono, quello dello state no.
+  // Mirrors `value` so it can be read in setUrlValue without going through
+  // the functional form of setState (see below): the ref update is
+  // synchronous, the state one isn't.
   const valueRef = useRef(value);
   useEffect(() => { valueRef.current = value; }, [value]);
 
@@ -122,13 +123,13 @@ export function useUrlState(paramName, defaultValue) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // L'effetto collaterale (history.pushState/replaceState) vive nel corpo di
-  // questa callback, MAI dentro la forma funzionale di setState: in
-  // React.StrictMode (main.jsx) un updater funzionale passato a setState
-  // viene invocato due volte in sviluppo per verificarne la purezza, il che
-  // raddoppiava silenziosamente ogni pushState (un click → due voci nella
-  // cronologia, pulsante Indietro del browser rotto: serviva un doppio
-  // Indietro per annullare una singola navigazione in-app).
+  // The side effect (history.pushState/replaceState) lives in the body of
+  // this callback, NEVER inside the functional form of setState: in
+  // React.StrictMode (main.jsx) a functional updater passed to setState is
+  // invoked twice in development to check its purity, which was silently
+  // doubling every pushState (one click → two history entries, the
+  // browser's Back button broken: it took two Backs to undo a single
+  // in-app navigation).
   const setUrlValue = useCallback((next, { replace = false } = {}) => {
     const prev = valueRef.current;
     const resolved = typeof next === "function" ? next(prev) : next;
@@ -148,10 +149,10 @@ export function useUrlState(paramName, defaultValue) {
   return [value, setUrlValue];
 }
 
-/* ============================== COMANDE (staff) ============================== */
-// Somma prezzi salvati come stringa in stile italiano ("12,50") e restituisce
-// una stringa nello stesso formato — coerente con come i prezzi sono già
-// salvati nel menù (mai come number).
+/* ============================== ORDERS (staff) ============================== */
+// Sums prices stored as Italian-style strings ("12,50") and returns a
+// string in the same format — consistent with how prices are already
+// stored in the menu (never as a number).
 export function parsePriceToCents(price) {
   const n = parseFloat(String(price ?? "0").replace(/\./g, "").replace(",", "."));
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
@@ -160,30 +161,30 @@ export function formatCentsAsPrice(cents) {
   return (cents / 100).toFixed(2).replace(".", ",");
 }
 
-// Per le etichette degli assi dei grafici (Stats.jsx): valori interi in
-// centesimi (es. 125000) letti direttamente come tick sarebbero fuorvianti
-// rispetto all'importo reale in euro mostrato nel tooltip — questo formatta
-// in modo compatto ("€ 1,2 mila") così l'asse resta leggibile anche con
-// importi grandi, senza i decimali di formatCentsAsPrice (superflui su un
-// asse con pochi tick).
+// For chart axis labels (Stats.jsx): raw integer values in cents (e.g.
+// 125000) read directly as ticks would be misleading compared to the
+// actual euro amount shown in the tooltip — this formats them compactly
+// ("€ 1,2 mila") so the axis stays readable even with large amounts,
+// without formatCentsAsPrice's decimals (unnecessary on an axis with few
+// ticks).
 const compactEuroFormatter = new Intl.NumberFormat("it-IT", { notation: "compact", maximumFractionDigits: 1 });
 export function formatCentsCompact(cents) {
   return `€ ${compactEuroFormatter.format(cents / 100)}`;
 }
 
-// Turno di servizio corrente (pranzo/cena), determinato in automatico
-// dall'orario — nessuna configurazione richiesta. Soglia fissata alle 17:00:
-// prima è pranzo, da quell'ora in poi è cena. Se gli orari reali del locale
-// sono diversi, questa è l'unica costante da cambiare.
+// Current service shift (lunch/dinner), determined automatically from the
+// time of day — no configuration needed. Threshold fixed at 17:00: before
+// that it's lunch, from then on it's dinner. If the restaurant's actual
+// hours differ, this is the only constant to change.
 const SHIFT_BOUNDARY_HOUR = 17;
 
 export function currentShiftLabel() {
   return new Date().getHours() < SHIFT_BOUNDARY_HOUR ? "Pranzo" : "Cena";
 }
 
-// Inizio del turno in corso (oggi): mezzanotte per il pranzo, dalle 17:00
-// per la cena — usato per capire quali comande chiuse fanno parte del
-// turno attuale (vs. turni/giorni precedenti, già nello Storico).
+// Start of the current shift (today): midnight for lunch, 17:00 for dinner
+// — used to figure out which closed orders belong to the current shift (vs.
+// previous shifts/days, already in the History).
 export function currentShiftStart() {
   const start = new Date();
   if (start.getHours() < SHIFT_BOUNDARY_HOUR) {
@@ -194,10 +195,10 @@ export function currentShiftStart() {
   return start;
 }
 
-// Identificativo di un tavolo/comanda ovunque compaia nell'interfaccia
-// (elenco tavoli, dettaglio, cucina, storico): se è stato dato un nome,
-// quello è l'identificativo principale e il numero passa in secondo piano;
-// altrimenti il numero resta l'unico identificativo.
+// A table/order's identity wherever it appears in the UI (table list,
+// detail, kitchen, history): if a name was given, that's the primary
+// identity and the number becomes secondary; otherwise the number stays
+// the only identity.
 export function tableIdentity(order) {
   if (order.tableName) {
     return { primary: order.tableName, secondary: `Tavolo ${order.tableNumber}` };
@@ -205,7 +206,7 @@ export function tableIdentity(order) {
   return { primary: `Tavolo ${order.tableNumber}`, secondary: null };
 }
 
-/* ============================== LINGUE (lato clienti) ============================== */
+/* ============================== LANGUAGES (customer side) ============================== */
 export const LANGUAGES = [
   { code: "it", label: "IT" },
   { code: "en", label: "EN" },
@@ -214,7 +215,7 @@ export const LANGUAGES = [
   { code: "fr", label: "FR" },
 ];
 
-// Testi fissi dell'interfaccia: tradotti a mano, non richiedono chiamate API.
+// Fixed UI text: translated by hand, no API calls needed.
 export const UI_STRINGS = {
   it: { onRequest: "Su richiesta", manageMenu: "Area riservata", reviewGoogle: "Lascia una recensione su Google", reviewTripadvisor: "Lascia una recensione su TripAdvisor", linkInstagram: "Seguici su Instagram", linkFacebook: "Seguici su Facebook", linkShop: "Vai al nostro shop online", closeZoom: "Chiudi", searchPlaceholder: "Cerca un piatto…", searchNoResults: "Nessun piatto trovato." },
   en: { onRequest: "On request", manageMenu: "Staff area", reviewGoogle: "Leave a review on Google", reviewTripadvisor: "Leave a review on TripAdvisor", linkInstagram: "Follow us on Instagram", linkFacebook: "Follow us on Facebook", linkShop: "Visit our online shop", closeZoom: "Close", searchPlaceholder: "Search for a dish…", searchNoResults: "No dishes found." },
@@ -225,9 +226,9 @@ export const UI_STRINGS = {
 
 export const TRANSLATION_LANG_KEY = "mdp-lang";
 
-// Traduce un singolo testo con MyMemory (API pubblica e gratuita, nessuna chiave richiesta),
-// usando una cache di sola durata della chiamata per non richiamarla due volte per lo
-// stesso testo nello stesso batch di generazione.
+// Translates a single text with MyMemory (a free public API, no key
+// required), using a call-lifetime-only cache to avoid calling it twice for
+// the same text within the same generation batch.
 async function translateText(text, lang, cache) {
   if (!text || !text.trim() || lang === "it") return text || "";
   const key = lang + "|" + text;
@@ -242,13 +243,13 @@ async function translateText(text, lang, cache) {
       cache[key] = translated;
       return translated;
     }
-  } catch (e) {
-    // Nessuna connessione o servizio non raggiungibile: si ricade sul testo italiano.
+  } catch {
+    // No connection or service unreachable: fall back to the Italian text.
   }
   return text;
 }
 
-// Traduce più testi con concorrenza limitata, per non sovraccaricare l'API gratuita.
+// Translates several texts with limited concurrency, to avoid overloading the free API.
 async function translateBatch(texts, lang, cache, concurrency = 4) {
   const results = new Array(texts.length);
   let i = 0;
@@ -262,12 +263,13 @@ async function translateBatch(texts, lang, cache, concurrency = 4) {
   return results;
 }
 
-// Costruisce, a partire dal menù sorgente (italiano) e da una traduzione parziale
-// già salvata, l'elenco dei soli campi ancora mancanti per una lingua ("jobs", con
-// una funzione "apply" per scrivere il risultato nella bozza) più la bozza stessa
-// (che contiene già intatto tutto ciò che era stato tradotto/corretto in precedenza).
-// Usata sia per generare le traduzioni mancanti, sia per mostrare all'admin quante
-// voci restano da tradurre.
+// Builds, starting from the source menu (Italian) and a partial translation
+// already saved, the list of only the fields still missing for a language
+// ("jobs", each with an "apply" function to write the result into the
+// draft) plus the draft itself (which already contains, intact, everything
+// previously translated/corrected). Used both to generate missing
+// translations and to show the admin how many entries are left to
+// translate.
 function collectMissingTranslations(menu, translation) {
   const existing = translation || {};
   const jobs = [];
@@ -278,12 +280,12 @@ function collectMissingTranslations(menu, translation) {
     categories: {},
   };
 
-  // Un campo mai tradotto (currentValue === undefined) o riceve un job di
-  // traduzione (se c'è del testo sorgente da tradurre), oppure viene
-  // riempito subito con "" (se il sorgente è vuoto, es. descrizione non
-  // compilata) — non deve MAI restare undefined: Firestore rifiuta interi
-  // documenti che contengono un undefined annidato, quindi lasciarlo tale
-  // farebbe fallire ogni salvataggio successivo alla generazione.
+  // A field that was never translated (currentValue === undefined) either
+  // gets a translation job (if there's source text to translate), or is
+  // immediately filled with "" (if the source is empty, e.g. an
+  // uncompleted description) — it must NEVER stay undefined: Firestore
+  // rejects entire documents that contain a nested undefined, so leaving it
+  // as such would fail every save after generation.
   const track = (sourceText, currentValue, apply) => {
     if (currentValue !== undefined) return;
     if (sourceText && sourceText.trim()) {
@@ -318,15 +320,16 @@ function collectMissingTranslations(menu, translation) {
   return { draft, jobs };
 }
 
-// Quante voci restano da tradurre per una lingua (0 = traduzione completa).
+// How many entries are left to translate for a language (0 = fully translated).
 export function countMissingTranslations(menu, translation) {
   return collectMissingTranslations(menu, translation).jobs.length;
 }
 
-// Genera (via MyMemory) solo le traduzioni mancanti per una lingua, senza mai
-// toccare un campo già tradotto/corretto a mano dall'admin. Va chiamata esplicitamente
-// dal pannello Admin (mai lato cliente): il risultato è pensato per essere rivisto
-// dall'admin e poi salvato dentro `menu.translations[lang]`.
+// Generates (via MyMemory) only the missing translations for a language,
+// never touching a field already translated/corrected by hand by the admin.
+// Must be called explicitly from the Admin panel (never client-side): the
+// result is meant to be reviewed by the admin and then saved into
+// `menu.translations[lang]`.
 export async function generateMissingTranslations(menu, lang, translation) {
   const { draft, jobs } = collectMissingTranslations(menu, translation);
   if (lang === "it" || jobs.length === 0) return draft;
@@ -336,11 +339,12 @@ export async function generateMissingTranslations(menu, lang, translation) {
   return draft;
 }
 
-// Sovrappone al menù sorgente (italiano) la traduzione salvata per una lingua,
-// ricadendo sul testo italiano campo per campo dove manca (voce non ancora
-// tradotta, o lingua senza alcuna traduzione generata). Pura e sincrona: nessuna
-// chiamata di rete — il cliente sceglie solo quale testo, già scaricato insieme
-// al resto del menù, visualizzare.
+// Overlays the saved translation for a language on top of the source
+// (Italian) menu, falling back to the Italian text field by field where
+// it's missing (an entry not yet translated, or a language with no
+// translation generated at all). Pure and synchronous: no network call —
+// the customer only chooses which text, already downloaded along with the
+// rest of the menu, to display.
 export function applyTranslation(menu, translation) {
   if (!translation) return menu;
   return {
@@ -368,7 +372,7 @@ export function applyTranslation(menu, translation) {
   };
 }
 
-// Logo caricato dall'utente (Fattoria della Piana), incorporato come immagine.
+// User-uploaded logo (Fattoria della Piana), embedded as an image.
 
 /* ============================== GLOBAL STYLE ============================== */
 export function GlobalStyle({ t }) {
@@ -429,10 +433,10 @@ export function BranchDivider({ color }) {
   );
 }
 
-// Il logo è un file immagine leggero e separato (public/logo.webp + fallback
-// public/logo.jpg), NON più incorporato come testo nel codice: si scarica
-// una sola volta e resta in cache nel browser del cliente, invece di
-// appesantire ogni caricamento della pagina.
+// The logo is a small, separate image file (public/logo.webp + fallback
+// public/logo.jpg), NO LONGER embedded as text in the code: it's
+// downloaded once and stays cached in the customer's browser, instead of
+// bloating every page load.
 export function Logo({ width = 160 }) {
   return (
     <picture>

@@ -1,6 +1,6 @@
-// Area cucina — schermo fisso che mostra le comande aperte, raggruppate per
-// tavolo e per portata (vedi docs/comande-camerieri.md). Caricato solo su
-// /cucina (lazy, vedi MenuApp.jsx), mai dal sito pubblico.
+// Kitchen area — fixed screen showing open orders, grouped by table and by
+// course (see docs/comande-camerieri.md). Loaded only at /cucina (lazy, see
+// MenuApp.jsx), never from the public site.
 import React, { useState, useEffect, useRef } from "react";
 import { LogOut, CheckCircle2, Clock, History } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, tableIdentity } from "./shared";
@@ -23,22 +23,21 @@ function formatTime(ts) {
   return ts?.toDate ? ts.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
 }
 
-// Raggruppa le righe per categoria reale del menù (categoryId/categoryName,
-// salvati come snapshot su ogni riga al momento dell'invio — vedi
-// buildOrderLine in orders.js), non più per un elenco fisso di "portate":
-// così il gruppo mostrato in cucina corrisponde sempre esattamente alla
-// categoria scelta dal cameriere, senza possibilità di errore. L'ordine dei
-// gruppi segue l'ordine in cui le categorie compaiono per la prima volta
-// nell'array items (cioè l'ordine di invio).
+// Groups lines by the real menu category (categoryId/categoryName, saved as
+// a snapshot on each line at send time — see buildOrderLine in orders.js),
+// no longer by a fixed list of "courses": so the group shown in the kitchen
+// always matches exactly the category the waiter chose, with no room for
+// error. Group order follows the order in which categories first appear in
+// the items array (i.e. send order).
 function groupByCategory(items) {
   const order = [];
   const byId = new Map();
   for (const line of items) {
     const key = line.categoryId || "__other__";
     if (!byId.has(key)) {
-      // categoryId resta il valore originale della riga (può essere null),
-      // usato per il confronto in markCategoryOut — "key" è solo per il
-      // raggruppamento locale.
+      // categoryId stays the line's original value (can be null), used for
+      // the comparison in markCategoryOut — "key" is only for local
+      // grouping.
       byId.set(key, { categoryId: line.categoryId, categoryName: line.categoryName || "Altro", lines: [] });
       order.push(key);
     }

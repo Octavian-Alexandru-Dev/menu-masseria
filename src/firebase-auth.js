@@ -1,7 +1,7 @@
-// Firebase Authentication — usato SOLO dal pannello di gestione menù.
-// È in un file a parte apposta: firebase/auth è un modulo pesante e non ha
-// senso farlo scaricare a un cliente che sta solo guardando il menù.
-// Questo file viene incluso nel sito solo quando si clicca "Gestione menù".
+// Firebase Authentication — used ONLY by the menu management panel.
+// Kept in its own file on purpose: firebase/auth is a heavy module with no
+// reason to be downloaded by a customer who's just looking at the menu.
+// This file is only included in the bundle once someone clicks "Gestione menù".
 import { app } from "./firebase-db";
 import {
   getAuth,
@@ -13,7 +13,7 @@ import {
 
 export const auth = getAuth(app);
 
-// Vedi firebase-db.js per il significato di VITE_USE_FIREBASE_EMULATOR.
+// See firebase-db.js for the meaning of VITE_USE_FIREBASE_EMULATOR.
 if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true") {
   connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
 }

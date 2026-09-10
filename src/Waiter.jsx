@@ -1,8 +1,8 @@
-// Area cameriere — presa comande digitale (vedi docs/comande-camerieri.md).
-// Caricato solo su /cameriere (lazy, vedi MenuApp.jsx), mai dal sito pubblico.
+// Waiter area — digital order taking (see docs/comande-camerieri.md).
+// Loaded only at /cameriere (lazy, see MenuApp.jsx), never from the public site.
 import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { Plus, Minus, X, ArrowLeft, LogOut, CheckCircle2, Clock, Utensils, History, Users, Receipt, CalendarDays, Play, Search } from "lucide-react";
-import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableIdentity, currentShiftStart, currentShiftLabel, itemMatchesSearch } from "./shared";
+import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, parsePriceToCents, tableIdentity, currentShiftStart, currentShiftLabel, itemMatchesSearch } from "./shared";
 import {
   subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
   autoCloseStaleOrders, orderTotalCents, copertoTotalCents,
@@ -186,9 +186,9 @@ function TableList({ t, menu, orders, shiftClosedOrders, expandedClosedId, onTog
         })}
       </div>
 
-      {/* Tavoli chiusi durante il turno in corso (§9 del documento): non
-          spariscono del tutto dalla schermata — restano consultabili qui
-          fino al cambio di turno (poi solo dallo Storico). */}
+      {/* Tables closed during the current shift (§9 of the doc): they don't
+          disappear from the screen entirely — they stay accessible here
+          until the shift changes (afterwards, only from the History). */}
       {shiftClosedOrders.length > 0 && (
         <div style={{ marginTop: 28 }}>
           <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 8 }}>
@@ -311,7 +311,7 @@ function CoversEditor({ t, order }) {
   );
 }
 
-function OrderDetail({ t, menu, menuCosts, order, onBack, staffName }) {
+function OrderDetail({ t, menu, menuCosts, order, onBack }) {
   const [draft, setDraft] = useState([]); // { lineId, menuItemId, name, price, categoryId, categoryName, quantity, notes }
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -325,11 +325,11 @@ function OrderDetail({ t, menu, menuCosts, order, onBack, staffName }) {
     .filter((c) => c.items.length > 0);
   const offMenuItems = categories.flatMap((c) => c.items.filter((i) => i.staffOnly).map((i) => ({ ...i, _categoryId: c.id, _categoryName: c.name })));
 
-  // Ricerca piatti: filtra dal vivo le liste sotto "Aggiungi piatti" mentre
-  // il cameriere digita, in qualunque lingua sia stata tradotta la voce —
-  // utile quando un cliente straniero chiede un piatto nella propria lingua
-  // anche se il pannello cameriere lavora sul menù in italiano. Disattivabile
-  // dall'admin (menu.searchEnabled): assente/true = attiva.
+  // Dish search: filters the lists under "Aggiungi piatti" live as the
+  // waiter types, in whatever language an entry has been translated into —
+  // useful when a foreign customer asks for a dish in their own language
+  // even if the waiter panel is working on the Italian menu. Can be
+  // disabled by the admin (menu.searchEnabled): missing/true = enabled.
   const searchEnabled = menu?.searchEnabled !== false;
   const [itemSearch, setItemSearch] = useState("");
   const isItemSearching = searchEnabled && itemSearch.trim() !== "";
@@ -342,9 +342,9 @@ function OrderDetail({ t, menu, menuCosts, order, onBack, staffName }) {
     ? offMenuItems.filter((i) => itemMatchesSearch(menu, i._categoryId, i.id, itemSearch))
     : offMenuItems;
 
-  // La "portata" non è più una scelta manuale (fonte di errori: un piatto
-  // finito per sbaglio sotto la categoria selezionata in quel momento), ma
-  // sempre la categoria reale del menù a cui il piatto appartiene.
+  // A line's "course" is no longer a manual choice (a source of errors: a
+  // dish ending up by mistake under whichever category happened to be
+  // selected), but always the real menu category the dish belongs to.
   const addToDraft = (item, categoryId, categoryName) => {
     setDraft((d) => {
       const idx = d.findIndex((l) => l.menuItemId === item.id && !l.notes);
@@ -393,8 +393,8 @@ function OrderDetail({ t, menu, menuCosts, order, onBack, staffName }) {
     }
   };
 
-  // Raggruppa le righe già inviate per categoria reale del menù, nello
-  // stesso ordine in cui le categorie compaiono nel menù.
+  // Groups already-sent lines by the real menu category, in the same order
+  // the categories appear in the menu.
   const sentByCategory = categories
     .map((c) => ({ categoryId: c.id, categoryName: c.name, lines: (order.items || []).filter((l) => l.categoryId === c.id) }))
     .filter((g) => g.lines.length > 0);
@@ -404,10 +404,7 @@ function OrderDetail({ t, menu, menuCosts, order, onBack, staffName }) {
     sentByCategory.push({ categoryId: "__other__", categoryName: sentOther[0].categoryName || "Altro", lines: sentOther });
   }
 
-  const totalCents = orderTotalCents(order) + draft.reduce((s, l) => {
-    const n = parseFloat(String(l.price).replace(",", ".")) || 0;
-    return s + Math.round(n * 100) * l.quantity;
-  }, 0);
+  const totalCents = orderTotalCents(order) + draft.reduce((s, l) => s + parsePriceToCents(l.price) * l.quantity, 0);
 
   const statusColor = (status) => (status === "out" ? t.secondary : status === "preparing" ? t.accent : t.inkSoft);
   const statusLabel = (status) => (status === "out" ? "Uscita" : status === "preparing" ? "In preparazione" : "Inviata");
@@ -656,8 +653,8 @@ function WaiterPanel({ menu, session }) {
   const [menuCosts, setMenuCosts] = useState({});
   const closingRef = useRef(new Set());
 
-  // Costi dei piatti (src/menuCosts.js), per fotografarli sulle righe della
-  // comanda al momento dell'invio — vedi addToDraft in OrderDetail.
+  // Dish costs (src/menuCosts.js), to snapshot them onto the order lines at
+  // send time — see addToDraft in OrderDetail.
   useEffect(() => {
     const unsubscribe = subscribeMenuCosts(setMenuCosts, (err) => console.error("[waiter] Errore lettura costi piatti:", err));
     return unsubscribe;
@@ -671,10 +668,10 @@ function WaiterPanel({ menu, session }) {
     return unsubscribe;
   }, []);
 
-  // Comande chiuse nel turno in corso (§9): l'inizio turno si calcola una
-  // volta all'apertura della schermata — se l'app resta aperta a cavallo
-  // del cambio turno (pranzo→cena), basta ricaricare la pagina per
-  // aggiornarlo, coerente con gli altri controlli "pigri" già nell'app.
+  // Orders closed during the current shift (§9): the shift start is
+  // computed once when the screen opens — if the app stays open across a
+  // shift change (lunch→dinner), just reloading the page refreshes it,
+  // consistent with the other "lazy" checks already in the app.
   useEffect(() => {
     const unsubscribe = subscribeShiftClosedOrders(currentShiftStart(), (list) => {
       setShiftClosedOrders(list);
@@ -686,8 +683,9 @@ function WaiterPanel({ menu, session }) {
     runDailyExpiredReservationsCleanup();
   }, []);
 
-  // Prenotazioni confermate per oggi: appaiono qui appena inizia il turno,
-  // così il cameriere può "avviarle" senza dover ridigitare tavolo/coperti.
+  // Confirmed reservations for today: they show up here as soon as the
+  // shift starts, so the waiter can "start" them without having to retype
+  // table/covers.
   useEffect(() => {
     const unsubscribe = subscribeReservationsForDate(dateKey(), (list) => {
       setTodaysReservations(list.filter((r) => r.status === "confirmed"));
@@ -695,8 +693,8 @@ function WaiterPanel({ menu, session }) {
     return unsubscribe;
   }, []);
 
-  // Chiusura automatica pigra dopo 24h (§6.2): ad ogni aggiornamento della
-  // lista, chiude le comande rimaste aperte troppo a lungo.
+  // Lazy automatic closing after 24h (§6.2): on every list update, closes
+  // orders that have been open too long.
   useEffect(() => {
     if (!ordersReady) return;
     const toClose = orders.filter((o) => !closingRef.current.has(o.id));
@@ -787,7 +785,7 @@ function WaiterPanel({ menu, session }) {
         <NewTableForm t={t} onCancel={() => setView({ mode: "list" })} onCreate={createTable} busy={creating} />
       )}
       {ordersReady && view.mode === "detail" && currentOrder && (
-        <OrderDetail t={t} menu={menu} menuCosts={menuCosts} order={currentOrder} onBack={() => setView({ mode: "list" })} staffName={session.name} />
+        <OrderDetail t={t} menu={menu} menuCosts={menuCosts} order={currentOrder} onBack={() => setView({ mode: "list" })} />
       )}
       {ordersReady && view.mode === "detail" && !currentOrder && (
         <div style={{ textAlign: "center", padding: 40, color: t.inkSoft }}>

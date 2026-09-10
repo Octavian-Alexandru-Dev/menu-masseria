@@ -1,11 +1,11 @@
-// Landing page unica per il personale: dopo il login, mostra le aree a cui
-// l'account ha accesso in base al ruolo (staff/{uid}.role) e permette di
-// scegliere dove andare. Raggiunta dal pulsante "Area riservata" in fondo al
-// menù pubblico (ClientView) — accesso consentito solo dopo autenticazione.
+// Single landing page for staff: after login, shows the areas the account
+// has access to based on role (staff/{uid}.role) and lets them choose where
+// to go. Reached from the "Area riservata" button at the bottom of the
+// public menu (ClientView) — access only granted after authentication.
 //
-// /cameriere e /cucina restano comunque raggiungibili direttamente (utili
-// per un dispositivo dedicato, es. il tablet fisso in cucina): questa
-// pagina è il punto d'ingresso comune, non l'unico.
+// /cameriere and /cucina remain directly reachable too (useful for a
+// dedicated device, e.g. the fixed kitchen tablet): this page is the common
+// entry point, not the only one.
 import React, { useState, useEffect } from "react";
 import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, ArrowLeft, BarChart3 } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel, useUrlState } from "./shared";
@@ -22,12 +22,12 @@ import Stats from "./Stats";
 
 const TODAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
-// Landing "Dashboard": oltre alla scelta dell'area, mostra a colpo d'occhio
-// qualche numero utile a inizio turno (tavoli aperti, prenotazioni da
-// confermare) — le sottoscrizioni che lo alimentano vengono montate solo
-// quando la Dashboard è davvero mostrata (vedi StaffHome), così un account
-// solo-cameriere o solo-cucina, che salta dritto alla propria area, non
-// paga il costo di listener che non vedrà mai.
+// "Dashboard" landing: besides letting you pick an area, it shows a few
+// useful numbers at a glance at the start of a shift (open tables, pending
+// reservations) — the subscriptions that feed it are only mounted when the
+// Dashboard is actually shown (see StaffHome below), so a waiter-only or
+// kitchen-only account, which jumps straight to its own area, doesn't pay
+// the cost of listeners it will never see.
 function Dashboard({ t, session, options, onChoose, openTablesCount, pendingReservationsCount }) {
   const countFor = (key) => {
     if (key === "waiter") return openTablesCount != null ? `${openTablesCount} ${openTablesCount === 1 ? "tavolo aperto" : "tavoli aperti"}` : null;
@@ -101,10 +101,10 @@ function BackToAreasBar({ t, onBack }) {
 
 export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo }) {
   const session = useStaffSession();
-  // Sezione scelta nella Dashboard (admin/waiter/kitchen/reservations),
-  // sincronizzata con ?sezione nell'URL — così anche qui il pulsante
-  // Indietro del browser torna alla Dashboard invece di non fare nulla
-  // (vedi useUrlState in shared.jsx; ripulito all'uscita da MenuApp.jsx).
+  // Section chosen in the Dashboard (admin/waiter/kitchen/reservations),
+  // synced with ?sezione in the URL — so here too the browser's Back button
+  // returns to the Dashboard instead of doing nothing (see useUrlState in
+  // shared.jsx; cleared on exit from MenuApp.jsx).
   const [area, setArea] = useUrlState("sezione", null);
   const [openTablesCount, setOpenTablesCount] = useState(null);
   const [pendingReservationsCount, setPendingReservationsCount] = useState(0);
@@ -113,33 +113,33 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   const canAdmin = session.status === "ready" && session.role === "admin";
   const canWaiter = session.status === "ready" && (session.role === "waiter" || session.role === "admin");
   const canKitchen = session.status === "ready" && (session.role === "kitchen" || session.role === "admin");
-  // Aree "core" (invariate rispetto a prima): determinano da sole se saltare
-  // direttamente in un'area quando ce n'è una sola, e se mostrare la barra
-  // "Cambia area" — un account solo-cameriere o solo-cucina deve continuare
-  // ad avere l'accesso diretto alla propria area di sempre, senza vedere la
-  // Dashboard, anche ora che esiste una quarta voce (Prenotazioni).
+  // "Core" areas (unchanged from before): on their own they decide whether
+  // to jump straight into an area when there's only one, and whether to
+  // show the "Change area" bar — a waiter-only or kitchen-only account must
+  // keep getting the same direct access to its own area as always, without
+  // seeing the Dashboard, even now that a fourth entry exists (Reservations).
   const coreOptions = [
     canAdmin && { key: "admin", label: "Gestione menù", icon: ShieldCheck },
     canWaiter && { key: "waiter", label: "Sala", icon: ClipboardList },
     canKitchen && { key: "kitchen", label: "Cucina", icon: ChefHat },
   ].filter(Boolean);
-  const canReservations = canWaiter; // stessa idoneità minima di Sala
+  const canReservations = canWaiter; // same minimum eligibility as Sala
   const dashboardOptions = [
     ...coreOptions,
     canReservations && { key: "reservations", label: "Prenotazioni", icon: CalendarDays },
-    // Statistiche: concerne solo Gestione menù (vendite/incassi), quindi
-    // richiede canAdmin come "admin" in coreOptions — non in coreOptions
-    // stesso per non alterare l'auto-skip della Dashboard per gli account
-    // mono-ruolo (stesso motivo per cui ci sta anche Prenotazioni).
+    // Statistics: concerns only Gestione menù (sales/revenue), so it
+    // requires canAdmin like "admin" in coreOptions — not part of
+    // coreOptions itself, so as not to change the Dashboard auto-skip for
+    // single-role accounts (same reason Reservations is handled this way too).
     canAdmin && { key: "stats", label: "Statistiche", icon: BarChart3 },
   ].filter(Boolean);
 
   const chosen = area || (coreOptions.length === 1 ? coreOptions[0].key : null);
   const showingDashboard = session.status === "ready" && !chosen && coreOptions.length > 0;
 
-  // I contatori live della Dashboard si montano solo quando la Dashboard è
-  // davvero mostrata: un account che salta dritto in un'area (waiter-only,
-  // kitchen-only) non apre queste sottoscrizioni in più.
+  // The Dashboard's live counters are only mounted when the Dashboard is
+  // actually shown: an account that jumps straight into an area
+  // (waiter-only, kitchen-only) doesn't open these extra subscriptions.
   useEffect(() => {
     if (!showingDashboard || !canWaiter) { setOpenTablesCount(null); return; }
     return subscribeOpenOrders(
@@ -218,10 +218,10 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
           ? <Reservations menu={menu} />
           : <Stats menu={menu} />;
 
-  // Se c'è più di un'area core disponibile, mostra una barra per tornare
-  // alla scelta (invariato rispetto a prima: un account solo-cameriere o
-  // solo-cucina, che non ha mai visto la Dashboard, non vede nemmeno questa
-  // barra quando è nella sua unica area).
+  // When more than one core area is available, show a bar to go back to the
+  // choice screen (unchanged from before: a waiter-only or kitchen-only
+  // account, which never saw the Dashboard, doesn't see this bar either
+  // while in its only area).
   if (coreOptions.length > 1) {
     const t = THEMES[theme] || THEMES.minimal;
     return (

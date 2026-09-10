@@ -1,15 +1,15 @@
-// Vista stampabile del menù, aperta in una scheda a parte dal pannello Admin
-// ("Esporta PDF / Stampa" in Admin.jsx) tramite `?print=1`. Non è una copia
-// dell'interfaccia web (impaginazione a lista invece di card/nav), ma
-// riprende lo stesso tema visivo del menù digitale — stessi colori, stessi
-// caratteri, stesso logo e stesso fregio decorativo (`BranchDivider`) — così
-// il documento cartaceo si riconosce subito come lo stesso locale.
+// Printable menu view, opened in a separate tab from the Admin panel
+// ("Esporta PDF / Stampa" in Admin.jsx) via `?print=1`. Not a copy of the
+// web UI (list layout instead of cards/nav), but reuses the same visual
+// theme as the digital menu — same colors, same fonts, same logo and same
+// decorative flourish (`BranchDivider`) — so the printed document is
+// immediately recognizable as the same place.
 //
-// Il menù da stampare arriva via sessionStorage (chiave STORAGE_KEY), scritto
-// da Admin.jsx subito prima di aprire questa scheda con window.open(): per
-// pagine aperte così, da script, dalla stessa origine, il browser copia la
-// sessionStorage del chiamante nella nuova scheda — non serve un'altra
-// richiesta a Firestore, e riflette anche modifiche non ancora salvate.
+// The menu to print arrives via sessionStorage (key STORAGE_KEY), written by
+// Admin.jsx right before opening this tab with window.open(): for pages
+// opened this way, by script, from the same origin, the browser copies the
+// caller's sessionStorage into the new tab — no extra Firestore request
+// needed, and it also reflects changes not yet saved.
 import React, { useEffect, useState } from "react";
 import { THEMES, ital, Logo, BranchDivider, UI_STRINGS, FALLBACK_STYLE, TYPE } from "./shared";
 import { optimizedImageUrl } from "./cloudinary";
@@ -30,10 +30,10 @@ function socialHandle(url, style) {
   }
 }
 
-// Il prezzo non viene mai tradotto (resta il campo italiano, es. "22,00" o
-// "SU RICHIESTA"): stessa logica di ClientView.jsx per riconoscere il caso
-// "su richiesta" e mostrarlo nella lingua scelta per il PDF, invece del
-// testo italiano letterale.
+// The price is never translated (it stays the Italian field, e.g. "22,00" or
+// "SU RICHIESTA"): same logic as ClientView.jsx to recognize the "on
+// request" case and show it in the language chosen for the PDF, instead of
+// the literal Italian text.
 function formatPrice(price, ui) {
   const isRequest = /richiesta/i.test(price || "");
   return isRequest ? ui.onRequest : `€ ${price}`;
@@ -49,11 +49,11 @@ export default function PrintMenu() {
     }
   });
 
-  // Niente stampa automatica all'apertura: parte solo quando l'admin preme
-  // "Stampa" nel toolbar qui sotto (in precedenza partiva da sola non
-  // appena le immagini finivano di caricare — oltre a essere indesiderata,
-  // in sviluppo con React StrictMode l'effetto poteva rieseguirsi due volte
-  // al montaggio e aprire due finestre di stampa in sequenza).
+  // No auto-print on open: it only starts when the admin presses "Stampa" in
+  // the toolbar below (it used to start on its own as soon as the images
+  // finished loading — besides being unwanted, in development with React
+  // StrictMode the effect could re-run twice on mount and open two print
+  // dialogs in a row).
   useEffect(() => {
     if (!payload) return;
     document.title = payload.restaurantName ? `${payload.restaurantName} — menù` : "Menù";
@@ -157,16 +157,16 @@ export default function PrintMenu() {
   );
 }
 
-// Foglio di stile della vista stampabile. A schermo simula un foglio A4 su
-// un tavolo di lettura neutro (per controllare l'impaginazione prima di
-// stampare); in stampa il tavolo di sfondo e l'ombra spariscono, resta solo
-// il foglio. Colori, caratteri e fregio decorativo sono quelli del tema del
-// locale (stessi di ClientView.jsx) — non una tavolozza neutra fissa: se
-// l'admin stampa col tema scuro "Notte di Cirò", il foglio segue quel tema.
-// `print-color-adjust: exact` chiede al browser di stampare comunque i
-// colori di sfondo invece di scartarli per risparmiare inchiostro (dipende
-// comunque dall'opzione "Grafica di sfondo" nella finestra di stampa, che
-// resta una scelta dell'utente, non forzabile da CSS).
+// Stylesheet for the printable view. On screen it simulates an A4 sheet on a
+// neutral reading table (to check the layout before printing); when
+// actually printed, the background table and shadow disappear, leaving only
+// the sheet. Colors, fonts and decorative flourish are the restaurant's
+// theme (same as ClientView.jsx) — not a fixed neutral palette: if the
+// admin prints with the dark "Notte di Cirò" theme, the sheet follows that
+// theme. `print-color-adjust: exact` asks the browser to print background
+// colors instead of discarding them to save ink (still depends on the
+// "Background graphics" option in the print dialog, which remains the
+// user's choice, not something CSS can force).
 function PrintStyle({ t, paperSize }) {
   return (
     <style>{`
@@ -211,15 +211,14 @@ function PrintStyle({ t, paperSize }) {
       .mdp-print-divider { display: flex; justify-content: center; margin-top: 16px; }
       .mdp-print-divider-sm { margin-top: 8px; margin-bottom: 2px; transform: scale(0.85); }
 
-      /* Di default una categoria PUÒ continuare su una nuova pagina se non
-         entra tutta in quella corrente: le voci che entrano restano dov'erano
-         (niente spazio bianco lasciato apposta), solo le rimanenti
-         proseguono nella pagina dopo. Ogni singola voce (.mdp-print-item)
-         resta comunque intera, non si spezza mai a metà. L'opzione "Non
-         spezzare una categoria tra due pagine" in Admin applica invece
-         .mdp-print-cat-avoid-split, che torna al comportamento opposto
-         (l'intera categoria salta a una nuova pagina, lasciando eventuale
-         spazio vuoto in quella precedente). */
+      /* By default a category CAN continue on a new page if it doesn't all
+         fit on the current one: the entries that fit stay where they were
+         (no whitespace left on purpose), only the rest continues on the
+         next page. Each individual entry (.mdp-print-item) always stays
+         whole, never split mid-item. The "Don't split a category across two
+         pages" option in Admin instead applies .mdp-print-cat-avoid-split,
+         which reverts to the opposite behavior (the whole category jumps to
+         a new page, possibly leaving empty space on the previous one). */
       .mdp-print-cat { margin-bottom: 26px; }
       .mdp-print-cat-avoid-split { break-inside: avoid; }
       .mdp-print-cat-head { text-align: center; margin-bottom: 14px; break-inside: avoid; break-after: avoid; }
