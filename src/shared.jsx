@@ -76,14 +76,31 @@ function normalizeSearch(text) {
     .toLowerCase()
     .trim();
 }
-// Searches for a dish by name/description in ANY language the menu has been
-// translated into, not just the one currently shown on screen: a waiter
-// working on the Italian menu can type "steak" and still find "Costata" if
-// the English translation exists, useful with foreign customers asking for
-// a dish by its name in their own language. Searches by id (stable across
-// languages), not by the text currently displayed.
+// Searches for a dish by name/description/searchTags in ANY language the menu
+// has been translated into, not just the one currently shown on screen: a
+// waiter working on the Italian menu can type "steak" and still find
+// "Costata" if the English translation exists, useful with foreign customers
+// asking for a dish by its name in their own language. Searches by id (stable
+// across languages), not by the text currently displayed.
+// searchTags is free text (comma-separated, e.g. "Bibita, Alcolico") set by
+// the admin per dish: internal search keywords, never shown to customers
+// (unlike the single `tag` field, which is a visible badge like "ROSSO").
+// It lets unrelated dishes share a common search word (e.g. wine and Coke
+// both tagged "Bibita") and, translated like every other text field, works
+// in every language without the admin re-typing anything.
 function candidateMatches(candidate, q) {
-  return !!candidate && (normalizeSearch(candidate.name).includes(q) || normalizeSearch(candidate.description).includes(q));
+  if (!candidate) return false;
+  return (
+    normalizeSearch(candidate.name).includes(q) ||
+    normalizeSearch(candidate.description).includes(q) ||
+    normalizeSearch(candidate.searchTags).includes(q)
+  );
+}
+// A query matching the category's own name returns every item in it (e.g.
+// searching "primi" surfaces the whole "Primi" category), on top of the
+// per-dish matching above.
+function categoryMatches(category, q) {
+  return !!category && normalizeSearch(category.name).includes(q);
 }
 export function itemMatchesSearch(menu, categoryId, itemId, query) {
   const q = normalizeSearch(query);
@@ -91,8 +108,12 @@ export function itemMatchesSearch(menu, categoryId, itemId, query) {
   const rawCategory = menu?.categories?.find((c) => c.id === categoryId);
   const rawItem = rawCategory?.items?.find((i) => i.id === itemId);
   if (candidateMatches(rawItem, q)) return true;
+  if (categoryMatches(rawCategory, q)) return true;
   const translations = menu?.translations || {};
-  return Object.values(translations).some((t) => candidateMatches(t?.categories?.[categoryId]?.items?.[itemId], q));
+  return Object.values(translations).some((t) => {
+    const tCategory = t?.categories?.[categoryId];
+    return candidateMatches(tCategory?.items?.[itemId], q) || categoryMatches(tCategory, q);
+  });
 }
 
 /* ============================== NAVIGATION (browser history) ============================== */
@@ -307,10 +328,11 @@ function collectMissingTranslations(menu, translation) {
 
     cat.items.forEach((item) => {
       const existingItem = existingCat.items?.[item.id] || {};
-      const draftItem = { name: existingItem.name, description: existingItem.description, tag: existingItem.tag };
+      const draftItem = { name: existingItem.name, description: existingItem.description, tag: existingItem.tag, searchTags: existingItem.searchTags };
       track(item.name, draftItem.name, (v) => { draftItem.name = v; });
       track(item.description || "", draftItem.description, (v) => { draftItem.description = v; });
       track(item.tag || "", draftItem.tag, (v) => { draftItem.tag = v; });
+      track(item.searchTags || "", draftItem.searchTags, (v) => { draftItem.searchTags = v; });
       draftCat.items[item.id] = draftItem;
     });
 

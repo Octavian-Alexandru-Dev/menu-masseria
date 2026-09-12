@@ -109,8 +109,8 @@ const DEMO_MENU = {
       subtitle: "",
       visible: true,
       items: [
-        { id: "item-acqua", name: "Acqua naturale", price: "2,00", tag: "", description: "0,75L", visible: true, staffOnly: false },
-        { id: "item-vino-casa", name: "Vino della casa", price: "12,00", tag: "", description: "Rosso o bianco, la caraffa", visible: true, staffOnly: false },
+        { id: "item-acqua", name: "Acqua naturale", price: "2,00", tag: "", description: "0,75L", searchTags: "Bibita", visible: true, staffOnly: false },
+        { id: "item-vino-casa", name: "Vino della casa", price: "12,00", tag: "", description: "Rosso o bianco, la caraffa", searchTags: "Bibita, Alcolico", visible: true, staffOnly: false },
       ],
     },
   ],

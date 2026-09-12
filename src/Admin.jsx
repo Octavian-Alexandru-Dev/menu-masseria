@@ -1385,6 +1385,17 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                           <span style={labelStyle}>Descrizione</span>
                           <textarea rows={2} style={{ ...inputStyle, resize: "vertical" }} value={item.description || ""} onChange={(e) => updateItem(cat.id, item.id, "description", e.target.value)} />
                         </div>
+                        <div style={{ marginTop: 10 }}>
+                          <span style={labelStyle} title="Parole chiave interne per la ricerca (cliente e cameriere): mai mostrate in menù. Utile per raggruppare piatti diversi sotto una stessa parola, es. vino e Coca-Cola entrambi con 'Bibita'">
+                            Tag di ricerca (facolt., separati da virgola)
+                          </span>
+                          <input
+                            style={inputStyle}
+                            placeholder="es. Bibita, Alcolico"
+                            value={item.searchTags || ""}
+                            onChange={(e) => updateItem(cat.id, item.id, "searchTags", e.target.value)}
+                          />
+                        </div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 10 }}>
                           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                             <Toggle
@@ -1704,6 +1715,12 @@ function TranslationEditor({
                     <div style={{ marginTop: 10 }}>
                       <span style={labelStyle}>Descrizione</span>
                       <textarea rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder={item.description} value={tItem.description ?? ""} onChange={(e) => updateTranslationItem(cat.id, item.id, "description", e.target.value)} />
+                    </div>
+                  )}
+                  {item.searchTags && (
+                    <div style={{ marginTop: 10 }}>
+                      <span style={labelStyle}>Tag di ricerca</span>
+                      <input style={inputStyle} placeholder={item.searchTags} value={tItem.searchTags ?? ""} onChange={(e) => updateTranslationItem(cat.id, item.id, "searchTags", e.target.value)} />
                     </div>
                   )}
                 </div>
