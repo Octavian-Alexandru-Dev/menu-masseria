@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import {
   ChevronLeft, ChevronRight, ArrowLeft, LogOut, Plus, Check, X,
-  Play, Users, Phone, ChevronDown, ChevronUp,
+  Play, Users, Phone, ChevronDown, ChevronUp, CalendarDays,
 } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE } from "./shared";
 import {
@@ -448,25 +448,28 @@ function DaySection({ t, dayKey, dayReservations, onOpen, onConfirm, onReject, o
 }
 
 // Half-width, in days, of the rolling window loaded around the selected/
-// jumped-to date, and the step by which that window grows when the user
-// scrolls close to either edge — see ReservationAgenda below.
+// jumped-to date, and the step by which that window grows each time the
+// user taps "load previous/next" — see ReservationAgenda below.
 const AGENDA_INITIAL_SPAN = 15;
 const AGENDA_EXTEND_STEP = 30;
 // A day header is treated as "the one in view" once it scrolls up past this
 // many px from the top of the agenda's own scroll box.
 const AGENDA_TOP_MARGIN = 8;
 
-// Bidirectional infinite-scroll agenda: renders one DaySection per day in
-// [rangeStart, rangeEnd] inside its OWN scrollable box (not the page) — the
-// calendar/overview above stay fixed on screen and are never scrolled away,
-// however far back or forward the agenda is scrolled. It:
+// Agenda: renders one DaySection per day in [rangeStart, rangeEnd] inside
+// its OWN scrollable box (not the page) — the calendar/overview above stay
+// fixed on screen and are never scrolled away, however far back or forward
+// the agenda is scrolled. It:
 //  - reports which day is currently at the top of the box (onDateInView), so
 //    the calendar above can keep its highlighted day in sync while
-//    scrolling, à la a continuous agenda;
-//  - asks the parent to slide the loaded window forward/backward
-//    (onExtendForward/onExtendBackward) once the first/last day gets close
-//    to the box's edge, compensating scroll position when content is
-//    prepended so the box doesn't visibly jump;
+//    scrolling, à la a continuous agenda — purely a client-side readout of
+//    already-loaded days, no extra query;
+//  - loads more days only on an explicit tap of the "load previous/next"
+//    button at either end of the list (onExtendBackward/onExtendForward),
+//    rather than automatically as the user nears the edge — deliberately,
+//    to keep how many Firestore reads a scroll session can rack up under the
+//    user's control, compensating scroll position when days are prepended
+//    above so the box doesn't visibly jump;
 //  - handles "jumps" (tapping a date in the calendar that may fall outside
 //    the currently loaded window) via the scrollRequest prop: re-centers
 //    the window on that date if needed, then scrolls to it once its
@@ -498,12 +501,12 @@ function ReservationAgenda({
 
   const scrollRef = useRef(null);
   const dayRefs = useRef({});
-  const extendingBackRef = useRef(false);
-  const extendingFwdRef = useRef(false);
   const capturedHeightRef = useRef(null);
   const pendingJumpRef = useRef(null);
   const selectedDateRef = useRef(selectedDate);
   selectedDateRef.current = selectedDate;
+  const [loadingBack, setLoadingBack] = useState(false);
+  const [loadingFwd, setLoadingFwd] = useState(false);
 
   const scrollToDate = (date) => {
     const container = scrollRef.current;
@@ -511,6 +514,18 @@ function ReservationAgenda({
     if (!container || !el) return;
     const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
     container.scrollTo({ top: Math.max(container.scrollTop + delta, 0), behavior: "smooth" });
+  };
+
+  const handleLoadPrevious = () => {
+    if (loadingBack || !scrollRef.current) return;
+    setLoadingBack(true);
+    capturedHeightRef.current = scrollRef.current.scrollHeight;
+    onExtendBackward();
+  };
+  const handleLoadNext = () => {
+    if (loadingFwd) return;
+    setLoadingFwd(true);
+    onExtendForward();
   };
 
   // A tap on the calendar (scrollRequest changes): jump the window if the
@@ -538,9 +553,9 @@ function ReservationAgenda({
     }
   }, [rangeStart, rangeEnd]);
 
-  // Compensate the box's scroll when days were prepended above (rangeStart
-  // moved earlier from an edge-extend, not from a jump/reset), so content
-  // already on screen doesn't visibly shift.
+  // Compensate the box's scroll when days were prepended above (a "load
+  // previous" tap, not a jump/reset), so content already on screen doesn't
+  // visibly shift.
   useLayoutEffect(() => {
     const container = scrollRef.current;
     if (container && capturedHeightRef.current != null) {
@@ -548,27 +563,25 @@ function ReservationAgenda({
       if (delta > 0) container.scrollTop += delta;
     }
     capturedHeightRef.current = null;
-    extendingBackRef.current = false;
+    setLoadingBack(false);
   }, [rangeStart]);
 
   useEffect(() => {
-    extendingFwdRef.current = false;
+    setLoadingFwd(false);
   }, [rangeEnd]);
 
+  // Tracks which day is at the top of the box purely to keep the calendar's
+  // highlighted date in sync while scrolling — reads already-loaded DOM
+  // positions only, triggers no query.
   useEffect(() => {
     const container = scrollRef.current;
     if (!container) return;
     let raf = null;
-    let lastScrollTop = container.scrollTop;
     const handleScroll = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = null;
-        const scrollTop = container.scrollTop;
-        const scrollingUp = scrollTop < lastScrollTop;
-        lastScrollTop = scrollTop;
         const containerTop = container.getBoundingClientRect().top;
-
         let current = null;
         for (const key of dayKeys) {
           const el = dayRefs.current[key];
@@ -577,31 +590,6 @@ function ReservationAgenda({
           else break;
         }
         if (current && current !== selectedDateRef.current) onDateInView(current);
-
-        // Only grow the window backward while actually scrolling up and
-        // near its start — otherwise the first day (right at the top of
-        // the box) would trigger this on every load/forward-scroll too.
-        if (scrollingUp && !extendingBackRef.current) {
-          const firstEl = dayRefs.current[dayKeys[0]];
-          if (firstEl) {
-            const top = firstEl.getBoundingClientRect().top - containerTop;
-            if (top > -50 && top < 500) {
-              extendingBackRef.current = true;
-              capturedHeightRef.current = container.scrollHeight;
-              onExtendBackward();
-            }
-          }
-        }
-        if (!extendingFwdRef.current) {
-          const lastEl = dayRefs.current[dayKeys[dayKeys.length - 1]];
-          if (lastEl) {
-            const containerBottom = container.getBoundingClientRect().bottom;
-            if (lastEl.getBoundingClientRect().bottom - containerBottom < 700) {
-              extendingFwdRef.current = true;
-              onExtendForward();
-            }
-          }
-        }
       });
     };
     container.addEventListener("scroll", handleScroll, { passive: true });
@@ -612,8 +600,18 @@ function ReservationAgenda({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayKeys]);
 
+  const loadMoreBtnStyle = {
+    width: "100%", padding: "10px 0", background: "none", border: `1px solid ${t.line}`,
+    borderRadius: 8, color: t.ink, fontSize: TYPE.smallPlus, cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+  };
+
   return (
     <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 16px 24px" }}>
+      <button onClick={handleLoadPrevious} disabled={loadingBack} className="mdp-btn" style={{ ...loadMoreBtnStyle, marginTop: 4, cursor: loadingBack ? "default" : "pointer" }}>
+        <ChevronUp size={14} /> {loadingBack ? "Caricamento…" : "Carica giorni precedenti"}
+      </button>
+
       {dayKeys.map((key) => (
         <DaySection
           key={key}
@@ -625,6 +623,10 @@ function ReservationAgenda({
           busyId={busyId}
         />
       ))}
+
+      <button onClick={handleLoadNext} disabled={loadingFwd} className="mdp-btn" style={{ ...loadMoreBtnStyle, marginTop: 18, cursor: loadingFwd ? "default" : "pointer" }}>
+        {loadingFwd ? "Caricamento…" : "Carica giorni successivi"} <ChevronDown size={14} />
+      </button>
     </div>
   );
 }
@@ -633,6 +635,10 @@ function ReservationsPanel({ menu, session, onBack }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(dateKey());
+  // The calendar can be tucked away (collapse button, or automatically once
+  // a date is picked) to give the agenda below more room, and reopened via
+  // the floating button that appears in its place.
+  const [calendarOpen, setCalendarOpen] = useState(true);
   // Set only when the calendar (not the agenda scroll itself) asks to jump
   // to a date, so ReservationAgenda can tell a tap apart from its own
   // scroll-driven onDateInView updates and avoid fighting the user's scroll.
@@ -696,6 +702,7 @@ function ReservationsPanel({ menu, session, onBack }) {
   const handleCalendarSelectDate = (key) => {
     setSelectedDate(key);
     setScrollRequest({ date: key, token: Date.now() });
+    setCalendarOpen(false);
   };
   const handleDateInView = (key) => setSelectedDate(key);
   const handleResetAgendaRange = (centerKey) => {
@@ -801,15 +808,29 @@ function ReservationsPanel({ menu, session, onBack }) {
 
       {view.mode === "day" && (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", maxWidth: 560, width: "100%", margin: "0 auto" }}>
-          {/* Fixed area — calendar, overview and the day heading never
-              scroll away: only the agenda below (its own scroll box) does,
-              so there's always a way back to the calendar without a
-              dedicated "back to calendar" button. */}
+          {/* Fixed area — overview and the day heading never scroll away:
+              only the agenda below (its own scroll box) does, so there's
+              always a way back to it without a dedicated "back to calendar"
+              button. The calendar itself can be tucked away here too, to
+              leave more room for the agenda — see the floating button below
+              when it's collapsed. */}
           <div style={{ flexShrink: 0, padding: "20px 16px 0" }}>
-            <ReservationCalendar
-              t={t} visibleMonth={visibleMonth} onChangeMonth={setVisibleMonth}
-              selectedDate={selectedDate} onSelectDate={handleCalendarSelectDate} countsByDate={countsByDate}
-            />
+            {calendarOpen && (
+              <>
+                <ReservationCalendar
+                  t={t} visibleMonth={visibleMonth} onChangeMonth={setVisibleMonth}
+                  selectedDate={selectedDate} onSelectDate={handleCalendarSelectDate} countsByDate={countsByDate}
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button onClick={() => setCalendarOpen(false)} className="mdp-btn" style={{
+                    display: "flex", alignItems: "center", gap: 4, background: "none", border: "none",
+                    color: t.inkSoft, cursor: "pointer", fontSize: TYPE.tiny, padding: "6px 2px 0",
+                  }}>
+                    <ChevronUp size={12} /> Nascondi calendario
+                  </button>
+                </div>
+              </>
+            )}
 
             <OverviewBar t={t} dayReservations={dayReservations} />
 
@@ -824,9 +845,6 @@ function ReservationsPanel({ menu, session, onBack }) {
                 <Plus size={14} /> Nuova
               </button>
             </div>
-            <div style={{ fontSize: TYPE.tiny, color: t.inkSoft, marginBottom: 4 }}>
-              Scorri per i giorni successivi o precedenti
-            </div>
           </div>
 
           <ReservationAgenda
@@ -838,6 +856,22 @@ function ReservationsPanel({ menu, session, onBack }) {
             onOpen={(r) => setView({ mode: "edit", reservation: r })}
             onConfirm={handleConfirm} onReject={handleReject} onAvvia={handleAvvia} busyId={busyId}
           />
+
+          {!calendarOpen && (
+            <button
+              onClick={() => setCalendarOpen(true)}
+              aria-label="Mostra calendario"
+              className="mdp-btn"
+              style={{
+                position: "fixed", right: 18, bottom: 22, zIndex: 30,
+                width: 50, height: 50, borderRadius: "50%", background: t.primary, color: t.bg,
+                border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
+              }}
+            >
+              <CalendarDays size={22} />
+            </button>
+          )}
         </div>
       )}
 

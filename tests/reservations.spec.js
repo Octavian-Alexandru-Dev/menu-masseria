@@ -148,12 +148,11 @@ test.describe("Area prenotazioni", () => {
     const before = await monthNav.boundingBox();
 
     // L'agenda (la lista dei giorni) ha un proprio box di scroll indipendente
-    // dalla pagina: scorrerla molto in avanti — anche per decine di "pagine"
-    // di rotellina, così l'agenda deve estendere più volte la finestra
-    // caricata — non deve mai spostare il calendario, che sta fuori da quel
-    // box (bug: prima lo scroll era sull'intera pagina, e tornare indietro
-    // dopo essere scesi riattivava l'estensione all'indietro invece di far
-    // ricomparire il calendario).
+    // dalla pagina: scorrerla molto (anche per decine di "pagine" di
+    // rotellina, ben oltre il fondo del contenuto caricato) non deve mai
+    // spostare il calendario, che sta fuori da quel box (bug: prima lo
+    // scroll era sull'intera pagina, e tornare indietro dopo essere scesi
+    // non faceva ricomparire il calendario).
     const firstDay = page.locator("[data-day-key]").first();
     const dayBox = await firstDay.boundingBox();
     await page.mouse.move(dayBox.x + dayBox.width / 2, dayBox.y + 10);
@@ -172,6 +171,59 @@ test.describe("Area prenotazioni", () => {
     await expect.poll(() => page.evaluate(() => globalThis.scrollY)).toBe(0);
     await expect(monthNav).toBeVisible();
     expect((await monthNav.boundingBox()).y).toBeCloseTo(before.y, 0);
+  });
+
+  test('il pulsante "Carica giorni successivi" estende l\'agenda oltre la finestra iniziale', async ({ page }) => {
+    await login(page);
+    const name = randomName();
+    createdNames.push(name);
+
+    // Oltre la finestra iniziale di ±15 giorni caricata attorno a oggi
+    // (AGENDA_INITIAL_SPAN in Reservations.jsx): non deve comparire finché
+    // non si preme esplicitamente "Carica giorni successivi" — niente
+    // caricamento automatico scorrendo, per tenere sotto controllo quante
+    // letture Firestore innesca una sessione di scroll.
+    const future = new Date();
+    future.setDate(future.getDate() + 20);
+    const futureKey = future.toISOString().slice(0, 10);
+
+    await page.getByRole("button", { name: /^nuova$/i }).click();
+    await page.getByPlaceholder("es. Famiglia Rossi").fill(name);
+    await page.locator('input[type="date"]').fill(futureKey);
+    await page.getByRole("button", { name: /^salva \(da confermare\)$/i }).click();
+    await expect(page.getByText("Nuova prenotazione")).toHaveCount(0, { timeout: 10_000 });
+
+    const futureHeader = page.getByText(DAY_HEADER_LABEL.format(future), { exact: false });
+    await expect(futureHeader).toHaveCount(0);
+
+    await page.getByRole("button", { name: /carica giorni successivi/i }).click();
+
+    await expect(futureHeader).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(name).first()).toBeVisible();
+  });
+
+  test("il calendario si nasconde (manualmente o selezionando una data) e riappare con il pulsante flottante", async ({ page }) => {
+    await login(page);
+
+    const monthNav = page.getByRole("button", { name: "Mese successivo" });
+    const floatingBtn = page.getByRole("button", { name: "Mostra calendario" });
+    await expect(monthNav).toBeVisible();
+    await expect(floatingBtn).toHaveCount(0);
+
+    await page.getByRole("button", { name: /^nascondi calendario$/i }).click();
+    await expect(monthNav).toHaveCount(0);
+    await expect(floatingBtn).toBeVisible();
+
+    await floatingBtn.click();
+    await expect(monthNav).toBeVisible();
+    await expect(floatingBtn).toHaveCount(0);
+
+    // Selezionare una data lo richiude automaticamente, per lasciare subito
+    // più spazio alla lista sotto — coerente col motivo per cui lo si apre.
+    const todayCell = page.getByRole("button", { name: CELL_DATE_LABEL.format(new Date()) });
+    await todayCell.click();
+    await expect(monthNav).toHaveCount(0);
+    await expect(floatingBtn).toBeVisible();
   });
 
   test("il modulo richiede nome e data prima di poter salvare", async ({ page }) => {
