@@ -34,6 +34,12 @@ async function createReservation(page, name) {
   await expect(page.getByText(name).first()).toBeVisible({ timeout: 10_000 });
 }
 
+// Il calendario è chiuso di default (per lasciare spazio all'agenda): i test
+// che devono interagirci lo aprono esplicitamente col pulsante flottante.
+async function openCalendar(page) {
+  await page.getByRole("button", { name: "Mostra calendario" }).click();
+}
+
 test.describe("Area prenotazioni", () => {
   const createdNames = [];
 
@@ -86,6 +92,7 @@ test.describe("Area prenotazioni", () => {
 
   test("naviga tra i mesi del calendario", async ({ page }) => {
     await login(page);
+    await openCalendar(page);
     const monthLabel = page.locator('button[aria-label="Mese precedente"] + div');
     const before = await monthLabel.innerText();
     await page.getByRole("button", { name: "Mese successivo" }).click();
@@ -97,6 +104,7 @@ test.describe("Area prenotazioni", () => {
     const name = randomName();
     createdNames.push(name);
     await createReservation(page, name); // usa la data selezionata di default: oggi
+    await openCalendar(page);
 
     const todayCell = page.getByRole("button", { name: CELL_DATE_LABEL.format(new Date()) });
     await expect(todayCell).toBeVisible();
@@ -109,6 +117,10 @@ test.describe("Area prenotazioni", () => {
 
   test("scorrendo la lista oltre le prenotazioni di oggi compaiono quelle del giorno successivo, e il calendario segue", async ({ page }) => {
     await login(page);
+    // Il calendario resta aperto qui: lo si apre solo per poter verificare
+    // alla fine che la sua cella segua lo scroll — lo scroll stesso non lo
+    // richiude mai (solo un tap esplicito su un giorno lo fa).
+    await openCalendar(page);
     const name = randomName();
     createdNames.push(name);
 
@@ -143,6 +155,7 @@ test.describe("Area prenotazioni", () => {
 
   test("il calendario resta raggiungibile anche dopo aver scorso molto l'agenda avanti e indietro", async ({ page }) => {
     await login(page);
+    await openCalendar(page);
 
     const monthNav = page.getByRole("button", { name: "Mese successivo" });
     const before = await monthNav.boundingBox();
@@ -202,15 +215,13 @@ test.describe("Area prenotazioni", () => {
     await expect(page.getByText(name).first()).toBeVisible();
   });
 
-  test("il calendario si nasconde (manualmente o selezionando una data) e riappare con il pulsante flottante", async ({ page }) => {
+  test("il calendario è nascosto di default e si apre/richiude col pulsante flottante o selezionando una data", async ({ page }) => {
     await login(page);
 
     const monthNav = page.getByRole("button", { name: "Mese successivo" });
     const floatingBtn = page.getByRole("button", { name: "Mostra calendario" });
-    await expect(monthNav).toBeVisible();
-    await expect(floatingBtn).toHaveCount(0);
-
-    await page.getByRole("button", { name: /^nascondi calendario$/i }).click();
+    // Nascosto fin dal primo caricamento della pagina, per lasciare subito
+    // spazio all'agenda: solo il pulsante flottante è visibile.
     await expect(monthNav).toHaveCount(0);
     await expect(floatingBtn).toBeVisible();
 
@@ -218,8 +229,13 @@ test.describe("Area prenotazioni", () => {
     await expect(monthNav).toBeVisible();
     await expect(floatingBtn).toHaveCount(0);
 
+    await page.getByRole("button", { name: /^nascondi calendario$/i }).click();
+    await expect(monthNav).toHaveCount(0);
+    await expect(floatingBtn).toBeVisible();
+
     // Selezionare una data lo richiude automaticamente, per lasciare subito
     // più spazio alla lista sotto — coerente col motivo per cui lo si apre.
+    await floatingBtn.click();
     const todayCell = page.getByRole("button", { name: CELL_DATE_LABEL.format(new Date()) });
     await todayCell.click();
     await expect(monthNav).toHaveCount(0);

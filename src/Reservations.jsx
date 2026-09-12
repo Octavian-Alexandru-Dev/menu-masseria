@@ -635,10 +635,11 @@ function ReservationsPanel({ menu, session, onBack }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(dateKey());
-  // The calendar can be tucked away (collapse button, or automatically once
-  // a date is picked) to give the agenda below more room, and reopened via
-  // the floating button that appears in its place.
-  const [calendarOpen, setCalendarOpen] = useState(true);
+  // Collapsed by default — the agenda is what's actually used most of the
+  // time, and the calendar took up too much of the screen when always shown.
+  // Reopened via the floating button, or the "Nascondi calendario" link/an
+  // actual date pick tucks it away again.
+  const [calendarOpen, setCalendarOpen] = useState(false);
   // Set only when the calendar (not the agenda scroll itself) asks to jump
   // to a date, so ReservationAgenda can tell a tap apart from its own
   // scroll-driven onDateInView updates and avoid fighting the user's scroll.
