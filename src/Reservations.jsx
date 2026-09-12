@@ -2,7 +2,7 @@
 // (see docs/prenotazioni.md). Loaded only at /prenotazioni or from the
 // shortcut in Sala (lazy, see MenuApp.jsx/Waiter.jsx), never from the
 // public site. Accessible to waiters and admins.
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import {
   ChevronLeft, ChevronRight, ArrowLeft, LogOut, Plus, Check, X,
   Play, Users, Phone, ChevronDown, ChevronUp,
@@ -13,19 +13,26 @@ import {
 } from "./staff-shared";
 import {
   dateKey, createReservation, updateReservation, confirmReservation, rejectReservation,
-  cancelReservation, startReservation, subscribeReservationsForRange, subscribeReservationsForDate,
+  cancelReservation, startReservation, subscribeReservationsForRange,
   autoFlagNoShows, runDailyExpiredReservationsCleanup, coversLabel,
 } from "./reservationsData";
 
 const MONTH_LABEL = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const WEEKDAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "short" });
 const DAY_HEADER_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
+const CELL_DATE_LABEL = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" });
 
 function startOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 function addMonths(date, delta) {
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
+}
+// Adds `delta` days to a "YYYY-MM-DD" key (or Date) and returns a new key —
+// used to size/slide the agenda's rolling day window.
+function addDays(dateKeyOrDate, delta) {
+  const base = typeof dateKeyOrDate === "string" ? new Date(dateKeyOrDate + "T00:00:00") : dateKeyOrDate;
+  return dateKey(new Date(base.getFullYear(), base.getMonth(), base.getDate() + delta));
 }
 function monthRangeKeys(date) {
   const start = startOfMonth(date);
@@ -82,13 +89,18 @@ function ReservationCalendar({ t, visibleMonth, onChangeMonth, selectedDate, onS
           const counts = countsByDate[key];
           const isSelected = key === selectedDate;
           const isToday = key === todayKey;
+          const hasCounts = counts && counts.total > 0;
+          const cellDate = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
           return (
             <button
               key={key}
               onClick={() => onSelectDate(key)}
+              aria-label={hasCounts
+                ? `${CELL_DATE_LABEL.format(cellDate)}, ${counts.total} prenotazioni, ${counts.covers} coperti`
+                : CELL_DATE_LABEL.format(cellDate)}
               className="mdp-btn"
               style={{
-                position: "relative", padding: "8px 0", borderRadius: 8, cursor: "pointer",
+                position: "relative", padding: "6px 0 5px", borderRadius: 8, cursor: "pointer",
                 border: isToday ? `1px solid ${t.primary}` : "1px solid transparent",
                 background: isSelected ? t.primary : "transparent",
                 color: isSelected ? t.bg : t.ink,
@@ -96,13 +108,16 @@ function ReservationCalendar({ t, visibleMonth, onChangeMonth, selectedDate, onS
               }}
             >
               {day}
-              {counts && counts.total > 0 && (
-                <span style={{
-                  position: "absolute", bottom: 3, left: "50%", transform: "translateX(-50%)",
-                  width: 5, height: 5, borderRadius: "50%",
-                  background: counts.pending > 0 ? t.accent2 : (isSelected ? t.bg : t.secondary),
-                }} />
-              )}
+              {/* Mini overview per day, à la Google Flights' price-per-date: n° prenotazioni · coperti.
+                  Always reserves the line's height (visibility toggle, not conditional render) so
+                  weeks with and without reservations keep the same row height in the grid. */}
+              <div style={{
+                fontSize: TYPE.micro, lineHeight: 1.2, marginTop: 1, fontWeight: 600,
+                visibility: hasCounts ? "visible" : "hidden",
+                color: counts?.pending > 0 ? (isSelected ? t.bg : t.accent2) : (isSelected ? t.bg : t.inkSoft),
+              }}>
+                {hasCounts ? `${counts.total}·${counts.covers}p` : "0·0p"}
+              </div>
             </button>
           );
         })}
@@ -324,21 +339,48 @@ export function AvviaModal({ t, reservation, onCancel, onConfirm, busy }) {
   );
 }
 
-function DayList({ t, selectedDate, dayReservations, onOpen, onConfirm, onReject, onAvvia, busyId }) {
-  const isToday = selectedDate === dateKey();
+// One day's worth of reservations inside the agenda: a small date header
+// (with its own mini overview) followed by the same status groups the old
+// single-day list used. Kept as one component per day so each day gets its
+// own independent "closed" toggle state, and so its header DOM node can be
+// measured/ref'd by ReservationAgenda to know which day is on screen.
+function DaySection({ t, dayKey, dayReservations, onOpen, onConfirm, onReject, onAvvia, busyId, headerRef }) {
+  const isToday = dayKey === dateKey();
   const pending = dayReservations.filter((r) => r.status === "pending");
   const confirmed = dayReservations.filter((r) => r.status === "confirmed");
   const started = dayReservations.filter((r) => r.status === "started");
   const closed = dayReservations.filter((r) => ["rejected", "cancelled", "no_show"].includes(r.status));
   const [showClosed, setShowClosed] = useState(false);
 
+  const activeCount = pending.length + confirmed.length + started.length;
+  const covers = dayReservations
+    .filter((r) => ACTIVE_STATUSES.includes(r.status))
+    .reduce((s, r) => s + (r.covers?.adults || 0) + (r.covers?.children || 0), 0);
+
   const statusLabel = (s) => (s === "rejected" ? "Rifiutata" : s === "cancelled" ? "Annullata" : "No-show");
 
   return (
-    <div style={{ marginTop: 20 }}>
+    <div style={{ marginTop: 26 }} data-day-key={dayKey}>
+      <div
+        ref={headerRef}
+        style={{
+          display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10,
+          paddingBottom: 8, marginBottom: 12, borderBottom: `1px solid ${t.line}`,
+        }}
+      >
+        <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: isToday ? t.primary : t.ink, textTransform: "capitalize" }}>
+          {DAY_HEADER_LABEL.format(new Date(dayKey + "T00:00:00"))}{isToday ? " · Oggi" : ""}
+        </div>
+        {activeCount > 0 && (
+          <div style={{ fontSize: TYPE.tiny, color: t.inkSoft, whiteSpace: "nowrap", flexShrink: 0 }}>
+            {activeCount} pren. · {covers}p
+          </div>
+        )}
+      </div>
+
       {dayReservations.length === 0 && (
-        <div style={{ textAlign: "center", color: t.inkSoft, fontSize: TYPE.body, marginTop: 30 }}>
-          Nessuna prenotazione per questo giorno.
+        <div style={{ textAlign: "center", color: t.inkSoft, fontSize: TYPE.smallPlus, padding: "6px 0 4px" }}>
+          Nessuna prenotazione.
         </div>
       )}
 
@@ -405,12 +447,194 @@ function DayList({ t, selectedDate, dayReservations, onOpen, onConfirm, onReject
   );
 }
 
+// Half-width, in days, of the rolling window loaded around the selected/
+// jumped-to date, and the step by which that window grows when the user
+// scrolls close to either edge — see ReservationAgenda below.
+const AGENDA_INITIAL_SPAN = 15;
+const AGENDA_EXTEND_STEP = 30;
+// Rough height of the sticky top bar: a day header is treated as "the one
+// in view" once it scrolls up past this line.
+const AGENDA_HEADER_OFFSET = 72;
+
+// Bidirectional infinite-scroll agenda: renders one DaySection per day in
+// [rangeStart, rangeEnd] (a plain, page-scrolled list — no nested scroll
+// container), and:
+//  - reports which day is currently under the sticky header (onDateInView),
+//    so the calendar above can keep its highlighted day in sync while
+//    scrolling, à la a continuous agenda;
+//  - asks the parent to slide the loaded window forward/backward
+//    (onExtendForward/onExtendBackward) once the first/last day gets close
+//    to the viewport, compensating scroll position when content is
+//    prepended so the page doesn't visibly jump;
+//  - handles "jumps" (tapping a date in the calendar that may fall outside
+//    the currently loaded window) via the scrollRequest prop: re-centers
+//    the window on that date if needed, then scrolls to it once its
+//    section exists in the DOM.
+function ReservationAgenda({
+  t, rangeStart, rangeEnd, reservations, selectedDate, scrollRequest,
+  onDateInView, onResetRange, onExtendBackward, onExtendForward,
+  onOpen, onConfirm, onReject, onAvvia, busyId,
+}) {
+  const dayKeys = useMemo(() => {
+    const keys = [];
+    let cursor = rangeStart;
+    let guard = 0;
+    while (cursor <= rangeEnd && guard < 400) {
+      keys.push(cursor);
+      cursor = addDays(cursor, 1);
+      guard += 1;
+    }
+    return keys;
+  }, [rangeStart, rangeEnd]);
+
+  const reservationsByDate = useMemo(() => {
+    const map = {};
+    reservations.forEach((r) => {
+      (map[r.date] || (map[r.date] = [])).push(r);
+    });
+    return map;
+  }, [reservations]);
+
+  const dayRefs = useRef({});
+  const extendingBackRef = useRef(false);
+  const extendingFwdRef = useRef(false);
+  const capturedHeightRef = useRef(null);
+  const pendingJumpRef = useRef(null);
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+
+  const scrollToDate = (date) => {
+    const el = dayRefs.current[date];
+    if (!el) return;
+    const top = el.getBoundingClientRect().top + window.scrollY - AGENDA_HEADER_OFFSET;
+    window.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
+  };
+
+  // A tap on the calendar (scrollRequest changes): jump the window if the
+  // target date isn't loaded yet, otherwise just scroll to it.
+  useEffect(() => {
+    if (!scrollRequest) return;
+    const { date } = scrollRequest;
+    if (date < rangeStart || date > rangeEnd) {
+      pendingJumpRef.current = date;
+      onResetRange(date);
+    } else {
+      scrollToDate(date);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollRequest]);
+
+  // Once a jump has re-centered the window, its DaySections exist as soon
+  // as this commits (they're built from the range alone) — scroll to the
+  // target on the next frame, once refs are attached.
+  useLayoutEffect(() => {
+    if (pendingJumpRef.current) {
+      const target = pendingJumpRef.current;
+      pendingJumpRef.current = null;
+      requestAnimationFrame(() => scrollToDate(target));
+    }
+  }, [rangeStart, rangeEnd]);
+
+  // Compensate the page scroll when days were prepended above (rangeStart
+  // moved earlier from an edge-extend, not from a jump/reset), so content
+  // already on screen doesn't visibly shift.
+  useLayoutEffect(() => {
+    if (capturedHeightRef.current != null) {
+      const delta = document.documentElement.scrollHeight - capturedHeightRef.current;
+      capturedHeightRef.current = null;
+      if (delta > 0) window.scrollBy(0, delta);
+    }
+    extendingBackRef.current = false;
+  }, [rangeStart]);
+
+  useEffect(() => {
+    extendingFwdRef.current = false;
+  }, [rangeEnd]);
+
+  useEffect(() => {
+    let raf = null;
+    let lastScrollY = window.scrollY;
+    const handleScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        const scrollY = window.scrollY;
+        const scrollingUp = scrollY < lastScrollY;
+        lastScrollY = scrollY;
+
+        let current = null;
+        for (const key of dayKeys) {
+          const el = dayRefs.current[key];
+          if (!el) continue;
+          if (el.getBoundingClientRect().top - AGENDA_HEADER_OFFSET <= 8) current = key;
+          else break;
+        }
+        if (current && current !== selectedDateRef.current) onDateInView(current);
+
+        // Only grow the window backward while actually scrolling up and
+        // near its start — otherwise the first day (right below the
+        // calendar) would trigger this on every load/forward-scroll too.
+        if (scrollingUp && !extendingBackRef.current) {
+          const firstEl = dayRefs.current[dayKeys[0]];
+          if (firstEl) {
+            const top = firstEl.getBoundingClientRect().top;
+            if (top > -50 && top < 500) {
+              extendingBackRef.current = true;
+              capturedHeightRef.current = document.documentElement.scrollHeight;
+              onExtendBackward();
+            }
+          }
+        }
+        if (!extendingFwdRef.current) {
+          const lastEl = dayRefs.current[dayKeys[dayKeys.length - 1]];
+          if (lastEl && lastEl.getBoundingClientRect().bottom < window.innerHeight + 700) {
+            extendingFwdRef.current = true;
+            onExtendForward();
+          }
+        }
+      });
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKeys]);
+
+  return (
+    <div>
+      {dayKeys.map((key) => (
+        <DaySection
+          key={key}
+          t={t}
+          dayKey={key}
+          dayReservations={reservationsByDate[key] || []}
+          headerRef={(el) => { dayRefs.current[key] = el; }}
+          onOpen={onOpen} onConfirm={onConfirm} onReject={onReject} onAvvia={onAvvia}
+          busyId={busyId}
+        />
+      ))}
+    </div>
+  );
+}
+
 function ReservationsPanel({ menu, session, onBack }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
   const [visibleMonth, setVisibleMonth] = useState(startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(dateKey());
+  // Set only when the calendar (not the agenda scroll itself) asks to jump
+  // to a date, so ReservationAgenda can tell a tap apart from its own
+  // scroll-driven onDateInView updates and avoid fighting the user's scroll.
+  const [scrollRequest, setScrollRequest] = useState(null);
   const [monthReservations, setMonthReservations] = useState([]);
-  const [dayReservations, setDayReservations] = useState([]);
+  // Rolling window of days loaded for the agenda (independent of the
+  // calendar's visible month) — see ReservationAgenda.
+  const [agendaRange, setAgendaRange] = useState(() => ({
+    start: addDays(dateKey(), -AGENDA_INITIAL_SPAN),
+    end: addDays(dateKey(), AGENDA_INITIAL_SPAN),
+  }));
+  const [agendaReservations, setAgendaReservations] = useState([]);
   const [view, setView] = useState({ mode: "day" }); // day | new | edit (view mode)
   const [busyId, setBusyId] = useState(null);
   const [avviaTarget, setAvviaTarget] = useState(null);
@@ -426,21 +650,53 @@ function ReservationsPanel({ menu, session, onBack }) {
   }, [visibleMonth]);
 
   useEffect(() => {
-    const unsubscribe = subscribeReservationsForDate(selectedDate, setDayReservations,
-      (err) => console.error("[reservations] Errore lettura giorno:", err));
+    const unsubscribe = subscribeReservationsForRange(agendaRange.start, agendaRange.end, setAgendaReservations,
+      (err) => console.error("[reservations] Errore lettura agenda:", err));
     return unsubscribe;
+  }, [agendaRange.start, agendaRange.end]);
+
+  // Keeps the calendar's visible month following the selected date — which
+  // itself follows the agenda scroll — so the highlighted day is always
+  // actually shown in the currently displayed month grid.
+  useEffect(() => {
+    const selectedMonth = startOfMonth(new Date(selectedDate + "T00:00:00"));
+    setVisibleMonth((prev) => (prev.getTime() === selectedMonth.getTime() ? prev : selectedMonth));
   }, [selectedDate]);
 
   useEffect(() => {
     runDailyExpiredReservationsCleanup();
   }, []);
 
+  // The selected date is always inside agendaRange (calendar taps that fall
+  // outside it re-center the window before scrolling — see
+  // ReservationAgenda), so it's safe to derive it from the agenda data
+  // instead of running a second, separate single-day listener.
+  const dayReservations = agendaReservations.filter((r) => r.date === selectedDate);
+
   const countsByDate = {};
   monthReservations.forEach((r) => {
-    if (!countsByDate[r.date]) countsByDate[r.date] = { total: 0, pending: 0 };
-    if (ACTIVE_STATUSES.includes(r.status)) countsByDate[r.date].total += 1;
+    if (!countsByDate[r.date]) countsByDate[r.date] = { total: 0, pending: 0, covers: 0 };
+    if (ACTIVE_STATUSES.includes(r.status)) {
+      countsByDate[r.date].total += 1;
+      countsByDate[r.date].covers += (r.covers?.adults || 0) + (r.covers?.children || 0);
+    }
     if (r.status === "pending") countsByDate[r.date].pending += 1;
   });
+
+  const handleCalendarSelectDate = (key) => {
+    setSelectedDate(key);
+    setScrollRequest({ date: key, token: Date.now() });
+  };
+  const handleDateInView = (key) => setSelectedDate(key);
+  const handleResetAgendaRange = (centerKey) => {
+    setAgendaRange({ start: addDays(centerKey, -AGENDA_INITIAL_SPAN), end: addDays(centerKey, AGENDA_INITIAL_SPAN) });
+  };
+  const handleExtendBackward = () => {
+    setAgendaRange((r) => ({ ...r, start: addDays(r.start, -AGENDA_EXTEND_STEP) }));
+  };
+  const handleExtendForward = () => {
+    setAgendaRange((r) => ({ ...r, end: addDays(r.end, AGENDA_EXTEND_STEP) }));
+  };
 
   const by = { uid: session.user.uid, name: session.name };
 
@@ -537,7 +793,7 @@ function ReservationsPanel({ menu, session, onBack }) {
         <div style={{ maxWidth: 560, margin: "0 auto", padding: "20px 16px 100px" }}>
           <ReservationCalendar
             t={t} visibleMonth={visibleMonth} onChangeMonth={setVisibleMonth}
-            selectedDate={selectedDate} onSelectDate={setSelectedDate} countsByDate={countsByDate}
+            selectedDate={selectedDate} onSelectDate={handleCalendarSelectDate} countsByDate={countsByDate}
           />
 
           <OverviewBar t={t} dayReservations={dayReservations} />
@@ -553,9 +809,16 @@ function ReservationsPanel({ menu, session, onBack }) {
               <Plus size={14} /> Nuova
             </button>
           </div>
+          <div style={{ fontSize: TYPE.tiny, color: t.inkSoft, marginBottom: 4 }}>
+            Scorri per i giorni successivi o precedenti
+          </div>
 
-          <DayList
-            t={t} selectedDate={selectedDate} dayReservations={dayReservations}
+          <ReservationAgenda
+            t={t}
+            rangeStart={agendaRange.start} rangeEnd={agendaRange.end} reservations={agendaReservations}
+            selectedDate={selectedDate} scrollRequest={scrollRequest}
+            onDateInView={handleDateInView} onResetRange={handleResetAgendaRange}
+            onExtendBackward={handleExtendBackward} onExtendForward={handleExtendForward}
             onOpen={(r) => setView({ mode: "edit", reservation: r })}
             onConfirm={handleConfirm} onReject={handleReject} onAvvia={handleAvvia} busyId={busyId}
           />

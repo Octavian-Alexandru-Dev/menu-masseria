@@ -2,6 +2,11 @@ import { test, expect } from "@playwright/test";
 import { TEST_WAITER } from "./test-env";
 import { deleteTestReservationByName, deleteTestOrderByTableNumber } from "./firestore-cleanup";
 
+// Stesso formatter usato in Reservations.jsx per l'aria-label delle celle
+// del calendario ("15 settembre 2026" [, N prenotazioni, M coperti]).
+const CELL_DATE_LABEL = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" });
+const DAY_HEADER_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
+
 // Nomi "sentinella" randomizzati ad ogni run, per non essere mai confusi con
 // una prenotazione reale e per non collidere con un eventuale residuo
 // lasciato da un run precedente interrotto a metà (stesso principio di
@@ -85,6 +90,55 @@ test.describe("Area prenotazioni", () => {
     const before = await monthLabel.innerText();
     await page.getByRole("button", { name: "Mese successivo" }).click();
     await expect(monthLabel).not.toHaveText(before);
+  });
+
+  test("il calendario mostra una panoramica di prenotazioni e coperti per il giorno", async ({ page }) => {
+    await login(page);
+    const name = randomName();
+    createdNames.push(name);
+    await createReservation(page, name); // usa la data selezionata di default: oggi
+
+    const todayCell = page.getByRole("button", { name: CELL_DATE_LABEL.format(new Date()) });
+    await expect(todayCell).toBeVisible();
+    // L'aria-label include "N prenotazioni, M coperti" solo quando la cella
+    // ha almeno una prenotazione attiva — la prenotazione appena creata
+    // (pending) lo garantisce, indipendentemente da eventuali altre
+    // prenotazioni di oggi create da test paralleli.
+    await expect(todayCell).toHaveAccessibleName(/\d+ prenotazioni, \d+ coperti/);
+  });
+
+  test("scorrendo la lista oltre le prenotazioni di oggi compaiono quelle del giorno successivo, e il calendario segue", async ({ page }) => {
+    await login(page);
+    const name = randomName();
+    createdNames.push(name);
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+
+    await page.getByRole("button", { name: /^nuova$/i }).click();
+    await page.getByPlaceholder("es. Famiglia Rossi").fill(name);
+    await page.locator('input[type="date"]').fill(tomorrowKey);
+    await page.getByRole("button", { name: /^salva \(da confermare\)$/i }).click();
+    await expect(page.getByText("Nuova prenotazione")).toHaveCount(0, { timeout: 10_000 });
+
+    // La sezione di domani esiste già nel DOM (l'agenda carica una finestra
+    // di giorni attorno alla data selezionata, non solo il giorno corrente):
+    // basta scorrerci sopra, senza dover ricreare/riaprire la pagina.
+    // Allinea esplicitamente l'intestazione del giorno in cima al viewport
+    // (block: "start"): scrollIntoViewIfNeeded si limita a scorrere quanto
+    // basta per renderla visibile, e potrebbe fermarsi con l'intestazione
+    // ancora in fondo allo schermo — sotto la soglia con cui l'agenda decide
+    // quale giorno è "in vista" (vedi AGENDA_HEADER_OFFSET in Reservations.jsx).
+    const tomorrowHeader = page.getByText(DAY_HEADER_LABEL.format(tomorrow), { exact: false });
+    await tomorrowHeader.evaluate((el) => el.scrollIntoView({ block: "start", behavior: "instant" }));
+    await expect(page.getByText(name).first()).toBeVisible({ timeout: 10_000 });
+
+    // Il calendario in alto segue lo scroll: la cella di domani deve
+    // risultare selezionata (sfondo pieno, non trasparente) una volta che
+    // la sua sezione è entrata in vista.
+    const tomorrowCell = page.getByRole("button", { name: new RegExp(CELL_DATE_LABEL.format(tomorrow)) });
+    await expect(tomorrowCell).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   });
 
   test("il modulo richiede nome e data prima di poter salvare", async ({ page }) => {
