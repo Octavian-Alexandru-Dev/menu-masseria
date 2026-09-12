@@ -112,3 +112,13 @@ End-to-end only (Playwright), against a local Firestore/Auth emulator that
 `playwright.config.js`'s `globalSetup` starts, seeds, and tears down
 automatically — never against the real Firebase project. See
 [`CLAUDE.md`](../CLAUDE.md) for the full workflow and when to run it.
+
+## The one exception: `bot/`
+
+`bot/` is a Telegram chatbot for staff (menu edits, comande) that breaks the
+"no backend" rule above by necessity — receiving a webhook requires a
+server. It's a separate Cloudflare Worker project (its own `package.json`,
+deploy pipeline, and Vitest suite), talking to the same Firestore database
+over the REST API rather than the app's client SDK. See
+[`docs/telegram-bot.md`](telegram-bot.md) for why, and for the account
+setup this needs before it can run at all.

@@ -1,0 +1,20 @@
+name = "menu-masseria-bot"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# No bindings needed: the Worker talks to Firestore over plain HTTPS (REST
+# API) with a Google service-account JWT it signs itself via Web Crypto, so
+# it needs neither the Node-only firebase-admin SDK nor a KV/D1 binding.
+
+# Not a secret (it's already public in the web app's bundle) — the Firebase
+# project id this bot talks to.
+[vars]
+FIREBASE_PROJECT_ID = "menu-masseria-della-pian"
+
+# Secrets (never committed — set with `wrangler secret put <NAME>`, see
+# ../docs/telegram-bot.md §7 for the full setup procedure):
+#   TELEGRAM_BOT_TOKEN
+#   TELEGRAM_WEBHOOK_SECRET
+#   GROQ_API_KEY
+#   GOOGLE_SERVICE_ACCOUNT_EMAIL
+#   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY

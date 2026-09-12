@@ -44,3 +44,13 @@ Why this matters: rules changes are easy to miss because they cause no build err
 # Working directory
 
 This repo is sometimes open in more than one Claude Code session at once. Before deleting or reverting files that look like unfamiliar scaffolding (especially untracked ones), check `git log`/recent activity or ask — a sibling session may be mid-task. If you find conflicting concurrent edits, use `ListAgents`/`SendMessage` to coordinate before cleaning anything up.
+
+# Bot Telegram (bot/)
+
+`bot/` is a separate Cloudflare Worker subproject (its own `package.json`, no shared dependencies with the root app) implementing the staff Telegram chatbot — see `docs/telegram-bot.md` for the full design and account setup. It has no React UI, so it's outside the Playwright rule above; it has its own Vitest suite instead:
+
+```
+cd bot && npm test
+```
+
+After changing anything under `bot/src/`, run that suite before considering the change done, same spirit as the Playwright rule for the main app: a new tool or behavior gets a test, a failing test is either an intentional contract change (update the test, say why) or a regression (stop and ask, don't rewrite the test to pass).

@@ -1,0 +1,16 @@
+# Copy to ".dev.vars" for local `wrangler dev` runs (never commit the real
+# file — see docs/telegram-bot.md). In production these same names are set
+# with `wrangler secret put <NAME>`, not read from this file.
+
+TELEGRAM_BOT_TOKEN=
+# Random string you choose yourself; must match the secret_token passed to
+# Telegram's setWebhook call (see docs/telegram-bot.md).
+TELEGRAM_WEBHOOK_SECRET=
+GROQ_API_KEY=
+
+FIREBASE_PROJECT_ID=menu-masseria-della-pian
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+# Paste the private_key field from the service account JSON key file as-is,
+# including the "-----BEGIN PRIVATE KEY-----"/"-----END PRIVATE KEY-----"
+# lines and the literal "\n" sequences.
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=

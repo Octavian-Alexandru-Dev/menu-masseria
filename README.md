@@ -23,6 +23,9 @@ audiences:
 - [`docs/comande-camerieri.md`](docs/comande-camerieri.md) and
   [`docs/prenotazioni.md`](docs/prenotazioni.md) (Italian) — detailed design
   docs for the order-taking and reservations features.
+- [`docs/telegram-bot.md`](docs/telegram-bot.md) (Italian) — design doc and
+  account setup procedure for the Telegram chatbot (`bot/`), a separate
+  Cloudflare Worker that lets staff manage the menu/orders via chat.
 
 ## Live demo
 

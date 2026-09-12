@@ -67,6 +67,7 @@ user can read/write any `staff` doc — see "Trust boundary" below).
 |---|---|---|
 | `name` | string | Display name, shown as "Ciao, {name}" etc. |
 | `role` | string | `"admin"`, `"waiter"`, or `"kitchen"`. Any other value (or a missing doc) is a valid state the UI handles explicitly (`useStaffSession` in `staff-shared.jsx`: `"no-role"` / an unrecognized role → "Accesso non consentito"). |
+| `telegramChatId` | string, optional | Links this account to a Telegram chat for the staff chatbot (`bot/`, see `docs/telegram-bot.md`). Set by hand in the Firebase console, same as the account itself — no UI for it yet. |
 
 ## `orders/{orderId}`
 
@@ -91,6 +92,20 @@ full field list and status lifecycle (`pending → confirmed → started`, or
 `reservationsData.js`'s `dateKey()` for why (avoids UTC/local timezone bugs
 for date-range queries).
 
+## `botPending/{chatId}`
+
+Transient state for the Telegram chatbot's confirmation flow (`bot/`, see
+`docs/telegram-bot.md` §5-6) — not part of the web app, written/read only by
+the Cloudflare Worker via Firestore's REST API (which bypasses
+`firestore.rules` entirely, same as the Admin SDK would — see "Trust
+boundary" below). Not a permanent record: a document here is a single
+staff-facing action awaiting a "sì"/"no" reply, applicationally expired
+after 5 minutes.
+
+```
+{ toolName: string, args: object, staffUid: string, staffName: string, createdAt: Timestamp }
+```
+
 ## Trust boundary (`firestore.rules`)
 
 Every collection above except `menu/data` reads requires
@@ -103,6 +118,11 @@ trade-off (see `firestore.rules`'s inline comments and `ROADMAP.md`'s
 "Sicurezza account admin" note): staff accounts are created by hand by the
 admin, not self-registered, so the threat model treats any authenticated
 account as trusted personnel.
+
+A second, separate bypass of these rules exists for `bot/` (the Telegram
+chatbot): it authenticates to Firestore's REST API with a Google
+service-account token, not a Firebase Auth session, so `firestore.rules`
+never runs for its requests at all — see `docs/telegram-bot.md` §2 and §8.
 
 ## Entity relationships
 
