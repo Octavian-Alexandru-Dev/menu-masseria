@@ -380,6 +380,7 @@ export function GlobalStyle({ t }) {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,600&family=Work+Sans:wght@300;400;500;600&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap');
       * { box-sizing: border-box; }
+      body { margin: 0; }
       .mdp-root {
         background: ${t.bg};
         color: ${t.ink};

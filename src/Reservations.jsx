@@ -19,7 +19,7 @@ import {
 
 const MONTH_LABEL = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const WEEKDAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "short" });
-const DAY_HEADER_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
+const DAY_HEADER_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const CELL_DATE_LABEL = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" });
 
 function startOfMonth(date) {
@@ -452,20 +452,21 @@ function DaySection({ t, dayKey, dayReservations, onOpen, onConfirm, onReject, o
 // scrolls close to either edge — see ReservationAgenda below.
 const AGENDA_INITIAL_SPAN = 15;
 const AGENDA_EXTEND_STEP = 30;
-// Rough height of the sticky top bar: a day header is treated as "the one
-// in view" once it scrolls up past this line.
-const AGENDA_HEADER_OFFSET = 72;
+// A day header is treated as "the one in view" once it scrolls up past this
+// many px from the top of the agenda's own scroll box.
+const AGENDA_TOP_MARGIN = 8;
 
 // Bidirectional infinite-scroll agenda: renders one DaySection per day in
-// [rangeStart, rangeEnd] (a plain, page-scrolled list — no nested scroll
-// container), and:
-//  - reports which day is currently under the sticky header (onDateInView),
-//    so the calendar above can keep its highlighted day in sync while
+// [rangeStart, rangeEnd] inside its OWN scrollable box (not the page) — the
+// calendar/overview above stay fixed on screen and are never scrolled away,
+// however far back or forward the agenda is scrolled. It:
+//  - reports which day is currently at the top of the box (onDateInView), so
+//    the calendar above can keep its highlighted day in sync while
 //    scrolling, à la a continuous agenda;
 //  - asks the parent to slide the loaded window forward/backward
 //    (onExtendForward/onExtendBackward) once the first/last day gets close
-//    to the viewport, compensating scroll position when content is
-//    prepended so the page doesn't visibly jump;
+//    to the box's edge, compensating scroll position when content is
+//    prepended so the box doesn't visibly jump;
 //  - handles "jumps" (tapping a date in the calendar that may fall outside
 //    the currently loaded window) via the scrollRequest prop: re-centers
 //    the window on that date if needed, then scrolls to it once its
@@ -495,6 +496,7 @@ function ReservationAgenda({
     return map;
   }, [reservations]);
 
+  const scrollRef = useRef(null);
   const dayRefs = useRef({});
   const extendingBackRef = useRef(false);
   const extendingFwdRef = useRef(false);
@@ -504,10 +506,11 @@ function ReservationAgenda({
   selectedDateRef.current = selectedDate;
 
   const scrollToDate = (date) => {
+    const container = scrollRef.current;
     const el = dayRefs.current[date];
-    if (!el) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - AGENDA_HEADER_OFFSET;
-    window.scrollTo({ top: Math.max(top, 0), behavior: "smooth" });
+    if (!container || !el) return;
+    const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    container.scrollTo({ top: Math.max(container.scrollTop + delta, 0), behavior: "smooth" });
   };
 
   // A tap on the calendar (scrollRequest changes): jump the window if the
@@ -535,15 +538,16 @@ function ReservationAgenda({
     }
   }, [rangeStart, rangeEnd]);
 
-  // Compensate the page scroll when days were prepended above (rangeStart
+  // Compensate the box's scroll when days were prepended above (rangeStart
   // moved earlier from an edge-extend, not from a jump/reset), so content
   // already on screen doesn't visibly shift.
   useLayoutEffect(() => {
-    if (capturedHeightRef.current != null) {
-      const delta = document.documentElement.scrollHeight - capturedHeightRef.current;
-      capturedHeightRef.current = null;
-      if (delta > 0) window.scrollBy(0, delta);
+    const container = scrollRef.current;
+    if (container && capturedHeightRef.current != null) {
+      const delta = container.scrollHeight - capturedHeightRef.current;
+      if (delta > 0) container.scrollTop += delta;
     }
+    capturedHeightRef.current = null;
     extendingBackRef.current = false;
   }, [rangeStart]);
 
@@ -552,58 +556,64 @@ function ReservationAgenda({
   }, [rangeEnd]);
 
   useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
     let raf = null;
-    let lastScrollY = window.scrollY;
+    let lastScrollTop = container.scrollTop;
     const handleScroll = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = null;
-        const scrollY = window.scrollY;
-        const scrollingUp = scrollY < lastScrollY;
-        lastScrollY = scrollY;
+        const scrollTop = container.scrollTop;
+        const scrollingUp = scrollTop < lastScrollTop;
+        lastScrollTop = scrollTop;
+        const containerTop = container.getBoundingClientRect().top;
 
         let current = null;
         for (const key of dayKeys) {
           const el = dayRefs.current[key];
           if (!el) continue;
-          if (el.getBoundingClientRect().top - AGENDA_HEADER_OFFSET <= 8) current = key;
+          if (el.getBoundingClientRect().top - containerTop <= AGENDA_TOP_MARGIN) current = key;
           else break;
         }
         if (current && current !== selectedDateRef.current) onDateInView(current);
 
         // Only grow the window backward while actually scrolling up and
-        // near its start — otherwise the first day (right below the
-        // calendar) would trigger this on every load/forward-scroll too.
+        // near its start — otherwise the first day (right at the top of
+        // the box) would trigger this on every load/forward-scroll too.
         if (scrollingUp && !extendingBackRef.current) {
           const firstEl = dayRefs.current[dayKeys[0]];
           if (firstEl) {
-            const top = firstEl.getBoundingClientRect().top;
+            const top = firstEl.getBoundingClientRect().top - containerTop;
             if (top > -50 && top < 500) {
               extendingBackRef.current = true;
-              capturedHeightRef.current = document.documentElement.scrollHeight;
+              capturedHeightRef.current = container.scrollHeight;
               onExtendBackward();
             }
           }
         }
         if (!extendingFwdRef.current) {
           const lastEl = dayRefs.current[dayKeys[dayKeys.length - 1]];
-          if (lastEl && lastEl.getBoundingClientRect().bottom < window.innerHeight + 700) {
-            extendingFwdRef.current = true;
-            onExtendForward();
+          if (lastEl) {
+            const containerBottom = container.getBoundingClientRect().bottom;
+            if (lastEl.getBoundingClientRect().bottom - containerBottom < 700) {
+              extendingFwdRef.current = true;
+              onExtendForward();
+            }
           }
         }
       });
     };
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    container.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      window.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("scroll", handleScroll);
       if (raf) cancelAnimationFrame(raf);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayKeys]);
 
   return (
-    <div>
+    <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 16px 24px" }}>
       {dayKeys.map((key) => (
         <DaySection
           key={key}
@@ -767,11 +777,11 @@ function ReservationsPanel({ menu, session, onBack }) {
   };
 
   return (
-    <div className="mdp-root" style={{ minHeight: "100vh" }}>
+    <div className="mdp-root" style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
       <GlobalStyle t={t} />
       <div style={{
         position: "sticky", top: 0, zIndex: 20, background: t.card, borderBottom: `1px solid ${t.line}`,
-        padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Logo width={40} />
@@ -790,27 +800,33 @@ function ReservationsPanel({ menu, session, onBack }) {
       </div>
 
       {view.mode === "day" && (
-        <div style={{ maxWidth: 560, margin: "0 auto", padding: "20px 16px 100px" }}>
-          <ReservationCalendar
-            t={t} visibleMonth={visibleMonth} onChangeMonth={setVisibleMonth}
-            selectedDate={selectedDate} onSelectDate={handleCalendarSelectDate} countsByDate={countsByDate}
-          />
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", maxWidth: 560, width: "100%", margin: "0 auto" }}>
+          {/* Fixed area — calendar, overview and the day heading never
+              scroll away: only the agenda below (its own scroll box) does,
+              so there's always a way back to the calendar without a
+              dedicated "back to calendar" button. */}
+          <div style={{ flexShrink: 0, padding: "20px 16px 0" }}>
+            <ReservationCalendar
+              t={t} visibleMonth={visibleMonth} onChangeMonth={setVisibleMonth}
+              selectedDate={selectedDate} onSelectDate={handleCalendarSelectDate} countsByDate={countsByDate}
+            />
 
-          <OverviewBar t={t} dayReservations={dayReservations} />
+            <OverviewBar t={t} dayReservations={dayReservations} />
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18, marginBottom: 4 }}>
-            <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink, textTransform: "capitalize" }}>
-              {DAY_HEADER_LABEL.format(new Date(selectedDate + "T00:00:00"))}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 18, marginBottom: 4 }}>
+              <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink, textTransform: "capitalize" }}>
+                {DAY_HEADER_LABEL.format(new Date(selectedDate + "T00:00:00"))}
+              </div>
+              <button onClick={() => setView({ mode: "new" })} className="mdp-btn" style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: t.primary, color: t.bg,
+                border: "none", borderRadius: 8, fontSize: TYPE.smallPlus, fontWeight: 600, cursor: "pointer",
+              }}>
+                <Plus size={14} /> Nuova
+              </button>
             </div>
-            <button onClick={() => setView({ mode: "new" })} className="mdp-btn" style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: t.primary, color: t.bg,
-              border: "none", borderRadius: 8, fontSize: TYPE.smallPlus, fontWeight: 600, cursor: "pointer",
-            }}>
-              <Plus size={14} /> Nuova
-            </button>
-          </div>
-          <div style={{ fontSize: TYPE.tiny, color: t.inkSoft, marginBottom: 4 }}>
-            Scorri per i giorni successivi o precedenti
+            <div style={{ fontSize: TYPE.tiny, color: t.inkSoft, marginBottom: 4 }}>
+              Scorri per i giorni successivi o precedenti
+            </div>
           </div>
 
           <ReservationAgenda

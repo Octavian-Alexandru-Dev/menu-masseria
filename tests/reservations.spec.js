@@ -5,7 +5,7 @@ import { deleteTestReservationByName, deleteTestOrderByTableNumber } from "./fir
 // Stesso formatter usato in Reservations.jsx per l'aria-label delle celle
 // del calendario ("15 settembre 2026" [, N prenotazioni, M coperti]).
 const CELL_DATE_LABEL = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" });
-const DAY_HEADER_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
+const DAY_HEADER_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 // Nomi "sentinella" randomizzati ad ogni run, per non essere mai confusi con
 // una prenotazione reale e per non collidere con un eventuale residuo
@@ -129,7 +129,7 @@ test.describe("Area prenotazioni", () => {
     // (block: "start"): scrollIntoViewIfNeeded si limita a scorrere quanto
     // basta per renderla visibile, e potrebbe fermarsi con l'intestazione
     // ancora in fondo allo schermo — sotto la soglia con cui l'agenda decide
-    // quale giorno è "in vista" (vedi AGENDA_HEADER_OFFSET in Reservations.jsx).
+    // quale giorno è "in vista" (vedi AGENDA_TOP_MARGIN in Reservations.jsx).
     const tomorrowHeader = page.getByText(DAY_HEADER_LABEL.format(tomorrow), { exact: false });
     await tomorrowHeader.evaluate((el) => el.scrollIntoView({ block: "start", behavior: "instant" }));
     await expect(page.getByText(name).first()).toBeVisible({ timeout: 10_000 });
@@ -139,6 +139,39 @@ test.describe("Area prenotazioni", () => {
     // la sua sezione è entrata in vista.
     const tomorrowCell = page.getByRole("button", { name: new RegExp(CELL_DATE_LABEL.format(tomorrow)) });
     await expect(tomorrowCell).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  });
+
+  test("il calendario resta raggiungibile anche dopo aver scorso molto l'agenda avanti e indietro", async ({ page }) => {
+    await login(page);
+
+    const monthNav = page.getByRole("button", { name: "Mese successivo" });
+    const before = await monthNav.boundingBox();
+
+    // L'agenda (la lista dei giorni) ha un proprio box di scroll indipendente
+    // dalla pagina: scorrerla molto in avanti — anche per decine di "pagine"
+    // di rotellina, così l'agenda deve estendere più volte la finestra
+    // caricata — non deve mai spostare il calendario, che sta fuori da quel
+    // box (bug: prima lo scroll era sull'intera pagina, e tornare indietro
+    // dopo essere scesi riattivava l'estensione all'indietro invece di far
+    // ricomparire il calendario).
+    const firstDay = page.locator("[data-day-key]").first();
+    const dayBox = await firstDay.boundingBox();
+    await page.mouse.move(dayBox.x + dayBox.width / 2, dayBox.y + 10);
+    for (let i = 0; i < 10; i++) {
+      await page.mouse.wheel(0, 4000);
+    }
+    await expect.poll(() => page.evaluate(() => globalThis.scrollY)).toBe(0);
+    expect((await monthNav.boundingBox()).y).toBeCloseTo(before.y, 0);
+
+    // E scorrendo indietro (anche superando abbondantemente il punto di
+    // partenza) il calendario è sempre lì, senza bisogno di alcun pulsante
+    // "torna al calendario".
+    for (let i = 0; i < 14; i++) {
+      await page.mouse.wheel(0, -4000);
+    }
+    await expect.poll(() => page.evaluate(() => globalThis.scrollY)).toBe(0);
+    await expect(monthNav).toBeVisible();
+    expect((await monthNav.boundingBox()).y).toBeCloseTo(before.y, 0);
   });
 
   test("il modulo richiede nome e data prima di poter salvare", async ({ page }) => {
