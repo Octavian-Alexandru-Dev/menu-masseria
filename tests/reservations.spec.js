@@ -215,31 +215,36 @@ test.describe("Area prenotazioni", () => {
     await expect(page.getByText(name).first()).toBeVisible();
   });
 
-  test("il calendario è nascosto di default e si apre/richiude col pulsante flottante o selezionando una data", async ({ page }) => {
+  test("il calendario è nascosto di default e si apre/richiude con lo stesso pulsante flottante (o selezionando una data)", async ({ page }) => {
     await login(page);
 
     const monthNav = page.getByRole("button", { name: "Mese successivo" });
-    const floatingBtn = page.getByRole("button", { name: "Mostra calendario" });
+    // Un solo pulsante flottante, sempre nello stesso punto: apre il
+    // calendario (icona calendario) e, una volta aperto, lo richiude
+    // (icona X) — stessa etichetta accessibile del pulsante, non un
+    // secondo link separato e poco visibile.
+    const toggleBtn = page.getByRole("button", { name: /mostra calendario|nascondi calendario/i });
+
     // Nascosto fin dal primo caricamento della pagina, per lasciare subito
     // spazio all'agenda: solo il pulsante flottante è visibile.
     await expect(monthNav).toHaveCount(0);
-    await expect(floatingBtn).toBeVisible();
+    await expect(toggleBtn).toHaveAccessibleName("Mostra calendario");
 
-    await floatingBtn.click();
+    await toggleBtn.click();
     await expect(monthNav).toBeVisible();
-    await expect(floatingBtn).toHaveCount(0);
+    await expect(toggleBtn).toHaveAccessibleName("Nascondi calendario");
 
-    await page.getByRole("button", { name: /^nascondi calendario$/i }).click();
+    await toggleBtn.click();
     await expect(monthNav).toHaveCount(0);
-    await expect(floatingBtn).toBeVisible();
+    await expect(toggleBtn).toHaveAccessibleName("Mostra calendario");
 
     // Selezionare una data lo richiude automaticamente, per lasciare subito
     // più spazio alla lista sotto — coerente col motivo per cui lo si apre.
-    await floatingBtn.click();
+    await toggleBtn.click();
     const todayCell = page.getByRole("button", { name: CELL_DATE_LABEL.format(new Date()) });
     await todayCell.click();
     await expect(monthNav).toHaveCount(0);
-    await expect(floatingBtn).toBeVisible();
+    await expect(toggleBtn).toHaveAccessibleName("Mostra calendario");
   });
 
   test("il modulo richiede nome e data prima di poter salvare", async ({ page }) => {

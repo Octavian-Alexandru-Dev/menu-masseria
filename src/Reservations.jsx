@@ -637,8 +637,8 @@ function ReservationsPanel({ menu, session, onBack }) {
   const [selectedDate, setSelectedDate] = useState(dateKey());
   // Collapsed by default — the agenda is what's actually used most of the
   // time, and the calendar took up too much of the screen when always shown.
-  // Reopened via the floating button, or the "Nascondi calendario" link/an
-  // actual date pick tucks it away again.
+  // Toggled by the floating button (same button, open/close icon swaps) —
+  // an actual date pick also tucks it away again.
   const [calendarOpen, setCalendarOpen] = useState(false);
   // Set only when the calendar (not the agenda scroll itself) asks to jump
   // to a date, so ReservationAgenda can tell a tap apart from its own
@@ -817,20 +817,10 @@ function ReservationsPanel({ menu, session, onBack }) {
               when it's collapsed. */}
           <div style={{ flexShrink: 0, padding: "20px 16px 0" }}>
             {calendarOpen && (
-              <>
-                <ReservationCalendar
-                  t={t} visibleMonth={visibleMonth} onChangeMonth={setVisibleMonth}
-                  selectedDate={selectedDate} onSelectDate={handleCalendarSelectDate} countsByDate={countsByDate}
-                />
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button onClick={() => setCalendarOpen(false)} className="mdp-btn" style={{
-                    display: "flex", alignItems: "center", gap: 4, background: "none", border: "none",
-                    color: t.inkSoft, cursor: "pointer", fontSize: TYPE.tiny, padding: "6px 2px 0",
-                  }}>
-                    <ChevronUp size={12} /> Nascondi calendario
-                  </button>
-                </div>
-              </>
+              <ReservationCalendar
+                t={t} visibleMonth={visibleMonth} onChangeMonth={setVisibleMonth}
+                selectedDate={selectedDate} onSelectDate={handleCalendarSelectDate} countsByDate={countsByDate}
+              />
             )}
 
             <OverviewBar t={t} dayReservations={dayReservations} />
@@ -858,21 +848,22 @@ function ReservationsPanel({ menu, session, onBack }) {
             onConfirm={handleConfirm} onReject={handleReject} onAvvia={handleAvvia} busyId={busyId}
           />
 
-          {!calendarOpen && (
-            <button
-              onClick={() => setCalendarOpen(true)}
-              aria-label="Mostra calendario"
-              className="mdp-btn"
-              style={{
-                position: "fixed", right: 18, bottom: 22, zIndex: 30,
-                width: 50, height: 50, borderRadius: "50%", background: t.primary, color: t.bg,
-                border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
-              }}
-            >
-              <CalendarDays size={22} />
-            </button>
-          )}
+          {/* Single, always-in-the-same-spot floating toggle: a calendar
+              icon opens it, an X (once open) closes it again — one obvious
+              button instead of a separate, easy-to-miss inline link. */}
+          <button
+            onClick={() => setCalendarOpen((v) => !v)}
+            aria-label={calendarOpen ? "Nascondi calendario" : "Mostra calendario"}
+            className="mdp-btn"
+            style={{
+              position: "fixed", right: 18, bottom: 22, zIndex: 30,
+              width: 50, height: 50, borderRadius: "50%", background: t.primary, color: t.bg,
+              border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
+            }}
+          >
+            {calendarOpen ? <X size={22} /> : <CalendarDays size={22} />}
+          </button>
         </div>
       )}
 
