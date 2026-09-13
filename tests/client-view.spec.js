@@ -56,6 +56,29 @@ test("searching for a dish that doesn't exist shows the empty-results message", 
   await expect(page.getByText(/nessun piatto trovato|no dishes found/i)).toBeVisible();
 });
 
+test("searching a search-tag surfaces every dish carrying it, across categories", async ({ page }) => {
+  // Seed data (scripts/seed-emulator.js): both "Acqua naturale" and "Vino
+  // della casa" carry the "Bibita" search-tag, but only the wine also
+  // carries "Alcolico" — the tag, not the category, drives the match.
+  const search = page.getByRole("textbox", { name: /cerca un piatto|search for a dish/i });
+  await search.fill("bibita");
+  await expect(page.getByText("Acqua naturale", { exact: true })).toBeVisible();
+  await expect(page.getByText("Vino della casa", { exact: true })).toBeVisible();
+
+  await search.fill("alcolico");
+  await expect(page.getByText("Vino della casa", { exact: true })).toBeVisible();
+  await expect(page.getByText("Acqua naturale", { exact: true })).toHaveCount(0);
+});
+
+test("searching a category name surfaces every dish in that category", async ({ page }) => {
+  // "Orecchiette" has no tag/description mentioning "primi": only living
+  // inside the "Primi" category should surface it for that search.
+  const search = page.getByRole("textbox", { name: /cerca un piatto|search for a dish/i });
+  await search.fill("primi");
+  await expect(page.getByText("Orecchiette", { exact: true })).toBeVisible();
+  await expect(page.getByText("Bruschetta", { exact: true })).toHaveCount(0);
+});
+
 test("clicking an item with a photo opens a zoom modal, closable via the X button", async ({ page }) => {
   await page.getByText("Tiramisù", { exact: true }).click();
   const modal = page.locator(".mdp-modal-card");

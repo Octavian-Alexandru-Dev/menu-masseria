@@ -127,6 +127,35 @@ test.describe("Area cameriere", () => {
       await expect(page.getByRole("button", { name: /bruschetta/i })).toBeVisible();
     });
 
+    test("i tag di ricerca filtrano come la digitazione manuale, sia cliccati che digitati", async ({ page }) => {
+      const tableNumber = await openFreshTable(page);
+      openedTableNumbers.push(tableNumber);
+
+      const search = page.getByRole("textbox", { name: "Cerca un piatto" });
+
+      // Cliccando il tag "Bibita" (seed: scripts/seed-emulator.js) il campo
+      // di ricerca si valorizza da solo e filtra come se il cameriere avesse
+      // digitato la stessa parola a mano.
+      await page.getByRole("button", { name: "Bibita", exact: true }).click();
+      await expect(search).toHaveValue("Bibita");
+      await expect(page.getByRole("button", { name: /acqua naturale/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /vino della casa/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /bruschetta/i })).toHaveCount(0);
+
+      // Ricliccando lo stesso tag (già selezionato) lo si deseleziona.
+      await page.getByRole("button", { name: "Bibita", exact: true }).click();
+      await expect(search).toHaveValue("");
+
+      // Digitando a mano lo stesso identico testo del tag si ottiene lo
+      // stesso risultato del click sulla pillola.
+      await search.fill("Alcolico");
+      await expect(page.getByRole("button", { name: /vino della casa/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /acqua naturale/i })).toHaveCount(0);
+      await page.getByRole("button", { name: "Alcolico", exact: true }).click();
+      await expect(search).toHaveValue("");
+      await expect(page.getByRole("button", { name: /acqua naturale/i })).toBeVisible();
+    });
+
     test("una riga nel carrello si può aumentare, diminuire, annotare e rimuovere prima dell'invio", async ({ page }) => {
       const tableNumber = await openFreshTable(page);
       openedTableNumbers.push(tableNumber);

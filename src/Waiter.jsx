@@ -311,6 +311,25 @@ function CoversEditor({ t, order }) {
   );
 }
 
+// Distinct search-tag chips across the whole menu (not just the items
+// currently visible), so the waiter can filter by tag ("Bibita", "Alcolico"…)
+// without typing it. Deduped case-insensitively but keeps the casing the
+// admin used the first time a tag appears.
+function distinctSearchTags(menu) {
+  const seen = new Map();
+  (menu?.categories || []).forEach((c) => {
+    c.items.forEach((item) => {
+      (item.searchTags || "").split(",").forEach((raw) => {
+        const tag = raw.trim();
+        if (!tag) return;
+        const key = tag.toLowerCase();
+        if (!seen.has(key)) seen.set(key, tag);
+      });
+    });
+  });
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, "it"));
+}
+
 function OrderDetail({ t, menu, menuCosts, order, onBack }) {
   const [draft, setDraft] = useState([]); // { lineId, menuItemId, name, price, categoryId, categoryName, quantity, notes }
   const [sending, setSending] = useState(false);
@@ -341,6 +360,15 @@ function OrderDetail({ t, menu, menuCosts, order, onBack }) {
   const filteredOffMenuItems = isItemSearching
     ? offMenuItems.filter((i) => itemMatchesSearch(menu, i._categoryId, i.id, itemSearch))
     : offMenuItems;
+
+  // Clicking a tag chip just fills the same search box a waiter would type
+  // into, so it goes through the exact same itemMatchesSearch matching as
+  // manual typing: selecting "Bibita" from the chips gives identical results
+  // to typing "Bibita" by hand. Clicking the already-selected chip clears it.
+  const searchTagChips = distinctSearchTags(menu);
+  const toggleSearchTag = (tag) => {
+    setItemSearch((current) => (current.trim().toLowerCase() === tag.toLowerCase() ? "" : tag));
+  };
 
   // A line's "course" is no longer a manual choice (a source of errors: a
   // dish ending up by mistake under whichever category happened to be
@@ -490,6 +518,30 @@ function OrderDetail({ t, menu, menuCosts, order, onBack }) {
               <X size={15} />
             </button>
           )}
+        </div>
+      )}
+
+      {searchEnabled && searchTagChips.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14, marginTop: -6 }}>
+          {searchTagChips.map((tag) => {
+            const active = itemSearch.trim().toLowerCase() === tag.toLowerCase();
+            return (
+              <button
+                key={tag}
+                onClick={() => toggleSearchTag(tag)}
+                className="mdp-btn"
+                aria-pressed={active}
+                style={{
+                  padding: "4px 10px", borderRadius: 999, fontSize: TYPE.tinyPlus, cursor: "pointer",
+                  border: `1px solid ${active ? t.primary : t.line}`,
+                  background: active ? t.primary : t.bg,
+                  color: active ? t.card : t.inkSoft,
+                }}
+              >
+                {tag}
+              </button>
+            );
+          })}
         </div>
       )}
 
