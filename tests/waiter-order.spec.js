@@ -238,7 +238,11 @@ test.describe("Area cameriere", () => {
     test("i link Storico e Prenotazioni nell'header aprono le rispettive sezioni e si può tornare a Sala", async ({ page }) => {
       await page.getByRole("button", { name: /storico/i }).click();
       await expect(page.getByText("Storico comande")).toBeVisible();
-      await page.getByRole("button", { name: /indietro/i }).click();
+      // "Indietro" ben visibile e facile da toccare: etichetta di testo e
+      // almeno 48px di altezza (Material 48dp / Apple 44pt / WCAG 2.5.5).
+      const back = page.getByRole("button", { name: "Indietro", exact: true });
+      expect((await back.boundingBox()).height).toBeGreaterThanOrEqual(48);
+      await back.click();
       await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
 
       await page.getByRole("button", { name: /prenotazioni/i }).click();

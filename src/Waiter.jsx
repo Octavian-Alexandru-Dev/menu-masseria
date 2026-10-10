@@ -1,61 +1,26 @@
 // Waiter area — digital order taking (see docs/comande-camerieri.md).
 // Loaded only at /cameriere (lazy, see MenuApp.jsx), never from the public site.
-import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
-import { Plus, Minus, X, ArrowLeft, LogOut, CheckCircle2, Clock, Utensils, History, Users, Receipt, CalendarDays, Play, Search } from "lucide-react";
-import { THEMES, ital, uid, GlobalStyle, Logo, TYPE, formatCentsAsPrice, parsePriceToCents, tableIdentity, currentShiftStart, currentShiftLabel, itemMatchesSearch } from "./shared";
+//
+// Phone layout. Inside the Windows till client the same area is shown with
+// the full-screen POS layout of TillSala.jsx instead; data and rules are
+// shared through sala-shared.jsx.
+import React, { useState, Suspense, lazy } from "react";
+import { Plus, Minus, X, LogOut, Clock, Utensils, History, Users, Receipt, CalendarDays, Play, Search } from "lucide-react";
+import { THEMES, ital, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableIdentity, currentShiftLabel, BackButton } from "./shared";
+import { orderTotalCents, copertoTotalCents, updateCovers } from "./orders";
+import { coversLabel } from "./reservationsData";
 import {
-  subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
-  autoCloseStaleOrders, orderTotalCents, copertoTotalCents,
-  updateCovers,
-} from "./orders";
-import {
-  subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup, coversLabel,
-} from "./reservationsData";
-import { subscribeMenuCosts } from "./menuCosts";
-import {
-  useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
+  useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout, logoutHiddenAtTill,
 } from "./staff-shared";
+import { getDesktopBridge } from "./desktop";
+import {
+  formatTime, elapsedLabel, SyncBadge, lineStatusLabel, lineStatusColor, useSalaData, useOrderDraft,
+} from "./sala-shared";
 import OrderHistory, { OrderRow } from "./OrderHistory";
 import ReceiptOverlay from "./ReceiptOverlay";
 
 const Reservations = lazy(() => import("./Reservations"));
-
-function formatTime(ts) {
-  return ts?.toDate ? ts.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
-}
-
-const PENDING_WARNING_MS = 12_000;
-
-function elapsedLabel(openedAt) {
-  const ms = openedAt?.toMillis ? Date.now() - openedAt.toMillis() : null;
-  if (ms == null) return "appena aperto";
-  const min = Math.floor(ms / 60000);
-  if (min < 1) return "appena aperto";
-  if (min < 60) return `${min} min fa`;
-  return `${Math.floor(min / 60)}h ${min % 60}min fa`;
-}
-
-function SyncBadge({ t, hasPendingWrites }) {
-  const [slow, setSlow] = useState(false);
-  useEffect(() => {
-    if (!hasPendingWrites) { setSlow(false); return; }
-    const id = setTimeout(() => setSlow(true), PENDING_WARNING_MS);
-    return () => clearTimeout(id);
-  }, [hasPendingWrites]);
-
-  if (!hasPendingWrites) {
-    return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: TYPE.tinyPlus, color: t.secondary }}>
-        <CheckCircle2 size={13} /> Sincronizzata
-      </span>
-    );
-  }
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: TYPE.tinyPlus, color: slow ? "#fff" : t.accent2, background: slow ? t.accent2 : "transparent", padding: slow ? "3px 8px" : 0, borderRadius: 20 }}>
-      <Clock size={13} /> {slow ? "Connessione lenta: invio non confermato" : "Invio in corso…"}
-    </span>
-  );
-}
+const TillSala = lazy(() => import("./TillSala"));
 
 function TodaysReservations({ t, reservations, onAvvia }) {
   if (reservations.length === 0) return null;
@@ -227,9 +192,7 @@ function NewTableForm({ t, onCancel, onCreate, busy }) {
 
   return (
     <div style={{ maxWidth: 420, margin: "0 auto", padding: "20px 16px 100px" }}>
-      <button onClick={onCancel} className="mdp-btn" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.smallPlus, marginBottom: 14 }}>
-        <ArrowLeft size={14} /> Indietro
-      </button>
+      <BackButton t={t} onClick={onCancel} style={{ marginBottom: 14 }} />
       <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary, marginBottom: 10 }}>
         Nuovo tavolo
       </div>
@@ -311,138 +274,25 @@ function CoversEditor({ t, order }) {
   );
 }
 
-// Distinct search-tag chips across the whole menu (not just the items
-// currently visible), so the waiter can filter by tag ("Bibita", "Alcolico"…)
-// without typing it. Deduped case-insensitively but keeps the casing the
-// admin used the first time a tag appears.
-function distinctSearchTags(menu) {
-  const seen = new Map();
-  (menu?.categories || []).forEach((c) => {
-    c.items.forEach((item) => {
-      (item.searchTags || "").split(",").forEach((raw) => {
-        const tag = raw.trim();
-        if (!tag) return;
-        const key = tag.toLowerCase();
-        if (!seen.has(key)) seen.set(key, tag);
-      });
-    });
-  });
-  return [...seen.values()].sort((a, b) => a.localeCompare(b, "it"));
-}
-
 function OrderDetail({ t, menu, menuCosts, order, onBack }) {
-  const [draft, setDraft] = useState([]); // { lineId, menuItemId, name, price, categoryId, categoryName, quantity, notes }
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState("");
-  const [closing, setClosing] = useState(false);
+  const {
+    draft, draftCount, addToDraft, changeQty, removeDraftLine, setDraftNote, send, sending, sendError, closeTable, closing,
+    searchEnabled, itemSearch, setItemSearch, isItemSearching, filteredNormalItems, filteredOffMenuItems,
+    searchTagChips, toggleSearchTag, sentByCategory, totalCents,
+  } = useOrderDraft({ menu, menuCosts, order });
   const [confirmClose, setConfirmClose] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
 
-  const categories = menu?.categories || [];
-  const normalItems = categories
-    .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false && !i.staffOnly) }))
-    .filter((c) => c.items.length > 0);
-  const offMenuItems = categories.flatMap((c) => c.items.filter((i) => i.staffOnly).map((i) => ({ ...i, _categoryId: c.id, _categoryName: c.name })));
-
-  // Dish search: filters the lists under "Aggiungi piatti" live as the
-  // waiter types, in whatever language an entry has been translated into —
-  // useful when a foreign customer asks for a dish in their own language
-  // even if the waiter panel is working on the Italian menu. Can be
-  // disabled by the admin (menu.searchEnabled): missing/true = enabled.
-  const searchEnabled = menu?.searchEnabled !== false;
-  const [itemSearch, setItemSearch] = useState("");
-  const isItemSearching = searchEnabled && itemSearch.trim() !== "";
-  const filteredNormalItems = isItemSearching
-    ? normalItems
-        .map((c) => ({ ...c, items: c.items.filter((i) => itemMatchesSearch(menu, c.id, i.id, itemSearch)) }))
-        .filter((c) => c.items.length > 0)
-    : normalItems;
-  const filteredOffMenuItems = isItemSearching
-    ? offMenuItems.filter((i) => itemMatchesSearch(menu, i._categoryId, i.id, itemSearch))
-    : offMenuItems;
-
-  // Clicking a tag chip just fills the same search box a waiter would type
-  // into, so it goes through the exact same itemMatchesSearch matching as
-  // manual typing: selecting "Bibita" from the chips gives identical results
-  // to typing "Bibita" by hand. Clicking the already-selected chip clears it.
-  const searchTagChips = distinctSearchTags(menu);
-  const toggleSearchTag = (tag) => {
-    setItemSearch((current) => (current.trim().toLowerCase() === tag.toLowerCase() ? "" : tag));
-  };
-
-  // A line's "course" is no longer a manual choice (a source of errors: a
-  // dish ending up by mistake under whichever category happened to be
-  // selected), but always the real menu category the dish belongs to.
-  const addToDraft = (item, categoryId, categoryName) => {
-    setDraft((d) => {
-      const idx = d.findIndex((l) => l.menuItemId === item.id && !l.notes);
-      if (idx >= 0) {
-        const next = [...d];
-        next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
-        return next;
-      }
-      return [...d, {
-        lineId: uid(), menuItemId: item.id, name: item.name, price: item.price,
-        cost: menuCosts?.[item.id] || null, categoryId, categoryName, quantity: 1, notes: "",
-      }];
-    });
-  };
-
-  const changeQty = (lineId, delta) => {
-    setDraft((d) => d.map((l) => (l.lineId === lineId ? { ...l, quantity: Math.max(1, l.quantity + delta) } : l)));
-  };
-  const removeDraftLine = (lineId) => setDraft((d) => d.filter((l) => l.lineId !== lineId));
-  const setDraftNote = (lineId, notes) => setDraft((d) => d.map((l) => (l.lineId === lineId ? { ...l, notes } : l)));
-
-  const send = async () => {
-    if (draft.length === 0) return;
-    setSending(true);
-    setSendError("");
-    try {
-      const lines = draft.map((l) => buildOrderLine(l));
-      await sendOrderLines(order.id, lines);
-      setDraft([]);
-    } catch (err) {
-      console.error("[waiter] Invio comanda fallito:", err);
-      setSendError("Invio non riuscito. Verifica la connessione e riprova.");
-    } finally {
-      setSending(false);
-    }
-  };
-
   const doClose = async () => {
-    setClosing(true);
-    try {
-      await closeOrder(order.id);
-      onBack();
-    } catch (err) {
-      console.error("[waiter] Chiusura tavolo fallita:", err);
-      setClosing(false);
-    }
+    if (await closeTable()) onBack();
   };
 
-  // Groups already-sent lines by the real menu category, in the same order
-  // the categories appear in the menu.
-  const sentByCategory = categories
-    .map((c) => ({ categoryId: c.id, categoryName: c.name, lines: (order.items || []).filter((l) => l.categoryId === c.id) }))
-    .filter((g) => g.lines.length > 0);
-  const sentCategoryIds = new Set(categories.map((c) => c.id));
-  const sentOther = (order.items || []).filter((l) => !sentCategoryIds.has(l.categoryId));
-  if (sentOther.length > 0) {
-    sentByCategory.push({ categoryId: "__other__", categoryName: sentOther[0].categoryName || "Altro", lines: sentOther });
-  }
-
-  const totalCents = orderTotalCents(order) + draft.reduce((s, l) => s + parsePriceToCents(l.price) * l.quantity, 0);
-
-  const statusColor = (status) => (status === "out" ? t.secondary : status === "preparing" ? t.accent : t.inkSoft);
-  const statusLabel = (status) => (status === "out" ? "Uscita" : status === "preparing" ? "In preparazione" : "Inviata");
-
+  const statusColor = (status) => lineStatusColor(t, status);
+  const statusLabel = lineStatusLabel;
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "16px 16px 140px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <button onClick={onBack} className="mdp-btn" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.smallPlus }}>
-          <ArrowLeft size={14} /> Tavoli
-        </button>
+        <BackButton t={t} onClick={onBack} label="Tavoli" />
         <SyncBadge t={t} hasPendingWrites={order._hasPendingWrites} />
       </div>
 
@@ -621,7 +471,7 @@ function OrderDetail({ t, menu, menuCosts, order, onBack }) {
               width: "100%", padding: "12px 0", background: t.primary, color: t.bg, border: "none", borderRadius: 8,
               fontSize: TYPE.bodyPlus, fontWeight: 600, cursor: sending ? "default" : "pointer", opacity: sending ? 0.7 : 1,
             }}>
-              {sending ? "Invio…" : `Invia comanda (${draft.reduce((s, l) => s + l.quantity, 0)})`}
+              {sending ? "Invio…" : `Invia comanda (${draftCount})`}
             </button>
           </div>
         </div>
@@ -693,77 +543,18 @@ function OrderDetail({ t, menu, menuCosts, order, onBack }) {
 
 function WaiterPanel({ menu, session }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
-  const [orders, setOrders] = useState([]);
-  const [ordersReady, setOrdersReady] = useState(false);
-  const [shiftClosedOrders, setShiftClosedOrders] = useState([]);
+  const { orders, ordersReady, shiftClosedOrders, todaysReservations, menuCosts, createTable: openTable, startFromReservation } = useSalaData({ menu, session });
   const [expandedClosedId, setExpandedClosedId] = useState(null);
   const [view, setView] = useState({ mode: "list" }); // list | new | detail | history | reservations
   const [creating, setCreating] = useState(false);
-  const [todaysReservations, setTodaysReservations] = useState([]);
   const [avviaTarget, setAvviaTarget] = useState(null);
   const [avviaBusy, setAvviaBusy] = useState(false);
-  const [menuCosts, setMenuCosts] = useState({});
-  const closingRef = useRef(new Set());
-
-  // Dish costs (src/menuCosts.js), to snapshot them onto the order lines at
-  // send time — see addToDraft in OrderDetail.
-  useEffect(() => {
-    const unsubscribe = subscribeMenuCosts(setMenuCosts, (err) => console.error("[waiter] Errore lettura costi piatti:", err));
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = subscribeOpenOrders((list) => {
-      setOrders(list);
-      setOrdersReady(true);
-    }, (err) => console.error("[waiter] Errore lettura comande:", err));
-    return unsubscribe;
-  }, []);
-
-  // Orders closed during the current shift (§9): the shift start is
-  // computed once when the screen opens — if the app stays open across a
-  // shift change (lunch→dinner), just reloading the page refreshes it,
-  // consistent with the other "lazy" checks already in the app.
-  useEffect(() => {
-    const unsubscribe = subscribeShiftClosedOrders(currentShiftStart(), (list) => {
-      setShiftClosedOrders(list);
-    }, (err) => console.error("[waiter] Errore lettura comande chiuse nel turno:", err));
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    runDailyExpiredReservationsCleanup();
-  }, []);
-
-  // Confirmed reservations for today: they show up here as soon as the
-  // shift starts, so the waiter can "start" them without having to retype
-  // table/covers.
-  useEffect(() => {
-    const unsubscribe = subscribeReservationsForDate(dateKey(), (list) => {
-      setTodaysReservations(list.filter((r) => r.status === "confirmed"));
-    }, (err) => console.error("[waiter] Errore lettura prenotazioni:", err));
-    return unsubscribe;
-  }, []);
-
-  // Lazy automatic closing after 24h (§6.2): on every list update, closes
-  // orders that have been open too long.
-  useEffect(() => {
-    if (!ordersReady) return;
-    const toClose = orders.filter((o) => !closingRef.current.has(o.id));
-    toClose.forEach((o) => closingRef.current.add(o.id));
-    autoCloseStaleOrders(toClose).catch(() => {});
-  }, [orders, ordersReady]);
 
   const createTable = async (fields) => {
     setCreating(true);
-    try {
-      const ref = await openOrder({ ...fields, coperto: menu?.coperto, waiterUid: session.user.uid, waiterName: session.name });
-      setView({ mode: "detail", orderId: ref.id });
-    } catch (err) {
-      console.error("[waiter] Apertura tavolo fallita:", err);
-    } finally {
-      setCreating(false);
-    }
+    const id = await openTable(fields);
+    setCreating(false);
+    if (id) setView({ mode: "detail", orderId: id });
   };
 
   const handleAvviaReservation = (reservation) => {
@@ -776,16 +567,11 @@ function WaiterPanel({ menu, session }) {
 
   const doAvviaReservation = async (reservation, tableNumber) => {
     setAvviaBusy(true);
-    try {
-      const ref = await startReservation(reservation, {
-        waiterUid: session.user.uid, waiterName: session.name, coperto: menu?.coperto, tableNumber,
-      });
+    const id = await startFromReservation(reservation, tableNumber);
+    setAvviaBusy(false);
+    if (id) {
       setAvviaTarget(null);
-      setView({ mode: "detail", orderId: ref.id });
-    } catch (err) {
-      console.error("[waiter] Avvio prenotazione fallito:", err);
-    } finally {
-      setAvviaBusy(false);
+      setView({ mode: "detail", orderId: id });
     }
   };
 
@@ -809,9 +595,11 @@ function WaiterPanel({ menu, session }) {
           <button onClick={() => setView({ mode: "history" })} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
             <History size={14} /> Storico
           </button>
-          <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
-            <LogOut size={14} /> Esci
-          </button>
+          {!logoutHiddenAtTill() && (
+            <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
+              <LogOut size={14} /> Esci
+            </button>
+          )}
         </div>
       </div>
 
@@ -900,6 +688,15 @@ export default function Waiter({ menu }) {
   }
 
   if (!menu) return <StaffLoadingScreen theme={theme} />;
+
+  // Till client: full-screen POS layout (TillSala.jsx), same data and rules.
+  if (getDesktopBridge()) {
+    return (
+      <Suspense fallback={<StaffLoadingScreen theme={theme} />}>
+        <TillSala menu={menu} session={session} />
+      </Suspense>
+    );
+  }
 
   return <WaiterPanel menu={menu} session={session} />;
 }

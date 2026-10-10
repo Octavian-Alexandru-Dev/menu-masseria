@@ -4,12 +4,12 @@
 // public site. Accessible to waiters and admins.
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
 import {
-  ChevronLeft, ChevronRight, ArrowLeft, LogOut, Plus, Check, X,
+  ChevronLeft, ChevronRight, LogOut, Plus, Check, X,
   Play, Users, Phone, ChevronDown, ChevronUp, CalendarDays,
 } from "lucide-react";
-import { THEMES, ital, GlobalStyle, Logo, TYPE } from "./shared";
+import { THEMES, ital, GlobalStyle, Logo, TYPE, BackButton } from "./shared";
 import {
-  useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
+  useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout, logoutHiddenAtTill,
 } from "./staff-shared";
 import {
   dateKey, createReservation, updateReservation, confirmReservation, rejectReservation,
@@ -219,9 +219,7 @@ function ReservationForm({ t, selectedDate, initial, onCancel, onSave, onSaveAnd
 
   return (
     <div style={{ maxWidth: 420, margin: "0 auto", padding: "20px 16px 100px" }}>
-      <button onClick={onCancel} className="mdp-btn" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.smallPlus, marginBottom: 14 }}>
-        <ArrowLeft size={14} /> Indietro
-      </button>
+      <BackButton t={t} onClick={onCancel} style={{ marginBottom: 14 }} />
       <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary, marginBottom: 10 }}>
         {isEdit ? "Modifica prenotazione" : "Nuova prenotazione"}
       </div>
@@ -797,13 +795,13 @@ function ReservationsPanel({ menu, session, onBack }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {onBack && (
-            <button onClick={onBack} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
-              <ArrowLeft size={14} /> Sala
+            <BackButton t={t} onClick={onBack} label="Sala" />
+          )}
+          {!logoutHiddenAtTill() && (
+            <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
+              <LogOut size={14} /> Esci
             </button>
           )}
-          <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
-            <LogOut size={14} /> Esci
-          </button>
         </div>
       </div>
 

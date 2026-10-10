@@ -239,7 +239,56 @@ strumenti sviluppatore.
 Le impostazioni sono salvate in `%APPDATA%\Masseria Cassa\settings.json`,
 le credenziali (cifrate) in `login.json` nella stessa cartella.
 
-## 5. Risoluzione problemi
+## 4.1 Interfaccia della cassa (Sala)
+
+Dentro il client Windows la Sala ha un'interfaccia propria, a tutto schermo
+e in stile cassa POS (`src/TillSala.jsx`). Usa gli stessi dati e le stesse
+regole della Sala da telefono (`src/sala-shared.jsx`), quindi la cassa può
+sostituire il telefono di un cameriere: aprire tavoli, prendere e inviare
+comande, preconto, chiusura.
+
+- **Tavoli:** griglia che riempie lo schermo, ordinata per numero. Ogni
+  riquadro mostra numero, nome, coperti, tempo, totale e lo stato **scritto**
+  su un colore fisso: grigio "Da ordinare", ambra "In cucina · x/y uscite",
+  verde "Tutto servito", blu "Preconto confermato". In alto ci sono le
+  sezioni Tavoli / Prenotazioni / Storico, l'ora, il turno e l'utente; ci
+  sono anche i filtri "Aperti" / "Chiusi nel turno" e, a destra, le
+  prenotazioni di oggi con "Avvia".
+- **Nuovo tavolo:** tastierino numerico a schermo (la cassa non ha
+  tastiera), coperti con +/−, nome e note facoltativi. Se il tavolo è già
+  aperto lo segnala e offre "Vai al tavolo".
+- **Comanda:** a sinistra le categorie (schede), la ricerca e i piatti a
+  riquadri (tocco = +1, con il conteggio sul riquadro); a destra lo
+  scontrino ("Già inviato" con lo stato di ogni riga, "Da inviare" con
+  +/−, nota e rimozione) e, sempre nello stesso posto in basso, Totale,
+  **Invia comanda**, **Preconto**, **Chiudi tavolo** (con conferma).
+- **Niente "Esci"** in nessuna parte della web app alla cassa (client
+  ≥ 1.4.0): il logout è in *Impostazioni → Account della cassa → Esci
+  dall'account…*, nascosto in un pannello richiudibile e con doppia
+  conferma. Le credenziali restano salvate: per rientrare basta "Accedi come …".
+
+Principi seguiti (nessuna invenzione da zero):
+
+- **Bersagli touch ≥ 48px**, distanziati: Material Design (48dp), Apple
+  Human Interface Guidelines (44pt), WCAG 2.2 — 2.5.5 (44px, AAA) e 2.5.8
+  (24px, minimo AA).
+- **Icone con etichetta di testo sempre visibile**, in particolare per la
+  navigazione (Nielsen Norman Group, "Icon Usability"): da qui il pulsante
+  **Indietro** con freccia + testo, alto 48px e con bordo, sempre in alto a
+  sinistra, sia sul telefono sia alla cassa (`BackButton` in `shared.jsx`).
+- **Pratiche comuni delle casse per la ristorazione:** stato dei tavoli
+  leggibile senza aprirli, colore mai unico indicatore, schermate semplici
+  e senza ingombri durante la presa della comanda, comandi sempre nella
+  stessa posizione, pensare a chi la usa per la prima volta.
+- **Euristiche di Nielsen:** visibilità dello stato del sistema
+  (sincronizzazione, stampa, aggiornamenti), prevenzione degli errori
+  (conferme, tavolo già aperto), riconoscere invece di ricordare (riquadri e
+  schede invece di codici).
+
+Le sezioni Prenotazioni e Storico, per ora, usano ancora il layout centrato
+del telefono.
+
+
 
 | Sintomo | Cosa fare |
 |---|---|
@@ -307,4 +356,9 @@ le credenziali (cifrate) in `login.json` nella stessa cartella.
 | Seconda apertura del programma: esce subito, la finestra già aperta resta visibile, riga nel log | `tests/desktop-client.spec.js` |
 | Aggiorna ora (programma): avviso con conto alla rovescia prima di chiudere | `tests/till-client.spec.js` |
 | Client Electron vero: API 1.1.0/1.2.0 (stato schermo intero, nessuna credenziale, stato aggiornamenti "dev"), errore tastiera fuori da Windows | `tests/desktop-client.spec.js` |
+| Cassa: griglia dei tavoli a tutta larghezza, schede e "Nuovo tavolo" ≥ 48px | `tests/till-sala.spec.js` |
+| Cassa: apertura con tastierino, comanda a riquadri per categoria, nota, invio, stato e totale sul riquadro del tavolo | `tests/till-sala.spec.js` |
+| Cassa: ricerca piatti, tavolo già aperto segnalato con "Vai al tavolo", chiusura con conferma e tavolo tra i chiusi del turno, preconto, Storico/Prenotazioni | `tests/till-sala.spec.js` |
+| Nessun "Esci" alla cassa con client 1.4 (Dashboard e tutte le aree); logout dalle impostazioni senza rientro automatico; "Esci" con conferma per i client 1.1–1.3 | `tests/till-client.spec.js` |
+| Telefono: "Indietro" con etichetta e alto almeno 48px | `tests/waiter-order.spec.js` |
 | Non coperto automaticamente: stampa fisica su POSBANK, ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, apertura durante l'installer (notifica + uscita), notifiche di Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |

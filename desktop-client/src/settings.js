@@ -136,6 +136,19 @@ $("btn-login-clear").addEventListener("click", (e) => busy(e.target, async () =>
   show("login-msg", "Credenziali rimosse.", "ok");
 }));
 
+// Two steps on purpose: logging out at the till is rare and deliberate.
+$("btn-logout").addEventListener("click", () => {
+  $("btn-logout").hidden = true;
+  $("btn-logout-confirm").hidden = false;
+  show("logout-msg", "Tocca di nuovo per confermare.");
+});
+$("btn-logout-confirm").addEventListener("click", () => {
+  window.cassa.action("logout");
+  $("btn-logout-confirm").hidden = true;
+  $("btn-logout").hidden = false;
+  show("logout-msg", "Account scollegato: nella cassa compare la schermata di accesso.", "ok");
+});
+
 $("btn-update-check").addEventListener("click", () => window.cassa.action("update-check"));
 $("btn-update-install").addEventListener("click", () => window.cassa.action("update-install"));
 

@@ -25,6 +25,12 @@
 //                          error }) with the current state, then on every
 //                          change. status: dev | idle | checking |
 //                          up-to-date | downloading | downloaded | error
+//
+// Added in client 1.4.0:
+//   onLogoutRequest(cb)  → unsubscribe; cb() when "Esci dall'account" is
+//                          confirmed in the settings window. Its presence
+//                          also hides every "Esci" button in the web app
+//                          (staff-shared.jsx > logoutHiddenAtTill).
 export function getDesktopBridge() {
   return typeof window !== "undefined" && window.mdpDesktop ? window.mdpDesktop : null;
 }

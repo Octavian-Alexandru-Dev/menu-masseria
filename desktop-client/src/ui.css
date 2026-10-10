@@ -32,6 +32,8 @@ button.danger { color: #b03a2e; border-color: #e1b3ad; }
 .msg { margin-top: 10px; font-size: 15px; min-height: 22px; }
 .msg.ok { color: #2e7d4f; }
 .msg.error { color: #b03a2e; font-weight: 600; }
+details.danger-zone { margin-top: 18px; border-top: 1px solid #eee5d4; padding-top: 12px; }
+details.danger-zone summary { min-height: 48px; display: flex; align-items: center; cursor: pointer; color: #8a8378; font-size: 15px; }
 .found { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #eee5d4; }
 footer {
   position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px;

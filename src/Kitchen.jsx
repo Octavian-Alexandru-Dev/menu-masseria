@@ -6,7 +6,7 @@ import { LogOut, CheckCircle2, Clock, History } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, tableIdentity } from "./shared";
 import { subscribeOpenOrders, markCategoryOut, autoCloseStaleOrders } from "./orders";
 import {
-  useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
+  useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout, logoutHiddenAtTill,
 } from "./staff-shared";
 import OrderHistory from "./OrderHistory";
 
@@ -165,9 +165,11 @@ function KitchenPanel({ theme, menu, session }) {
           <button onClick={() => setShowHistory(true)} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
             <History size={14} /> Storico
           </button>
-          <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
-            <LogOut size={14} /> Esci
-          </button>
+          {!logoutHiddenAtTill() && (
+            <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, padding: "6px 8px" }}>
+              <LogOut size={14} /> Esci
+            </button>
+          )}
         </div>
       </div>
 

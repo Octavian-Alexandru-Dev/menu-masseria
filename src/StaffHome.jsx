@@ -7,10 +7,10 @@
 // dedicated device, e.g. the fixed kitchen tablet): this page is the common
 // entry point, not the only one.
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, ArrowLeft, BarChart3 } from "lucide-react";
-import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel, useUrlState } from "./shared";
+import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, BarChart3 } from "lucide-react";
+import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel, useUrlState, BackButton } from "./shared";
 import {
-  useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout,
+  useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout, logoutHiddenAtTill,
 } from "./staff-shared";
 import { subscribeOpenOrders } from "./orders";
 import { subscribePendingReservations } from "./reservationsData";
@@ -82,19 +82,23 @@ function Dashboard({ t, session, options, onChoose, openTablesCount, pendingRese
         })}
       </div>
 
-      <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.smallPlus, marginTop: 10 }}>
-        Esci
-      </button>
+      {!logoutHiddenAtTill() && (
+        <button onClick={staffLogout} className="mdp-btn" style={{ background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.smallPlus, marginTop: 10 }}>
+          Esci
+        </button>
+      )}
     </div>
   );
 }
 
+// Fixed height: full-screen areas below it (the till's Sala, TillSala.jsx)
+// subtract it through the --mdp-area-bar CSS variable set on the wrapper.
+const AREA_BAR_HEIGHT = 64;
+
 function BackToAreasBar({ t, onBack }) {
   return (
-    <div style={{ background: t.bgAlt, borderBottom: `1px solid ${t.line}`, padding: "6px 16px" }}>
-      <button onClick={onBack} className="mdp-btn" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.tinyPlus }}>
-        <ArrowLeft size={12} /> Cambia area
-      </button>
+    <div style={{ background: t.bgAlt, borderBottom: `1px solid ${t.line}`, padding: "0 16px", height: AREA_BAR_HEIGHT, boxSizing: "border-box", display: "flex", alignItems: "center" }}>
+      <BackButton t={t} onClick={onBack} label="Cambia area" />
     </div>
   );
 }
@@ -225,10 +229,10 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   if (coreOptions.length > 1) {
     const t = THEMES[theme] || THEMES.minimal;
     return (
-      <>
+      <div style={{ "--mdp-area-bar": `${AREA_BAR_HEIGHT}px` }}>
         <BackToAreasBar t={t} onBack={() => setArea(null)} />
         {panel}
-      </>
+      </div>
     );
   }
 

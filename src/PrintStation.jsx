@@ -16,7 +16,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Keyboard, Maximize, Minimize, Settings, Power } from "lucide-react";
 import { confirmAction } from "./confirmDialog";
 import UpdateBanner from "./UpdateBanner";
-import { useStaffSession } from "./staff-shared";
+import { useStaffSession, tillLogout } from "./staff-shared";
 import { getDesktopBridge } from "./desktop";
 import { buildReceipt, grayToMonoBitmap, LOGO_WIDTH_DOTS } from "./escpos";
 import {
@@ -128,6 +128,15 @@ export default function PrintStation() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(null);
   const [actionError, setActionError] = useState(null);
+
+  // "Esci dall'account" in the client's settings window (client ≥ 1.4.0):
+  // the web app has no "Esci" button at the till any more.
+  useEffect(() => {
+    if (typeof bridge.onLogoutRequest !== "function") return;
+    return bridge.onLogoutRequest(() => {
+      tillLogout().catch((err) => console.error("[till] Logout fallito:", err));
+    });
+  }, [bridge]);
 
   const canKeyboard = typeof bridge.toggleKeyboard === "function";
   const canFullscreen = typeof bridge.setFullscreen === "function";

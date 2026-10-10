@@ -175,13 +175,13 @@ export function StaffMessageScreen({ theme, title, message, onLogout }) {
         <div style={{ fontSize: TYPE.body, color: t.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
           {message}
         </div>
-        <button onClick={onLogout} className="mdp-btn" style={{
+        {!logoutHiddenAtTill() && <button onClick={onLogout} className="mdp-btn" style={{
           margin: "0 auto", padding: "9px 18px", background: "none", border: `1px solid ${t.line}`,
           borderRadius: 6, color: t.ink, fontSize: TYPE.smallPlus, cursor: "pointer",
           display: "flex", alignItems: "center", gap: 6,
         }}>
           <LogOut size={13} /> Esci
-        </button>
+        </button>}
       </div>
     </div>
   );
@@ -195,6 +195,24 @@ export function StaffLoadingScreen({ theme }) {
       Caricamento…
     </div>
   );
+}
+
+// At the till (client ≥ 1.4.0, whose settings window has its own "Esci
+// dall'account") no "Esci" button is shown anywhere in the web app: logging
+// out there is rare and deliberate, so it lives in the client's settings,
+// out of the way of an accidental tap. Older clients keep the confirmed
+// "Esci" below, otherwise they would have no way to log out at all.
+export function logoutHiddenAtTill() {
+  const bridge = getDesktopBridge();
+  return Boolean(bridge && typeof bridge.onLogoutRequest === "function");
+}
+
+// Logout asked from the client's settings window (PrintStation.jsx listens
+// for it): already confirmed there, so no dialog — and no automatic sign-in
+// afterwards, the login screen offers "Accedi come …" instead.
+export function tillLogout() {
+  manualLogoutAtTill = true;
+  return signOut(auth);
 }
 
 // Inside the till client a stray tap on "Esci" would leave the till logged

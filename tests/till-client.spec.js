@@ -163,8 +163,8 @@ test("con le credenziali della cassa salvate l'accesso è automatico", async ({ 
   await expectSignedInAsWaiter(page);
 });
 
-test("alla cassa 'Esci' chiede conferma e dopo l'uscita si rientra con un tocco", async ({ page }) => {
-  await installDesktopBridgeMock(page, { savedLogin: TEST_WAITER });
+test("con un client 1.1–1.3 'Esci' resta (non c'è il logout nelle impostazioni), chiede conferma e si rientra con un tocco", async ({ page }) => {
+  await installDesktopBridgeMock(page, { savedLogin: TEST_WAITER, noSettingsLogout: true });
   await page.goto("/cameriere");
   await expectSignedInAsWaiter(page);
 
@@ -187,6 +187,31 @@ test("alla cassa 'Esci' chiede conferma e dopo l'uscita si rientra con un tocco"
   await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toHaveCount(0);
   await oneTap.click();
   await expectSignedInAsWaiter(page);
+});
+
+test("con il client 1.4 non c'è nessun 'Esci' nell'interfaccia: il logout si fa dalle impostazioni del programma", async ({ page }) => {
+  await installDesktopBridgeMock(page, { savedLogin: TEST_ADMIN });
+  await page.goto("/?area=staff");
+  // Dashboard (admin): nessun "Esci".
+  await expect(page.getByText(/^Ciao,/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
+  // Nessun "Esci" nemmeno nelle singole aree.
+  for (const area of [/^sala/i, /^cucina/i, /^prenotazioni/i, /^gestione menù/i]) {
+    await page.getByRole("button", { name: area }).first().click();
+    await expect(page.getByRole("button", { name: "Cambia area" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
+    await page.getByRole("button", { name: "Cambia area" }).click();
+    await expect(page.getByText(/^Ciao,/)).toBeVisible({ timeout: 10_000 });
+  }
+
+  // "Esci dall'account" confermato nelle impostazioni del programma.
+  await page.evaluate(() => globalThis.__fireLogoutRequest());
+  const oneTap = page.getByRole("button", { name: `Accedi come ${TEST_ADMIN.email}` });
+  await expect(oneTap).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1000);
+  await expect(page.getByText(/^Ciao,/)).toHaveCount(0); // nessun rientro automatico
+  await oneTap.click();
+  await expect(page.getByText(/^Ciao,/)).toBeVisible({ timeout: 10_000 });
 });
 
 test("credenziali della cassa sbagliate mostrano un errore comprensibile", async ({ page }) => {

@@ -44,6 +44,16 @@
       <button id="btn-login-clear" class="danger">Rimuovi credenziali</button>
     </div>
     <div id="login-msg" class="msg" role="status"></div>
+
+    <details class="danger-zone">
+      <summary>Esci dall'account…</summary>
+      <div class="muted" style="margin:8px 0; word-break:normal">Scollega l'account in uso alla cassa (ad esempio per accedere con un altro account). La cassa smette di stampare i preconti finché non si accede di nuovo; le credenziali salvate restano, quindi per rientrare basta toccare "Accedi come …".</div>
+      <div class="actions">
+        <button id="btn-logout" class="danger">Esci dall'account</button>
+        <button id="btn-logout-confirm" class="danger" hidden>Conferma: esci dall'account</button>
+      </div>
+      <div id="logout-msg" class="msg" role="status"></div>
+    </details>
   </section>
 
   <section>

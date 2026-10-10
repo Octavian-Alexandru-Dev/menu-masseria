@@ -3,8 +3,8 @@
 // whoever last served them). Paginated loading, not realtime: see
 // loadClosedOrdersPage in orders.js.
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, Clock, CheckCircle2, Timer, Printer, Trash2 } from "lucide-react";
-import { ital, TYPE, formatCentsAsPrice, tableIdentity } from "./shared";
+import { Clock, CheckCircle2, Timer, Printer, Trash2 } from "lucide-react";
+import { ital, TYPE, formatCentsAsPrice, tableIdentity, BackButton } from "./shared";
 import { loadClosedOrdersPage, deleteOrder, deleteAllClosedOrders, orderTotalCents, copertoTotalCents } from "./orders";
 import ReceiptOverlay from "./ReceiptOverlay";
 
@@ -209,9 +209,7 @@ export default function OrderHistory({ t, menu, onBack, isAdmin }) {
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "16px 16px 60px" }}>
-      <button onClick={onBack} className="mdp-btn" style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: t.inkSoft, cursor: "pointer", fontSize: TYPE.smallPlus, marginBottom: 14 }}>
-        <ArrowLeft size={14} /> Indietro
-      </button>
+      <BackButton t={t} onClick={onBack} style={{ marginBottom: 14 }} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
         <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary }}>
           Storico comande

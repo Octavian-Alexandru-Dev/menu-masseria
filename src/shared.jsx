@@ -3,6 +3,7 @@
 // utilities, small decorative components. No Firebase import here: they
 // stay out of the public bundle.
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { ArrowLeft } from "lucide-react";
 
 /* ============================== THEME PRESETS ============================== */
 export const THEMES = {
@@ -460,6 +461,30 @@ export function BranchDivider({ color }) {
 // public/logo.jpg), NO LONGER embedded as text in the code: it's
 // downloaded once and stays cached in the customer's browser, instead of
 // bloating every page load.
+// The one "back" control of the staff areas (phones and till alike). Follows
+// the usual guidance instead of a bare arrow: a visible text label next to
+// the icon (NN/g, "Icon Usability": an arrow alone is ambiguous), a 48px
+// tall touch target (Material 48dp / Apple HIG 44pt / WCAG 2.5.5 44px) and
+// an outline, so it reads as a button. Always top-left, like a platform
+// navigation bar. `label` names the destination when it's specific
+// ("Tavoli", "Sala"), "Indietro" otherwise.
+export function BackButton({ t, onClick, label = "Indietro", style }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mdp-btn"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 8, minHeight: 48, padding: "0 18px 0 12px",
+        background: t.card, color: t.ink, border: `1.5px solid ${t.line}`, borderRadius: 12,
+        fontSize: 16, fontWeight: 600, cursor: "pointer", flexShrink: 0, ...style,
+      }}
+    >
+      <ArrowLeft size={22} strokeWidth={2.25} /> {label}
+    </button>
+  );
+}
+
 export function Logo({ width = 160 }) {
   return (
     <picture>

@@ -338,6 +338,10 @@ ipcMain.on("settings:action", (e, action) => {
   if (action === "update-check") updater.check();
   if (action === "update-install") installUpdate();
   if (action === "open-logs") shell.openPath(logDir());
+  if (action === "logout" && mainWindow) {
+    log("logout richiesto dalle impostazioni");
+    mainWindow.webContents.send("bridge:logout-request");
+  }
   if (action === "toggle-fullscreen" && mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
   if (action === "devtools" && mainWindow) mainWindow.webContents.openDevTools({ mode: "detach" });
   if (action === "quit") app.quit();

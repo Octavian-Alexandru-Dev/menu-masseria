@@ -29,6 +29,12 @@ contextBridge.exposeInMainWorld("mdpDesktop", {
     call("bridge:update-state").then(cb).catch(() => {});
     return () => ipcRenderer.removeListener("bridge:update-state", listener);
   },
+  // "Esci dall'account" pressed in the settings window. Since client 1.4.0.
+  onLogoutRequest: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on("bridge:logout-request", listener);
+    return () => ipcRenderer.removeListener("bridge:logout-request", listener);
+  },
   onUpdateAvailable: (cb) => {
     const listener = () => cb();
     ipcRenderer.on("bridge:update-available", listener);

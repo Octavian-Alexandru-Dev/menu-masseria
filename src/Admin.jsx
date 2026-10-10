@@ -13,6 +13,7 @@ import { db } from "./firebase-db";
 import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation, FALLBACK_STYLE, TYPE } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 import { subscribeMenuCosts, saveMenuCosts } from "./menuCosts";
+import { logoutHiddenAtTill } from "./staff-shared";
 
 // Reads and validates a .json file chosen for import: used both by the
 // regular Admin panel ("Importa JSON") and by the bootstrap screen when the
@@ -923,9 +924,11 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           <button onClick={onSave} disabled={saving} className="mdp-btn" style={btnPrimary(t)}>
             <Save size={13} /> {saving ? "Salvataggio…" : "Salva modifiche"}
           </button>
-          <button onClick={onLogout} className="mdp-btn" style={btnGhost(t)}>
-            <LogOut size={13} /> Esci
-          </button>
+          {!logoutHiddenAtTill() && (
+            <button onClick={onLogout} className="mdp-btn" style={btnGhost(t)}>
+              <LogOut size={13} /> Esci
+            </button>
+          )}
         </div>
       </div>
 
