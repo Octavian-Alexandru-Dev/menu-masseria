@@ -20,6 +20,8 @@ audiences:
 - [`docs/architecture.md`](docs/architecture.md) — module map and the
   reasoning behind the current architecture.
 - [`docs/data-model.md`](docs/data-model.md) — the Firestore schema.
+- [`docs/stampa-scontrini.md`](docs/stampa-scontrini.md) (Italian) — the
+  Windows till client and receipt printing on the thermal printer.
 - [`docs/comande-camerieri.md`](docs/comande-camerieri.md) and
   [`docs/prenotazioni.md`](docs/prenotazioni.md) (Italian) — detailed design
   docs for the order-taking and reservations features.
@@ -34,6 +36,21 @@ taking, kitchen, reservations, admin) require staff credentials and aren't
 publicly accessible — to try them without access to the real project, see
 [Try it locally](#try-it-locally-no-real-credentials-needed) below.
 
+## Windows till client — download
+
+**[⬇ Download Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/masseria-menu-firebase/releases/latest/download/Masseria-Cassa-Setup.exe)**
+(Windows 10/11, 64-bit — always the latest release)
+
+The till client (`desktop-client/`, Electron) wraps the same staff web app
+in a fullscreen window for the 12" touch terminal at the till, and prints
+receipts sent from any staff device (waiters' phones included) directly on
+the thermal printer. The UI is loaded from the live site, so a normal
+hosting deploy updates the till too — a new installer is only needed when
+the client itself changes. The installer isn't code-signed: on first run
+Windows SmartScreen shows "Windows protected your PC" → *More info* → *Run
+anyway*. Setup, printer settings and troubleshooting:
+[`docs/stampa-scontrini.md`](docs/stampa-scontrini.md).
+
 ## Features
 
 - **Multilingual public menu** (IT/EN/ES/DE/FR): translations are generated
@@ -42,6 +59,11 @@ publicly accessible — to try them without access to the real project, see
 - **Real-time order flow**: the waiter sends the order from their device,
   the kitchen sees it appear instantly (`Waiter.jsx` ↔ `Kitchen.jsx`,
   synced via Firestore).
+- **Receipt printing at the till**: "Stampa" on a receipt, from any staff
+  device, queues a print job (`printJobs` in Firestore) that the Windows
+  till client prints as ESC/POS on the 80mm thermal printer, with live
+  status back on the device that asked (`printJobs.js`, `escpos.js`,
+  `PrintStation.jsx`, `desktop-client/`).
 - **Table reservations** with a dedicated staff view (`Reservations.jsx`).
 - **Admin panel**: menu editor with drag & drop category/dish reordering,
   translation management, a configurable printable PDF export (language,
@@ -110,6 +132,9 @@ instead of copying `.env.example` by hand.
 | `npm run test:e2e:ui` | Playwright in interactive UI mode. |
 | `npm run emulators:up` / `emulators:down` | Start/stop the emulator container directly. |
 | `npm run seed:emulator` | (Re-)seed the running emulator with demo data — idempotent. |
+| `cd desktop-client && npm install && npx install-electron` | Install the till client's dependencies (also enables `tests/desktop-client.spec.js`). |
+| `cd desktop-client && npm start` | Run the till client locally (settings in its window: tap the printer button). |
+| `cd desktop-client && npm run dist:win` | Build the Windows installer into `desktop-client/dist/` (works from macOS too). |
 
 See [`CLAUDE.md`](CLAUDE.md) for the full testing workflow, including when
 to run the suite and how to handle a failing test after a change.
@@ -124,9 +149,11 @@ src/
   StaffHome.jsx         # staff landing page / dashboard, role-based area picker
   Waiter.jsx, Kitchen.jsx, Reservations.jsx, Stats.jsx  # staff areas
   OrderHistory.jsx, ReceiptOverlay.jsx, PrintMenu.jsx    # shared staff UI
+  PrintStation.jsx, printJobs.js, escpos.js, desktop.js  # receipt print queue + ESC/POS (till client only)
   shared.jsx, staff-shared.jsx   # cross-cutting UI/data helpers, no Firebase (shared.jsx) vs. auth+role (staff-shared.jsx)
   orders.js, reservationsData.js, statsData.js, menuCosts.js  # Firestore data layer, one module per domain
   firebase-db.js, firebase-auth.js, cloudinary.js  # external service clients
+desktop-client/  # Windows till client (Electron): fullscreen shell + raw TCP printing + settings window
 docs/            # design docs and this technical documentation
 scripts/         # emulator seeding/export scripts, Bitwarden env generation
 tests/           # Playwright E2E specs + fixtures
@@ -154,6 +181,12 @@ the hook pulls the Tophost FTP credentials from the `Menu-masseria`
 Bitwarden Secrets Manager project when `.bws-token` is present, falling
 back to a local `.ftp-credentials` file otherwise (format in
 `.ftp-credentials.example`).
+
+The Windows till client is released separately: pushing a `cassa-v<version>`
+tag (e.g. `git tag cassa-v1.0.1 && git push origin cassa-v1.0.1`) makes
+`.github/workflows/desktop-client-release.yml` build the installer on a
+Windows runner and publish it as the latest GitHub Release, which is what
+the download link above points to.
 
 Full operational documentation, written for the restaurant owner (no
 technical prerequisites): [`GUIDA.md`](GUIDA.md).

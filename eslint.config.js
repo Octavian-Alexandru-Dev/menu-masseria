@@ -40,7 +40,17 @@ export default [
     files: ["scripts/**/*.js", "tests/**/*.js", "playwright.config.js", "vite.config.js"],
     languageOptions: { ecmaVersion: 2022, sourceType: "module", globals: globals.node },
   },
+  // Windows till client (Electron): CommonJS main/preload scripts in Node,
+  // plain browser scripts for its local pages (settings, offline).
   {
-    ignores: ["dist/**", "node_modules/**", "seed-data/**"],
+    files: ["desktop-client/src/{main,preload,settings-preload,printer,settings-store}.js"],
+    languageOptions: { ecmaVersion: 2022, sourceType: "commonjs", globals: globals.node },
+  },
+  {
+    files: ["desktop-client/src/{settings,offline}.js"],
+    languageOptions: { ecmaVersion: 2022, sourceType: "script", globals: globals.browser },
+  },
+  {
+    ignores: ["dist/**", "node_modules/**", "seed-data/**", "desktop-client/dist/**", "desktop-client/node_modules/**"],
   },
 ];

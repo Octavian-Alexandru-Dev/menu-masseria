@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Impostazioni — Masseria Cassa</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body>
+  <header>
+    <img src="logo.jpg" alt="" class="logo">
+    <div>
+      <h1>Impostazioni cassa</h1>
+      <div class="muted" id="version"></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>Stampante scontrini</h2>
+    <div class="row">
+      <label>Indirizzo IP <input id="host" inputmode="decimal" autocomplete="off"></label>
+      <label class="narrow">Porta <input id="port" inputmode="numeric"></label>
+    </div>
+    <div class="actions">
+      <button id="btn-status">Verifica stato</button>
+      <button id="btn-test">Stampa di prova</button>
+      <button id="btn-discover">Cerca stampanti in rete</button>
+    </div>
+    <div id="printer-msg" class="msg" role="status"></div>
+    <div id="discover-results"></div>
+  </section>
+
+  <section>
+    <h2>Schermo</h2>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="startFullscreen"> Avvia a schermo intero</label>
+      <label class="check"><input type="checkbox" id="kiosk"> Modalità chiosco (blocca l'uscita dallo schermo intero)</label>
+    </div>
+    <div class="row">
+      <label>Zoom interfaccia
+        <select id="zoomFactor">
+          <option value="0.8">80%</option><option value="0.9">90%</option><option value="1">100%</option>
+          <option value="1.1">110%</option><option value="1.25">125%</option><option value="1.5">150%</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="launchAtLogin"> Avvia all'accensione del computer</label>
+    </div>
+    <div class="actions">
+      <button id="btn-fullscreen">Entra/esci da schermo intero</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Avanzate</h2>
+    <label>Nome di questa postazione <input id="stationName"></label>
+    <label>Indirizzo dell'app <input id="appUrl" autocomplete="off" spellcheck="false"></label>
+    <div class="muted">L'interfaccia viene caricata da questo indirizzo: ogni aggiornamento pubblicato sul sito arriva anche qui.</div>
+    <div class="actions">
+      <button id="btn-reload">Ricarica app</button>
+      <button id="btn-devtools">Strumenti sviluppatore</button>
+      <button id="btn-quit" class="danger">Chiudi programma</button>
+    </div>
+    <div class="muted" id="file"></div>
+  </section>
+
+  <footer>
+    <div id="save-msg" class="msg" role="status"></div>
+    <button id="btn-close" class="secondary">Chiudi</button>
+    <button id="btn-save" class="primary">Salva</button>
+  </footer>
+  <script src="settings.js"></script>
+</body>
+</html>

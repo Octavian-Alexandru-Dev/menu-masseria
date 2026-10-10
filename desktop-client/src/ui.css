@@ -1,0 +1,41 @@
+/* Shared look of the client's local pages (settings, offline). Large touch
+   targets: the till is a 12" touch screen, usually without a keyboard. */
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 20px 24px 96px; background: #f6f1e7; color: #2b2620;
+  font: 16px/1.4 "Segoe UI", system-ui, sans-serif;
+}
+header { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+.logo { width: 110px; height: auto; mix-blend-mode: multiply; }
+h1 { font-size: 24px; margin: 0; }
+h2 { font-size: 17px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .5px; color: #8a6d1d; }
+section { background: #fff; border: 1px solid #e3dccd; border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+label { display: block; font-size: 14px; color: #5c554b; margin-bottom: 10px; flex: 1; }
+label.narrow { flex: 0 0 120px; }
+label.check { display: flex; align-items: center; gap: 10px; font-size: 16px; color: #2b2620; min-height: 48px; }
+input, select {
+  display: block; width: 100%; margin-top: 4px; min-height: 48px; padding: 8px 12px;
+  font-size: 18px; border: 1px solid #cfc6b4; border-radius: 8px; background: #fffdf8; color: inherit;
+}
+input[type="checkbox"] { width: 28px; height: 28px; min-height: 0; margin: 0; flex: none; }
+.row { display: flex; gap: 14px; flex-wrap: wrap; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+button {
+  min-height: 52px; padding: 0 20px; font-size: 16px; font-weight: 600; border-radius: 10px;
+  border: 1px solid #cfc6b4; background: #fffdf8; color: #2b2620; cursor: pointer;
+}
+button:active { transform: scale(.98); }
+button:disabled { opacity: .6; }
+button.primary { background: #8a6d1d; border-color: #8a6d1d; color: #fff; }
+button.danger { color: #b03a2e; border-color: #e1b3ad; }
+.muted { font-size: 13px; color: #8a8378; margin-top: 6px; word-break: break-all; }
+.msg { margin-top: 10px; font-size: 15px; min-height: 22px; }
+.msg.ok { color: #2e7d4f; }
+.msg.error { color: #b03a2e; font-weight: 600; }
+.found { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #eee5d4; }
+footer {
+  position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px;
+  padding: 12px 24px; background: #f6f1e7; border-top: 1px solid #e3dccd;
+}
+footer .msg { flex: 1; margin: 0; }
+.center { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; padding-bottom: 20px; }

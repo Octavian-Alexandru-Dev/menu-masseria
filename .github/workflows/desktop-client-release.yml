@@ -1,0 +1,46 @@
+name: Release client cassa (Windows)
+
+# Costruisce l'installer Windows del client della cassa (desktop-client/,
+# vedi docs/stampa-scontrini.md) e lo pubblica come GitHub Release.
+# Si avvia solo pushando un tag "cassa-v<versione>", es.:
+#   git tag cassa-v1.0.1 && git push origin cassa-v1.0.1
+# Il file ha un nome fisso (Masseria-Cassa-Setup.exe), così il link di
+# download nel README (releases/latest/download/...) punta sempre all'ultima
+# versione.
+#
+# Serve solo quando cambia il client stesso: l'interfaccia arriva dal sito,
+# quindi le modifiche alla web app (compreso il layout dello scontrino) non
+# richiedono una nuova release.
+on:
+  push:
+    tags:
+      - 'cassa-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Versione dal tag
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#cassa-v}" --no-git-tag-version --allow-same-version
+      - run: npm run dist:win
+      - name: Pubblica la release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/Masseria-Cassa-Setup.exe
+          --title "Masseria Cassa ${GITHUB_REF_NAME#cassa-v}"
+          --notes "Installer Windows del client della cassa. Scarica Masseria-Cassa-Setup.exe ed eseguilo sul computer della cassa."
+          --latest

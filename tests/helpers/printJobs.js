@@ -1,0 +1,43 @@
+// Accesso Node-side alla coda di stampa (printJobs, vedi src/printJobs.js)
+// sull'emulatore: semina richieste "vecchie" per il test di scadenza, legge
+// lo stato di una richiesta e pulisce quelle create dai test.
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, getDoc, collection, query, where, getDocs, deleteDoc, Timestamp } from "firebase/firestore";
+import { TEST_WAITER } from "../test-env.js";
+import { auth, db } from "./emulatorApp.js";
+
+let signInPromise = null;
+function ensureSignedIn() {
+  if (!signInPromise) signInPromise = signInWithEmailAndPassword(auth, TEST_WAITER.email, TEST_WAITER.password);
+  return signInPromise;
+}
+
+export async function seedPrintJob(id, { tableLabel, createdAtMs }) {
+  await ensureSignedIn();
+  await setDoc(doc(db, "printJobs", id), {
+    type: "receipt",
+    orderId: null,
+    payload: { tableLabel, dateLabel: "", lines: [{ quantity: 1, name: "Voce scaduta", notes: "", totalCents: 100 }], coperto: null, totalCents: 100 },
+    status: "pending",
+    createdAt: Timestamp.fromMillis(createdAtMs),
+    requestedBy: { uid: null, email: null },
+    claimedBy: null, claimedAt: null, finishedAt: null, error: null,
+  });
+}
+
+export async function getPrintJob(id) {
+  await ensureSignedIn();
+  const snap = await getDoc(doc(db, "printJobs", id));
+  return snap.exists() ? snap.data() : null;
+}
+
+// Best-effort, come firestore-cleanup.js: non deve mai far fallire un test.
+export async function deletePrintJobsByTableLabel(tableLabel) {
+  try {
+    await ensureSignedIn();
+    const snap = await getDocs(query(collection(db, "printJobs"), where("payload.tableLabel", "==", tableLabel)));
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  } catch (err) {
+    console.error(`[test cleanup] Eliminazione stampe "${tableLabel}" fallita:`, err.message || err);
+  }
+}

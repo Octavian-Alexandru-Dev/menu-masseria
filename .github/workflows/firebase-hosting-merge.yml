@@ -5,6 +5,7 @@ on:
       - main
     paths-ignore:
       - 'landing_page/**'
+      - 'desktop-client/**'
       - 'scripts/**'
       - '.githooks/**'
       - '.claude/**'

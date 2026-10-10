@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Masseria Cassa — connessione assente</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body>
+  <div class="center">
+    <img src="logo.jpg" alt="" class="logo" style="width:180px">
+    <h1>Impossibile caricare l'app</h1>
+    <div>Il computer della cassa non riesce a raggiungere il sito. Controlla la connessione a internet e riprova.</div>
+    <div class="muted" id="detail"></div>
+    <div class="actions">
+      <button id="retry" class="primary">Riprova</button>
+      <button id="settings">Impostazioni</button>
+    </div>
+  </div>
+  <script src="offline.js"></script>
+</body>
+</html>

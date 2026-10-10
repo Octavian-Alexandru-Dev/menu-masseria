@@ -19,8 +19,29 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
+  // Le spec con una stazione di stampa attiva (una "cassa", simulata o il
+  // vero client Electron) stampano TUTTE le richieste in coda, come la cassa
+  // vera: se girassero in parallelo tra loro, una si prenderebbe le stampe
+  // dell'altra. Per questo stanno in progetti propri, eseguiti in sequenza
+  // (dependencies) dopo il resto della suite.
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      testIgnore: [/receipt-printing\.spec\.js/, /desktop-client\.spec\.js/],
+    },
+    {
+      name: "print-queue",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /receipt-printing\.spec\.js/,
+      dependencies: ["chromium"],
+    },
+    {
+      name: "desktop-client",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /desktop-client\.spec\.js/,
+      dependencies: ["print-queue"],
+    },
   ],
   webServer: {
     command: "npm run dev",

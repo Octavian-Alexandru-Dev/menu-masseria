@@ -1,14 +1,39 @@
-// Receipt — printable summary (not a fiscal receipt, via the browser's
-// print) overlaid on the rest of the screen. Shared component: used by the
-// detail view of a still-open table (Waiter.jsx, editable) and by rows of
-// already-closed orders — the "Chiusi nel turno" section and History
-// (OrderHistory.jsx, read-only: a closed order can no longer be edited,
-// only reprinted).
+// Receipt — printable summary (not a fiscal receipt) overlaid on the rest of
+// the screen. Shared component: used by the detail view of a still-open
+// table (Waiter.jsx, editable) and by rows of already-closed orders — the
+// "Chiusi nel turno" section and History (OrderHistory.jsx, read-only: a
+// closed order can no longer be edited, only reprinted).
+//
+// "Stampa" sends the receipt to the thermal printer at the till through the
+// print queue (printJobs.js, see docs/stampa-scontrini.md) — from any
+// device, phones included — and follows the job's status in realtime. The
+// browser's own print dialog stays available as a secondary fallback.
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Printer, Pencil, Check } from "lucide-react";
+import { X, Printer, Pencil, Check, RotateCcw } from "lucide-react";
 import { TYPE, formatCentsAsPrice, parsePriceToCents, tableIdentity } from "./shared";
 import { itemsTotalCents, copertoTotalCents, markReceiptPrinted, removeOrderLine, confirmFinalReceipt } from "./orders";
+import { enqueueReceiptPrint, subscribePrintJob, retryPrintJob } from "./printJobs";
+
+// After this long still "pending", nobody has picked the job up: most likely
+// the till client is off or not logged in.
+const STATION_SLOW_MS = 15_000;
+
+function printStatusText(job, slow, enqueueError) {
+  if (enqueueError) return { text: enqueueError, tone: "error" };
+  if (!job) return { text: "Invio alla cassa…", tone: "info" };
+  switch (job.status) {
+    case "pending":
+      return slow
+        ? { text: "La cassa non ha ancora preso la stampa: il programma della cassa è acceso e connesso?", tone: "warn" }
+        : { text: "Inviato alla cassa, in attesa…", tone: "info" };
+    case "printing": return { text: "Stampa in corso alla cassa…", tone: "info" };
+    case "printed": return { text: "Stampato alla cassa", tone: "ok" };
+    case "expired": return { text: "Richiesta scaduta: nessuna cassa l'ha stampata.", tone: "error" };
+    case "error": return { text: `Stampa non riuscita: ${job.error || "errore sconosciuto"}`, tone: "error" };
+    default: return { text: "", tone: "info" };
+  }
+}
 
 export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = false }) {
   const [editing, setEditing] = useState(false);
@@ -20,7 +45,47 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const doPrint = () => window.print();
+  const [printJobId, setPrintJobId] = useState(null);
+  const [printJob, setPrintJob] = useState(null);
+  const [printSlow, setPrintSlow] = useState(false);
+  const [enqueueError, setEnqueueError] = useState(null);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!printJobId) return;
+    return subscribePrintJob(printJobId, setPrintJob, (err) => console.error("[receipt] Stato stampa non disponibile:", err));
+  }, [printJobId]);
+
+  const jobStatus = printJob?.status;
+  useEffect(() => {
+    setPrintSlow(false);
+    if (jobStatus !== "pending") return;
+    const id = setTimeout(() => setPrintSlow(true), STATION_SLOW_MS);
+    return () => clearTimeout(id);
+  }, [jobStatus, printJob?.createdAt]);
+
+  const doSendToPrinter = async () => {
+    setSending(true);
+    setEnqueueError(null);
+    try {
+      if (printJobId && (jobStatus === "error" || jobStatus === "expired")) {
+        await retryPrintJob(printJobId);
+      } else {
+        setPrintJob(null);
+        setPrintJobId(await enqueueReceiptPrint(order, menu));
+      }
+    } catch (err) {
+      console.error("[receipt] Invio alla cassa fallito:", err);
+      setEnqueueError("Invio alla cassa non riuscito. Controlla la connessione e riprova.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const doBrowserPrint = () => window.print();
+  const printBusy = sending || (printJobId && !enqueueError && (!printJob || jobStatus === "pending" || jobStatus === "printing"));
+  const printFailed = enqueueError || jobStatus === "error" || jobStatus === "expired";
+  const printStatus = printJobId || enqueueError ? printStatusText(printJob, printSlow, enqueueError) : null;
 
   const doRemove = async (lineId) => {
     setRemovingId(lineId);
@@ -121,11 +186,27 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
         )}
 
         <div className="mdp-receipt-noprint" style={{ display: "grid", gap: 8 }}>
-          <button onClick={doPrint} className="mdp-btn" style={{
+          <button onClick={doSendToPrinter} disabled={printBusy} className="mdp-btn" style={{
             padding: "10px 0", background: "none", border: `1px solid ${t.line}`, borderRadius: 8,
-            color: t.ink, fontSize: TYPE.smallPlus, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            color: t.ink, fontSize: TYPE.smallPlus, cursor: printBusy ? "default" : "pointer", opacity: printBusy ? 0.6 : 1,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           }}>
-            <Printer size={13} /> Stampa
+            {printFailed ? <><RotateCcw size={13} /> Riprova stampa</> : <><Printer size={13} /> Stampa</>}
+          </button>
+          {printStatus && (
+            <div role="status" aria-label="Stato stampa" style={{
+              fontSize: TYPE.tinyPlus, textAlign: "center", lineHeight: 1.4,
+              color: printStatus.tone === "error" ? t.accent2 : printStatus.tone === "ok" ? t.secondary : printStatus.tone === "warn" ? "#a06a1a" : t.inkSoft,
+            }}>
+              {printStatus.tone === "ok" && <Check size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />}
+              {printStatus.text}
+            </div>
+          )}
+          <button onClick={doBrowserPrint} className="mdp-btn" style={{
+            padding: "2px 0", background: "none", border: "none", color: t.inkSoft,
+            fontSize: TYPE.tinyPlus, textDecoration: "underline", cursor: "pointer",
+          }}>
+            Stampa dal browser
           </button>
           {!locked && (!editing ? (
             <button onClick={() => setEditing(true)} className="mdp-btn" style={{

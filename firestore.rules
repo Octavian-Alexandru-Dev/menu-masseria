@@ -45,6 +45,14 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
 
+    // Coda di stampa dei preconti verso la stampante termica della cassa
+    // (vedi docs/stampa-scontrini.md): qualunque dispositivo dello staff
+    // accoda una stampa, il client Windows della cassa la prende in carico e
+    // ne aggiorna lo stato. Stesso confine di fiducia delle collection sopra.
+    match /printJobs/{jobId} {
+      allow read, write: if request.auth != null;
+    }
+
     // Tutto il resto è bloccato per sicurezza.
     match /{document=**} {
       allow read, write: if false;

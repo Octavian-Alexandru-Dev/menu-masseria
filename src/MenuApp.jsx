@@ -18,17 +18,35 @@ import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "./firebase-db";
 import { MENU_DOC_PATH, FALLBACK_STYLE, useUrlState } from "./shared";
 import ClientView from "./ClientView";
+import { getDesktopBridge } from "./desktop";
 
 const StaffHome = lazy(() => import("./StaffHome"));
 const PrintMenu = lazy(() => import("./PrintMenu"));
 const Waiter = lazy(() => import("./Waiter"));
 const Kitchen = lazy(() => import("./Kitchen"));
 const Reservations = lazy(() => import("./Reservations"));
+const PrintStation = lazy(() => import("./PrintStation"));
 
 const LOAD_ATTEMPT_TIMEOUT_MS = 5000; // timeout for each attempt
 const MAX_LOAD_ATTEMPTS = 3; // number of automatic retries before the final message
 const SAVE_TIMEOUT_MS = 8000;
 const MAX_UNDO_STEPS = 20;
+
+// Inside the Windows till client (desktop-client/) the print station runs
+// alongside whatever screen is shown, so receipts sent from any device are
+// printed even while the till is on the waiter area, the dashboard or the
+// public menu. Never rendered in a normal browser.
+function withPrintStation(content) {
+  if (!getDesktopBridge()) return content;
+  return (
+    <>
+      {content}
+      <Suspense fallback={null}>
+        <PrintStation />
+      </Suspense>
+    </>
+  );
+}
 
 export default function App() {
   const [menu, setMenuState] = useState(null);
@@ -238,7 +256,7 @@ export default function App() {
 
   if (isKitchenPath || isWaiterPath || isReservationsPath) {
     const StaffArea = isKitchenPath ? Kitchen : isReservationsPath ? Reservations : Waiter;
-    return (
+    return withPrintStation(
       <Suspense
         fallback={
           <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...FALLBACK_STYLE }}>
@@ -255,7 +273,7 @@ export default function App() {
   // panel inside it lets you import a JSON backup if the document doesn't
   // exist yet on Firestore — see Admin.jsx).
   if (view === "staff") {
-    return (
+    return withPrintStation(
       <Suspense
         fallback={
           <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...FALLBACK_STYLE }}>
@@ -279,7 +297,7 @@ export default function App() {
   }
 
   if (!menu) {
-    return (
+    return withPrintStation(
       <div style={{
         minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center", gap: 14, padding: 24, textAlign: "center", ...FALLBACK_STYLE,
@@ -314,5 +332,5 @@ export default function App() {
     );
   }
 
-  return <ClientView menu={menu} onGoStaff={() => setView("staff")} />;
+  return withPrintStation(<ClientView menu={menu} onGoStaff={() => setView("staff")} />);
 }

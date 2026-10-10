@@ -91,6 +91,19 @@ full field list and status lifecycle (`pending → confirmed → started`, or
 `reservationsData.js`'s `dateKey()` for why (avoids UTC/local timezone bugs
 for date-range queries).
 
+## `printJobs/{id}`
+
+Receipt print queue for the thermal printer at the till — see
+`docs/stampa-scontrini.md` for the full flow. One document per "Stampa"
+press: `payload` is a snapshot of the receipt (table label, lines with
+precomputed totals, cover charge, total), so what prints is what was on
+screen even if the order changes meanwhile. `status`: `pending` →
+`printing` (claimed by a till client in a transaction, `claimedBy`) →
+`printed` | `error` (`error` holds a readable message); `pending` jobs older
+than 10 minutes become `expired` instead of printing. A retry puts the same
+document back to `pending`. Jobs older than 7 days are deleted lazily by
+the till client at startup — no TTL policy or scheduled job.
+
 ## Trust boundary (`firestore.rules`)
 
 Every collection above except `menu/data` reads requires

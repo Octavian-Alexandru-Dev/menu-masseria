@@ -8,7 +8,7 @@
     "dev:local": "npm run emulators:up && npm run seed:emulator && VITE_USE_FIREBASE_EMULATOR=true VITE_FIREBASE_API_KEY=demo-key VITE_FIREBASE_PROJECT_ID=demo-masseria-test vite",
     "build": "vite build",
     "preview": "vite preview",
-    "emulators:up": "docker compose -f docker-compose.emulator.yml up -d --wait",
+    "emulators:up": "docker compose -f docker-compose.emulator.yml up --build -d --wait",
     "emulators:down": "docker compose -f docker-compose.emulator.yml down",
     "seed:emulator": "node scripts/seed-emulator.js",
     "seed:export": "bash scripts/export-seed-data.sh",

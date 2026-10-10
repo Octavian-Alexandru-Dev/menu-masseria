@@ -2,7 +2,7 @@
 
 This project uses Playwright for end-to-end contract tests, run against a **local Firebase emulator** (Auth + Firestore, containerized — see `docker-compose.emulator.yml`), never against the real production project. Tests live in `tests/*.spec.js` and are plain JavaScript (the app itself has no TypeScript).
 
-After implementing or changing a UI feature (`ClientView.jsx`, `Admin.jsx`, `Waiter.jsx`, `Kitchen.jsx`, `Reservations.jsx`, `OrderHistory.jsx`, `PrintMenu.jsx`, `ReceiptOverlay.jsx`, `StaffHome.jsx`, `shared.jsx`, `staff-shared.jsx`, `MenuApp.jsx`), verify it yourself before considering the task done:
+After implementing or changing a UI feature (`ClientView.jsx`, `Admin.jsx`, `Waiter.jsx`, `Kitchen.jsx`, `Reservations.jsx`, `OrderHistory.jsx`, `PrintMenu.jsx`, `ReceiptOverlay.jsx`, `PrintStation.jsx`, `StaffHome.jsx`, `shared.jsx`, `staff-shared.jsx`, `MenuApp.jsx`, or the till client in `desktop-client/`), verify it yourself before considering the task done:
 
 ```
 npm run test:e2e       # headless run — self-contained, starts/seeds/tears down the emulator automatically
@@ -19,6 +19,7 @@ Test accounts (`TEST_ADMIN`, `TEST_WAITER`, `TEST_KITCHEN`, see `tests/test-env.
 
 Notes:
 - `tests/client-view.spec.js` / `tests/admin-login.spec.js` / `tests/kitchen-view.spec.js` / `tests/waiter-order.spec.js` / `tests/reservations.spec.js` cover the public menu, staff login screens, and full authenticated flows (waiter↔kitchen realtime order handling, reservations lifecycle). Assertions favor structure/role/text over hardcoded content.
+- `tests/receipt-printing.spec.js` / `tests/escpos.spec.js` cover receipt printing (print queue, till print station via a mocked `window.mdpDesktop`, ESC/POS output). `tests/desktop-client.spec.js` launches the real Electron till client (`desktop-client/`) against a fake TCP printer; it is skipped unless `cd desktop-client && npm install && npx install-electron` has been run. Coverage checklist: `docs/stampa-scontrini.md`.
 - `tests/firestore-cleanup.js` deletes test-created orders/reservations between tests within a run (parallel test isolation); the whole emulator is discarded after the run regardless.
 - When adding a new UI feature, add or extend a spec in `tests/` alongside it.
 

@@ -437,9 +437,12 @@ un'integrazione con cassa/stampante fiscale (resta fuori scopo, §1), solo un
 riepilogo stampabile via browser (`window.print()`, come già fa `PrintMenu.jsx`
 per il menù) per dare un'occhiata condivisa col tavolo prima del conto vero.
 
-- **Stampa**: usa la stampa nativa del browser; un CSS `@media print` nasconde
-  tutto il resto della pagina e i controlli non pertinenti (pulsanti di
-  modifica), lasciando solo il riepilogo.
+- **Stampa**: invia il preconto alla stampante termica della cassa tramite la
+  coda `printJobs` e il client Windows della cassa (vedi
+  `docs/stampa-scontrini.md`), da qualunque dispositivo, con lo stato della
+  stampa mostrato in tempo reale. Resta disponibile "Stampa dal browser"
+  (stampa nativa: un CSS `@media print` nasconde tutto il resto della pagina
+  e i controlli non pertinenti, lasciando solo il riepilogo).
 - **Modifica**: dopo aver generato il preconto, si possono rimuovere
   righe sbagliate (`removeOrderLine`) — per aggiungerne di nuove si chiude il
   riquadro e si usa "Aggiungi piatti" come al solito, poi si riapre per un
