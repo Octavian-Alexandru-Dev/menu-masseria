@@ -4,14 +4,20 @@
 // con la stazione di stampa attiva, senza Electron né stampante vera. I byte
 // ESC/POS ricevuti finiscono in window.__printed; window.__printFail = "msg"
 // fa fallire le stampe con quel messaggio (es. carta esaurita).
-export async function installDesktopBridgeMock(page, { failWith = null } = {}) {
-  await page.addInitScript((failMessage) => {
+// legacy: true simula un client 1.0.0 già installato (bridge senza
+// tastiera/schermo intero/chiusura/credenziali). savedLogin: credenziali
+// della cassa salvate nel client ({ email, password }).
+export async function installDesktopBridgeMock(page, { failWith = null, legacy = false, savedLogin = null } = {}) {
+  await page.addInitScript(({ failMessage, legacyApi, login }) => {
     globalThis.__printed = [];
     globalThis.__printFail = failMessage;
     globalThis.__settingsOpened = 0;
     globalThis.__reloaded = false;
-    globalThis.mdpDesktop = {
-      version: "test",
+    globalThis.__keyboardToggles = 0;
+    globalThis.__fullscreen = true;
+    globalThis.__quit = false;
+    const bridge = {
+      version: legacyApi ? "1.0.0" : "test",
       getConfig: async () => ({ stationName: "Cassa di test" }),
       printRaw: async (bytes) => {
         if (globalThis.__printFail) throw new Error(globalThis.__printFail);
@@ -21,7 +27,19 @@ export async function installDesktopBridgeMock(page, { failWith = null } = {}) {
       reloadApp: () => { globalThis.__reloaded = true; },
       onUpdateAvailable: (cb) => { globalThis.__fireUpdateAvailable = cb; return () => {}; },
     };
-  }, failWith);
+    if (!legacyApi) {
+      Object.assign(bridge, {
+        toggleKeyboard: async () => { globalThis.__keyboardToggles += 1; return "touch"; },
+        setFullscreen: async (wanted) => {
+          if (typeof wanted === "boolean") globalThis.__fullscreen = wanted;
+          return globalThis.__fullscreen;
+        },
+        quitApp: () => { globalThis.__quit = true; },
+        getSavedLogin: async () => login,
+      });
+    }
+    globalThis.mdpDesktop = bridge;
+  }, { failMessage: failWith, legacyApi: legacy, login: savedLogin });
 }
 
 // Ultimi byte stampati decodificati come latin1 (le lettere accentate CP858

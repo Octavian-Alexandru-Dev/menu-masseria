@@ -8,6 +8,14 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase-db";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, FALLBACK_STYLE } from "./shared";
+import { getDesktopBridge } from "./desktop";
+import { confirmAction } from "./confirmDialog";
+
+// Set by a deliberate, confirmed logout at the till: the login screen then
+// waits for a tap on "Accedi come …" instead of signing straight back in
+// (so another account can be used). Reset by reloading/restarting the
+// client, which signs in automatically again.
+let manualLogoutAtTill = false;
 
 // A staff member's session state:
 //  - "loading": don't know yet whether they're authenticated / don't know their role yet
@@ -43,28 +51,51 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Till account saved in the Windows client (desktop-client/credentials.js):
+  // automatic sign-in, plus a one-tap button after a deliberate logout.
+  const [savedLogin, setSavedLogin] = useState(null);
 
-  const submit = async (e) => {
-    e.preventDefault();
+  const signIn = async (emailValue, passValue, failurePrefix = "") => {
     setError("");
     setBusy(true);
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), pass);
+      await signInWithEmailAndPassword(auth, emailValue.trim(), passValue);
     } catch (err) {
       const code = err && err.code;
       if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-        setError("Email o password non corretti.");
+        setError(failurePrefix + "Email o password non corretti.");
       } else if (code === "auth/invalid-email") {
-        setError("Indirizzo email non valido.");
+        setError(failurePrefix + "Indirizzo email non valido.");
       } else if (code === "auth/too-many-requests") {
-        setError("Troppi tentativi. Riprova tra qualche minuto.");
+        setError(failurePrefix + "Troppi tentativi. Riprova tra qualche minuto.");
       } else {
-        setError("Accesso non riuscito. Riprova.");
+        setError(failurePrefix + "Accesso non riuscito. Riprova.");
       }
     } finally {
       setBusy(false);
     }
   };
+
+  const submit = (e) => {
+    e.preventDefault();
+    signIn(email, pass);
+  };
+
+  const signInSaved = () => signIn(savedLogin.email, savedLogin.password, "Accesso con l'account della cassa non riuscito (controlla le credenziali in Impostazioni): ");
+
+  useEffect(() => {
+    const bridge = getDesktopBridge();
+    if (!bridge || typeof bridge.getSavedLogin !== "function") return;
+    let cancelled = false;
+    bridge.getSavedLogin().then((login) => {
+      if (cancelled || !login?.email || !login?.password) return;
+      setSavedLogin(login);
+      if (!manualLogoutAtTill) {
+        signIn(login.email, login.password, "Accesso automatico non riuscito (controlla le credenziali in Impostazioni): ");
+      }
+    }).catch((err) => console.error("[login] Credenziali della cassa non disponibili:", err));
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="mdp-root" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -83,6 +114,20 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
           <div style={{ textAlign: "center", fontSize: TYPE.smallPlus, color: t.inkSoft, marginTop: 6, marginBottom: 22 }}>
             {subtitle}
           </div>
+        )}
+
+        {savedLogin && (
+          <>
+            <button type="button" onClick={signInSaved} disabled={busy} className="mdp-btn" style={{
+              width: "100%", minHeight: 56, marginBottom: 18, background: t.primary, color: t.bg, border: "none",
+              borderRadius: 8, fontSize: TYPE.bodyLg, fontWeight: 600, cursor: "pointer",
+            }}>
+              {busy ? "Accesso…" : `Accedi come ${savedLogin.email}`}
+            </button>
+            <div style={{ textAlign: "center", fontSize: TYPE.tinyPlus, color: t.inkSoft, marginBottom: 16 }}>
+              oppure con un altro account:
+            </div>
+          </>
         )}
 
         <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Email</label>
@@ -152,6 +197,19 @@ export function StaffLoadingScreen({ theme }) {
   );
 }
 
-export function staffLogout() {
+// Inside the till client a stray tap on "Esci" would leave the till logged
+// out (and stop the print station): there it asks for confirmation first.
+// On phones/browsers it logs out immediately, as before.
+export async function staffLogout() {
+  if (getDesktopBridge()) {
+    const confirmed = await confirmAction({
+      title: "Uscire dall'account?",
+      message: "La cassa smetterà di stampare i preconti finché non si accede di nuovo.",
+      confirmLabel: "Esci",
+      danger: true,
+    });
+    if (!confirmed) return;
+    manualLogoutAtTill = true;
+  }
   return signOut(auth);
 }

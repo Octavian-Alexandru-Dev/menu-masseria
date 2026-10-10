@@ -75,6 +75,10 @@ test("il client carica la web app, espone il bridge e stampa un preconto inviato
   const till = await app.firstWindow();
   await expect(till.getByText("Area cameriere")).toBeVisible({ timeout: 20_000 });
   expect(await till.evaluate(() => typeof globalThis.mdpDesktop?.printRaw)).toBe("function");
+  // API 1.1.0: stato schermo intero (avviato in finestra, startFullscreen:
+  // false) e nessuna credenziale della cassa salvata.
+  expect(await till.evaluate(() => globalThis.mdpDesktop.setFullscreen())).toBe(false);
+  expect(await till.evaluate(() => globalThis.mdpDesktop.getSavedLogin())).toBeNull();
   await staffLogin(till, TEST_ADMIN);
   await expect(till.getByRole("button", { name: /stampante: pronta/i })).toBeVisible({ timeout: 15_000 });
 
@@ -98,10 +102,11 @@ test("il client carica la web app, espone il bridge e stampa un preconto inviato
   expect(receipt.endsWith("\x1dVB\x00")).toBe(true);
 });
 
-test("il pulsante stampante apre le impostazioni native, con verifica stato e stampa di prova", async () => {
+test("il menu Cassa apre le impostazioni native, con verifica stato e stampa di prova", async () => {
   const till = await app.firstWindow();
   const settingsPromise = app.waitForEvent("window");
-  await till.getByRole("button", { name: /apri impostazioni stampante/i }).click();
+  await till.getByRole("button", { name: /apri menu cassa/i }).click();
+  await till.getByRole("menuitem", { name: "Impostazioni stampante" }).click();
   const settings = await settingsPromise;
   await expect(settings.getByRole("heading", { name: "Impostazioni cassa" })).toBeVisible();
   await expect(settings.locator("#host")).toHaveValue("127.0.0.1");
@@ -119,4 +124,11 @@ test("il pulsante stampante apre le impostazioni native, con verifica stato e st
   await settings.getByRole("button", { name: "Verifica stato" }).click();
   await expect(settings.locator("#printer-msg")).toHaveText(/rifiutato la connessione|non risponde/i, { timeout: 15_000 });
   await settings.getByRole("button", { name: "Chiudi", exact: true }).click();
+
+  // Fuori da Windows la tastiera virtuale non esiste: errore leggibile, non un crash.
+  if (process.platform !== "win32") {
+    await till.getByRole("button", { name: /apri menu cassa/i }).click();
+    await till.getByRole("menuitem", { name: "Tastiera" }).click();
+    await expect(till.getByRole("alert")).toHaveText(/solo su windows/i);
+  }
 });

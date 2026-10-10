@@ -18,6 +18,27 @@ async function busy(button, fn) {
   try { await fn(); } finally { button.disabled = false; button.textContent = label; }
 }
 
+function showSavedLogin(email) {
+  $("login-saved").textContent = email ? `Credenziali salvate per: ${email}` : "Nessuna credenziale salvata.";
+  if (email && !$("loginEmail").value) $("loginEmail").value = email;
+}
+
+function showUpdate(u) {
+  const texts = {
+    dev: "Versione di sviluppo: aggiornamenti automatici disattivati.",
+    idle: "",
+    checking: "Controllo aggiornamenti…",
+    "up-to-date": "Il programma è aggiornato.",
+    downloading: `Download della versione ${u.version || ""} in corso${u.progress != null ? ` (${u.progress}%)` : ""}…`,
+    downloaded: `Versione ${u.version} pronta: verrà installata alla chiusura, oppure subito.`,
+    error: `Aggiornamento non riuscito: ${u.error}`,
+  };
+  show("update-msg", texts[u.status] || "", u.status === "error" ? "error" : u.status === "downloaded" ? "ok" : "");
+  $("btn-update-install").hidden = u.status !== "downloaded";
+}
+
+window.cassa.onUpdateState(showUpdate);
+
 async function init() {
   const info = await window.cassa.get();
   const s = info.settings;
@@ -27,6 +48,10 @@ async function init() {
   $("kiosk").checked = s.kiosk;
   $("zoomFactor").value = String(s.zoomFactor);
   $("launchAtLogin").checked = s.launchAtLogin;
+  $("keyboardMode").value = s.keyboardMode;
+  $("autoLogin").checked = s.autoLogin;
+  showSavedLogin(info.savedEmail);
+  showUpdate(info.update);
   $("stationName").value = s.stationName;
   $("appUrl").value = s.appUrl;
   $("version").textContent = `Versione ${info.version} · Electron ${info.electron}`;
@@ -85,11 +110,34 @@ $("btn-save").addEventListener("click", (e) => busy(e.target, async () => {
     kiosk: $("kiosk").checked,
     zoomFactor: Number($("zoomFactor").value),
     launchAtLogin: $("launchAtLogin").checked,
+    keyboardMode: $("keyboardMode").value,
+    autoLogin: $("autoLogin").checked,
     stationName: $("stationName").value.trim() || "Cassa",
     appUrl: $("appUrl").value.trim(),
   });
   show("save-msg", res.ok ? "Impostazioni salvate." : res.errors.join(" "), res.ok ? "ok" : "error");
 }));
+
+$("btn-login-save").addEventListener("click", (e) => busy(e.target, async () => {
+  const email = $("loginEmail").value.trim();
+  const password = $("loginPassword").value;
+  if (!email || !password) return show("login-msg", "Inserisci email e password.", "error");
+  const res = await window.cassa.credentials("save", email, password);
+  if (!res.ok) return show("login-msg", res.error, "error");
+  $("loginPassword").value = "";
+  showSavedLogin(res.savedEmail);
+  show("login-msg", "Credenziali salvate. Ricorda di premere Salva in basso se hai cambiato l'opzione di accesso automatico.", "ok");
+}));
+
+$("btn-login-clear").addEventListener("click", (e) => busy(e.target, async () => {
+  const res = await window.cassa.credentials("clear");
+  $("loginEmail").value = "";
+  showSavedLogin(res.savedEmail);
+  show("login-msg", "Credenziali rimosse.", "ok");
+}));
+
+$("btn-update-check").addEventListener("click", () => window.cassa.action("update-check"));
+$("btn-update-install").addEventListener("click", () => window.cassa.action("update-install"));
 
 $("btn-fullscreen").addEventListener("click", () => window.cassa.action("toggle-fullscreen"));
 $("btn-reload").addEventListener("click", () => window.cassa.action("reload"));

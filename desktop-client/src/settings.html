@@ -31,7 +31,23 @@
   </section>
 
   <section>
-    <h2>Schermo</h2>
+    <h2>Account della cassa</h2>
+    <div class="muted" style="margin:0 0 10px">Accesso automatico all'avvio e dopo un'uscita: nessuno deve più digitare email e password. La password è cifrata da Windows e non lascia questo computer.</div>
+    <div class="msg" id="login-saved"></div>
+    <div class="row">
+      <label>Email <input id="loginEmail" type="email" autocomplete="off" spellcheck="false"></label>
+      <label>Password <input id="loginPassword" type="password" autocomplete="new-password"></label>
+    </div>
+    <label class="check"><input type="checkbox" id="autoLogin"> Accedi automaticamente con questo account</label>
+    <div class="actions">
+      <button id="btn-login-save">Salva credenziali</button>
+      <button id="btn-login-clear" class="danger">Rimuovi credenziali</button>
+    </div>
+    <div id="login-msg" class="msg" role="status"></div>
+  </section>
+
+  <section>
+    <h2>Schermo e tastiera</h2>
     <div class="row">
       <label class="check"><input type="checkbox" id="startFullscreen"> Avvia a schermo intero</label>
       <label class="check"><input type="checkbox" id="kiosk"> Modalità chiosco (blocca l'uscita dallo schermo intero)</label>
@@ -45,9 +61,25 @@
       </label>
       <label class="check"><input type="checkbox" id="launchAtLogin"> Avvia all'accensione del computer</label>
     </div>
+    <label>Tastiera virtuale (pulsante "Tastiera" nel menu Cassa)
+      <select id="keyboardMode">
+        <option value="touch">Tastiera touch di Windows</option>
+        <option value="osk">Tastiera su schermo classica (finestra mobile)</option>
+      </select>
+    </label>
     <div class="actions">
       <button id="btn-fullscreen">Entra/esci da schermo intero</button>
     </div>
+  </section>
+
+  <section>
+    <h2>Aggiornamenti del programma</h2>
+    <div id="update-msg" class="msg" role="status"></div>
+    <div class="actions">
+      <button id="btn-update-check">Controlla aggiornamenti</button>
+      <button id="btn-update-install" class="primary" hidden>Installa e riavvia</button>
+    </div>
+    <div class="muted">Il programma si aggiorna da solo: gli aggiornamenti vengono scaricati in background e installati alla chiusura (o subito, con "Installa e riavvia"). L'interfaccia invece arriva dal sito e non richiede aggiornamenti.</div>
   </section>
 
   <section>

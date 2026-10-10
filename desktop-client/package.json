@@ -1,14 +1,14 @@
 {
   "name": "masseria-cassa",
   "productName": "Masseria Cassa",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Client Windows della cassa: interfaccia web dello staff + stampa diretta dei preconti sulla stampante termica.",
   "private": true,
   "author": "Fattoria della Piana",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist:win": "electron-builder --win nsis --x64"
+    "dist:win": "electron-builder --win nsis --x64 --publish never"
   },
   "devDependencies": {
     "electron": "44.4.3",
@@ -17,10 +17,24 @@
   "build": {
     "appId": "it.masseria-della-piana.cassa",
     "productName": "Masseria Cassa",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["src/**/*", "build/icon.png", "package.json"],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png"
     },
     "nsis": {
@@ -31,6 +45,17 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Masseria Cassa",
       "artifactName": "Masseria-Cassa-Setup.exe"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Octavian-Alexandru-Dev",
+        "repo": "menu-masseria",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
   }
 }

@@ -46,9 +46,11 @@ in a fullscreen window for the 12" touch terminal at the till, and prints
 receipts sent from any staff device (waiters' phones included) directly on
 the thermal printer. The UI is loaded from the live site, so a normal
 hosting deploy updates the till too — a new installer is only needed when
-the client itself changes. The installer isn't code-signed: on first run
-Windows SmartScreen shows "Windows protected your PC" → *More info* → *Run
-anyway*. Setup, printer settings and troubleshooting:
+the client itself changes, and from 1.1.0 the client installs those by
+itself (electron-updater, from GitHub Releases), so the link above is only
+needed for a first install. The installer isn't code-signed: Edge may block
+the download (*⋯ → Keep → Keep anyway*) and on first run Windows SmartScreen
+shows "Windows protected your PC" → *More info* → *Run anyway*. Setup, printer settings and troubleshooting:
 [`docs/stampa-scontrini.md`](docs/stampa-scontrini.md).
 
 ## Features

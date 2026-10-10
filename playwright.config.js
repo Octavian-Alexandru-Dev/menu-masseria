@@ -28,7 +28,7 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      testIgnore: [/receipt-printing\.spec\.js/, /desktop-client\.spec\.js/],
+      testIgnore: [/receipt-printing\.spec\.js/, /till-client\.spec\.js/, /desktop-client\.spec\.js/],
     },
     {
       name: "print-queue",
@@ -37,10 +37,16 @@ export default defineConfig({
       dependencies: ["chromium"],
     },
     {
+      name: "till-client",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /till-client\.spec\.js/,
+      dependencies: ["print-queue"],
+    },
+    {
       name: "desktop-client",
       use: { ...devices["Desktop Chrome"] },
       testMatch: /desktop-client\.spec\.js/,
-      dependencies: ["print-queue"],
+      dependencies: ["till-client"],
     },
   ],
   webServer: {

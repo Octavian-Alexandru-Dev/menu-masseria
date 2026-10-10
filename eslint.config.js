@@ -43,7 +43,7 @@ export default [
   // Windows till client (Electron): CommonJS main/preload scripts in Node,
   // plain browser scripts for its local pages (settings, offline).
   {
-    files: ["desktop-client/src/{main,preload,settings-preload,printer,settings-store}.js"],
+    files: ["desktop-client/src/{main,preload,settings-preload,printer,settings-store,keyboard,credentials,updater}.js"],
     languageOptions: { ecmaVersion: 2022, sourceType: "commonjs", globals: globals.node },
   },
   {

@@ -1,0 +1,127 @@
+import { test, expect } from "@playwright/test";
+import { TEST_WAITER, TEST_ADMIN } from "./test-env";
+import { staffLogin } from "./helpers/staffLogin";
+import { installDesktopBridgeMock } from "./helpers/desktopBridge";
+
+// Comodità della cassa nel client Windows (docs/stampa-scontrini.md): menu
+// "Cassa" sul pulsante stampante (tastiera virtuale, schermo intero,
+// impostazioni, chiusura con conferma), banner di aggiornamento, accesso
+// automatico con l'account della cassa salvato nel client, conferma su
+// "Esci". Il client è simulato con window.mdpDesktop (helpers/desktopBridge.js).
+//
+// Progetto Playwright dedicato (playwright.config.js): ogni pagina qui è una
+// "cassa" con la stazione di stampa attiva, quindi non deve girare in
+// parallelo con tests/receipt-printing.spec.js.
+
+async function expectSignedInAsWaiter(page) {
+  await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+}
+
+test("il menu Cassa apre tastiera, schermo intero, impostazioni e chiude il programma solo dopo conferma", async ({ page }) => {
+  await installDesktopBridgeMock(page);
+  await page.goto("/cameriere");
+  // Prima del login la stazione è inattiva (nessun accesso a Firestore).
+  await expect(page.getByRole("button", { name: /stampante non attiva: serve il login/i })).toBeVisible({ timeout: 10_000 });
+  await staffLogin(page, TEST_ADMIN);
+  const cassa = page.getByRole("button", { name: /stampante: pronta.*apri menu cassa/i });
+  await expect(cassa).toBeVisible({ timeout: 10_000 });
+  const menu = page.getByRole("menu", { name: "Menu cassa" });
+
+  await cassa.click();
+  await expect(menu).toBeVisible();
+  await menu.getByRole("menuitem", { name: "Tastiera" }).click();
+  expect(await page.evaluate(() => globalThis.__keyboardToggles)).toBe(1);
+  await expect(menu).toHaveCount(0); // si chiude per lasciare spazio alla tastiera
+
+  await cassa.click();
+  await menu.getByRole("menuitem", { name: "Esci da schermo intero" }).click();
+  expect(await page.evaluate(() => globalThis.__fullscreen)).toBe(false);
+  await expect(menu.getByRole("menuitem", { name: "Schermo intero" })).toBeVisible();
+
+  await menu.getByRole("menuitem", { name: "Impostazioni stampante" }).click();
+  expect(await page.evaluate(() => globalThis.__settingsOpened)).toBe(1);
+
+  // Chiusura: un tocco sbagliato non chiude nulla.
+  await cassa.click();
+  await menu.getByRole("menuitem", { name: "Chiudi programma" }).click();
+  const dialog = page.getByRole("alertdialog", { name: /chiudere il programma della cassa/i });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Annulla" }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => globalThis.__quit)).toBe(false);
+
+  await cassa.click();
+  await menu.getByRole("menuitem", { name: "Chiudi programma" }).click();
+  await dialog.getByRole("button", { name: "Chiudi programma" }).click();
+  expect(await page.evaluate(() => globalThis.__quit)).toBe(true);
+});
+
+test("con un client vecchio (1.0.0) il menu offre solo le impostazioni stampante", async ({ page }) => {
+  await installDesktopBridgeMock(page, { legacy: true });
+  await page.goto("/cameriere");
+  await staffLogin(page, TEST_ADMIN);
+  await page.getByRole("button", { name: /apri menu cassa/i }).click();
+  const menu = page.getByRole("menu", { name: "Menu cassa" });
+  await expect(menu.getByRole("menuitem", { name: "Impostazioni stampante" })).toBeVisible();
+  await expect(menu.getByRole("menuitem")).toHaveCount(1);
+});
+
+test("il banner di nuova versione aggiorna l'app", async ({ page }) => {
+  await installDesktopBridgeMock(page);
+  await page.goto("/cameriere");
+  await staffLogin(page, TEST_ADMIN);
+  await expect(page.getByRole("button", { name: /apri menu cassa/i })).toBeVisible({ timeout: 10_000 });
+  // Nuovo deploy (o aggiornamento del client) rilevato: banner, non un
+  // ricaricamento forzato in mezzo al lavoro.
+  await page.evaluate(() => globalThis.__fireUpdateAvailable());
+  await expect(page.getByText("È disponibile una nuova versione dell'app.")).toBeVisible();
+  await page.getByRole("button", { name: /aggiorna ora/i }).click();
+  expect(await page.evaluate(() => globalThis.__reloaded)).toBe(true);
+});
+
+test("con le credenziali della cassa salvate l'accesso è automatico", async ({ page }) => {
+  await installDesktopBridgeMock(page, { savedLogin: TEST_WAITER });
+  await page.goto("/cameriere");
+  await expectSignedInAsWaiter(page);
+});
+
+test("alla cassa 'Esci' chiede conferma e dopo l'uscita si rientra con un tocco", async ({ page }) => {
+  await installDesktopBridgeMock(page, { savedLogin: TEST_WAITER });
+  await page.goto("/cameriere");
+  await expectSignedInAsWaiter(page);
+
+  // Tocco per sbaglio: "Annulla" lascia tutto com'era.
+  await page.getByRole("button", { name: /^esci$/i }).click();
+  const dialog = page.getByRole("alertdialog", { name: /uscire dall'account/i });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Annulla" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expectSignedInAsWaiter(page);
+
+  // Uscita voluta: niente rientro automatico (si può usare un altro
+  // account), ma basta un tocco per tornare sull'account della cassa.
+  await page.getByRole("button", { name: /^esci$/i }).click();
+  await dialog.getByRole("button", { name: "Esci" }).click();
+  const oneTap = page.getByRole("button", { name: `Accedi come ${TEST_WAITER.email}` });
+  await expect(oneTap).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+  await page.waitForTimeout(1000);
+  await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toHaveCount(0);
+  await oneTap.click();
+  await expectSignedInAsWaiter(page);
+});
+
+test("credenziali della cassa sbagliate mostrano un errore comprensibile", async ({ page }) => {
+  await installDesktopBridgeMock(page, { savedLogin: { email: TEST_WAITER.email, password: "sbagliata" } });
+  await page.goto("/cameriere");
+  await expect(page.getByText(/accesso automatico non riuscito.*email o password non corretti/i)).toBeVisible({ timeout: 10_000 });
+});
+
+test("nel browser normale 'Esci' esce subito, senza conferma", async ({ page }) => {
+  await page.goto("/cameriere");
+  await staffLogin(page, TEST_WAITER);
+  await expectSignedInAsWaiter(page);
+  await page.getByRole("button", { name: /^esci$/i }).click();
+  await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+});

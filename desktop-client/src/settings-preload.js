@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld("cassa", {
   discover: () => ipcRenderer.invoke("settings:discover"),
   onDiscoverProgress: (cb) => ipcRenderer.on("settings:discover-progress", (_e, done, total) => cb(done, total)),
   action: (name) => ipcRenderer.send("settings:action", name),
+  credentials: (action, email, password) => ipcRenderer.invoke("settings:credentials", action, email, password),
+  onUpdateState: (cb) => ipcRenderer.on("settings:update-state", (_e, st) => cb(st)),
 });

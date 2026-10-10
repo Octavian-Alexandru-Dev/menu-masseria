@@ -5,12 +5,17 @@
 // deploy updates the till too. What the shell adds is only what a browser
 // can't do: talking raw TCP to the thermal printer (printer.js), a
 // fullscreen/kiosk window for the 12" touch terminal, and a local settings
-// window to fix printer problems on the spot.
+// window to fix printer problems on the spot. Plus the till comforts that
+// need the OS: on-demand virtual keyboard (keyboard.js), a saved login for
+// the till account (credentials.js) and self-updates (updater.js).
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { app, BrowserWindow, ipcMain, shell, session, net, screen } = require("electron");
 const store = require("./settings-store");
 const printer = require("./printer");
+const keyboard = require("./keyboard");
+const credentials = require("./credentials");
+const updater = require("./updater");
 
 // Lets the Playwright smoke test (tests/desktop-client.spec.js) run the real
 // client against a throwaway settings folder.
@@ -58,10 +63,20 @@ function startUpdateChecks() {
   fetchHtmlHash().then((h) => { loadedHtmlHash = h; });
   updateTimer = setInterval(async () => {
     const h = await fetchHtmlHash();
-    if (h && loadedHtmlHash && h !== loadedHtmlHash && mainWindow) {
-      mainWindow.webContents.send("bridge:update-available");
-    }
+    if (h && loadedHtmlHash && h !== loadedHtmlHash) notifyUpdateAvailable();
   }, UPDATE_CHECK_INTERVAL_MS);
+}
+
+// Same "new version — update now" banner in the page for both a new web
+// deploy and a downloaded client update; "Aggiorna ora" (bridge:reload)
+// installs the client update if there is one, otherwise reloads the page.
+function notifyUpdateAvailable() {
+  if (mainWindow) mainWindow.webContents.send("bridge:update-available");
+}
+
+function reloadOrInstall() {
+  if (updater.installNow()) return;
+  session.defaultSession.clearCache().finally(() => { loadApp(); startUpdateChecks(); });
 }
 
 function loadApp() {
@@ -195,15 +210,57 @@ ipcMain.handle("bridge:print", async (e, bytes) => {
 
 ipcMain.on("bridge:open-settings", (e) => { if (fromApp(e) || isLocalPage(e)) openSettings(); });
 ipcMain.on("bridge:reload", (e) => {
-  if (!fromApp(e) && !isLocalPage(e)) return;
-  session.defaultSession.clearCache().finally(() => { loadApp(); startUpdateChecks(); });
+  if (fromApp(e) || isLocalPage(e)) reloadOrInstall();
+});
+
+ipcMain.handle("bridge:keyboard", async (e) => {
+  if (!fromApp(e)) return { ok: false, error: "Origine non autorizzata." };
+  try {
+    return { ok: true, value: await keyboard.toggleKeyboard(settings.keyboardMode) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("bridge:fullscreen", (e, wanted) => {
+  if (!fromApp(e) || !mainWindow) return { ok: false, error: "Origine non autorizzata." };
+  if (typeof wanted === "boolean") {
+    // Leaving fullscreen must also leave kiosk mode, otherwise it's a no-op.
+    if (!wanted && mainWindow.isKiosk()) mainWindow.setKiosk(false);
+    mainWindow.setFullScreen(wanted);
+  }
+  return { ok: true, value: mainWindow.isFullScreen() || mainWindow.isKiosk() };
+});
+
+ipcMain.on("bridge:quit", (e) => { if (fromApp(e)) app.quit(); });
+
+// The till account saved in Impostazioni, handed only to the web app's own
+// origin, which uses it to sign in without typing (staff-shared.jsx).
+ipcMain.handle("bridge:saved-login", (e) => {
+  if (!fromApp(e)) return { ok: false, error: "Origine non autorizzata." };
+  return { ok: true, value: settings.autoLogin ? credentials.load() : null };
 });
 
 /* ---------------------------- settings window ---------------------------- */
 
 ipcMain.handle("settings:get", (e) => {
   if (!isSettingsWindow(e)) return null;
-  return { settings, file: store.file(), version: app.getVersion(), electron: process.versions.electron, fullscreen: mainWindow ? mainWindow.isFullScreen() : false };
+  return {
+    settings, file: store.file(), version: app.getVersion(), electron: process.versions.electron,
+    fullscreen: mainWindow ? mainWindow.isFullScreen() : false,
+    savedEmail: credentials.savedEmail(), update: updater.state(),
+  };
+});
+
+ipcMain.handle("settings:credentials", (e, action, email, password) => {
+  if (!isSettingsWindow(e)) return { ok: false, error: "Non autorizzato." };
+  try {
+    if (action === "clear") credentials.clear();
+    else credentials.save(String(email).trim(), String(password));
+    return { ok: true, savedEmail: credentials.savedEmail() };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle("settings:save", (e, next) => {
@@ -240,6 +297,8 @@ ipcMain.handle("settings:discover", async (e) => {
 ipcMain.on("settings:action", (e, action) => {
   if (!isSettingsWindow(e)) return;
   if (action === "reload") session.defaultSession.clearCache().finally(() => { loadApp(); startUpdateChecks(); });
+  if (action === "update-check") updater.check();
+  if (action === "update-install") updater.installNow();
   if (action === "toggle-fullscreen" && mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
   if (action === "devtools" && mainWindow) mainWindow.webContents.openDevTools({ mode: "detach" });
   if (action === "quit") app.quit();
@@ -258,6 +317,10 @@ if (!app.requestSingleInstanceLock()) {
     // cleared — the login session and Firestore's offline cache are kept.
     await session.defaultSession.clearCache();
     createMainWindow();
+    updater.init((st) => {
+      if (settingsWindow) settingsWindow.webContents.send("settings:update-state", st);
+      if (st.status === "downloaded") notifyUpdateAvailable();
+    });
   });
   app.on("window-all-closed", () => app.quit());
 }

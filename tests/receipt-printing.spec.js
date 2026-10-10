@@ -130,21 +130,5 @@ test("una richiesta rimasta in coda troppo a lungo scade invece di essere stampa
   }
 });
 
-test("alla cassa il pulsante stampante apre le impostazioni e il banner aggiorna l'app", async ({ page }) => {
-  await installDesktopBridgeMock(page);
-  await page.goto("/cameriere");
-  // Prima del login la stazione è inattiva (nessun accesso a Firestore).
-  await expect(page.getByRole("button", { name: /stampante non attiva: serve il login/i })).toBeVisible({ timeout: 10_000 });
-  await staffLogin(page, TEST_ADMIN);
-  const printerButton = page.getByRole("button", { name: /stampante: pronta/i });
-  await expect(printerButton).toBeVisible({ timeout: 10_000 });
-
-  await printerButton.click();
-  expect(await page.evaluate(() => globalThis.__settingsOpened)).toBe(1);
-
-  // Nuovo deploy rilevato dal client: banner, non un ricaricamento forzato.
-  await page.evaluate(() => globalThis.__fireUpdateAvailable());
-  await expect(page.getByText("È disponibile una nuova versione dell'app.")).toBeVisible();
-  await page.getByRole("button", { name: /aggiorna ora/i }).click();
-  expect(await page.evaluate(() => globalThis.__reloaded)).toBe(true);
-});
+// Menu Cassa (tastiera, schermo intero, impostazioni, chiusura), banner di
+// aggiornamento, login automatico e conferma di uscita: tests/till-client.spec.js.

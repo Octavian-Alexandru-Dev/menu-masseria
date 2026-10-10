@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld("mdpDesktop", {
   printRaw: (bytes) => call("bridge:print", bytes),
   openSettings: () => ipcRenderer.send("bridge:open-settings"),
   reloadApp: () => ipcRenderer.send("bridge:reload"),
+  toggleKeyboard: () => call("bridge:keyboard"),
+  // setFullscreen(true|false) → Promise<boolean>; no argument = read only.
+  setFullscreen: (wanted) => call("bridge:fullscreen", wanted),
+  quitApp: () => ipcRenderer.send("bridge:quit"),
+  getSavedLogin: () => call("bridge:saved-login"),
   onUpdateAvailable: (cb) => {
     const listener = () => cb();
     ipcRenderer.on("bridge:update-available", listener);

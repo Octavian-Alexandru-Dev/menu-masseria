@@ -15,6 +15,10 @@ const DEFAULTS = {
   kiosk: false,
   zoomFactor: 1,
   launchAtLogin: false,
+  // "touch" = Windows touch keyboard, "osk" = classic On-Screen Keyboard.
+  keyboardMode: "touch",
+  // Sign in automatically with the till account saved in credentials.js.
+  autoLogin: true,
 };
 
 function file() {
@@ -43,6 +47,7 @@ function validate(s) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push("Porta della stampante non valida.");
   const zoom = Number(s.zoomFactor);
   if (!(zoom >= 0.5 && zoom <= 2)) errors.push("Zoom non valido (tra 50% e 200%).");
+  if (!["touch", "osk"].includes(s.keyboardMode)) errors.push("Tipo di tastiera non valido.");
   return errors;
 }
 

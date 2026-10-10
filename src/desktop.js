@@ -9,7 +9,16 @@
 //   openSettings()       opens the native printer/app settings window
 //   onUpdateAvailable(cb) → unsubscribe; cb fires when a newer web app
 //                          version has been deployed
-//   reloadApp()          reloads the web app (picks up a new deploy)
+//   reloadApp()          reloads the web app (picks up a new deploy), or
+//                        installs a downloaded client update and restarts
+//
+// Added in client 1.1.0 — check they exist before using them, since a till
+// may still run an older client while the web app is already updated:
+//   toggleKeyboard()     → Promise; shows/hides the Windows virtual keyboard
+//   setFullscreen(bool?) → Promise<boolean>; no argument = current state
+//   quitApp()            closes the client
+//   getSavedLogin()      → Promise<{ email, password } | null>, the till
+//                          account saved in the client's settings
 export function getDesktopBridge() {
   return typeof window !== "undefined" && window.mdpDesktop ? window.mdpDesktop : null;
 }
