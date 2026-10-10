@@ -21,6 +21,14 @@ contextBridge.exposeInMainWorld("mdpDesktop", {
   setFullscreen: (wanted) => call("bridge:fullscreen", wanted),
   quitApp: () => ipcRenderer.send("bridge:quit"),
   getSavedLogin: () => call("bridge:saved-login"),
+  // Client self-update state ({ status, version, progress, error }), current
+  // value first, then every change. Since client 1.2.0.
+  onClientUpdateState: (cb) => {
+    const listener = (_e, st) => cb(st);
+    ipcRenderer.on("bridge:update-state", listener);
+    call("bridge:update-state").then(cb).catch(() => {});
+    return () => ipcRenderer.removeListener("bridge:update-state", listener);
+  },
   onUpdateAvailable: (cb) => {
     const listener = () => cb();
     ipcRenderer.on("bridge:update-available", listener);

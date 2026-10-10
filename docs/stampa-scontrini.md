@@ -129,10 +129,23 @@ non cambia mai):
 ### 3.2 Aggiornamenti e reinstallazione
 
 - **Automatici (dalla 1.1.0):** il programma controlla gli aggiornamenti
-  all'avvio e ogni 6 ore, li scarica in background e mostra il banner "È
-  disponibile una nuova versione — **Aggiorna ora**". Toccandolo, installa
-  in silenzio e si riavvia da solo. Se lo ignori, l'aggiornamento si
-  installa alla prossima chiusura. Lo stato si vede in *Impostazioni →
+  all'avvio e ogni 6 ore e li scarica in background. Un banner in basso
+  racconta cosa succede (dalla 1.2.0):
+  - "Download dell'aggiornamento del programma (versione X) in corso — 42%.
+    Puoi continuare a lavorare.";
+  - "Aggiornamento del programma pronto (versione X)…" con **Aggiorna ora**:
+    toccandolo compare "Installazione… il programma si riavvierà da solo" e
+    in pochi secondi riparte. Se lo ignori, si installa alla prossima
+    chiusura;
+  - "Aggiornamento del programma non riuscito: riproverà da solo più tardi"
+    (chiudibile), per esempio senza internet;
+  - dopo il riavvio: "Programma aggiornato alla versione X." per qualche
+    secondo.
+
+  Lo stesso vale per l'interfaccia: "È disponibile una nuova versione
+  dell'interfaccia" → **Aggiorna ora** → "Aggiornamento dell'interfaccia in
+  corso…" → "Interfaccia aggiornata all'ultima versione.". Il semplice
+  controllo degli aggiornamenti non mostra nulla. Lo stato si vede in *Impostazioni →
   Aggiornamenti del programma* (con "Controlla aggiornamenti").
 - **Installare una nuova versione sopra quella già presente** (es. dal
   bookmark): è un aggiornamento sul posto. L'installer riconosce il
@@ -174,7 +187,8 @@ il sito dell'app.
 
 ## 4. Menu Cassa e impostazioni
 
-Il **pulsante stampante** in basso a sinistra mostra lo stato con un pallino:
+Il pulsante con la **rotella delle impostazioni** in basso a sinistra mostra
+lo stato della stampante con un pallino:
 verde = pronta, arancione = stampa in corso, rosso = errore (il motivo
 compare accanto), grigio = serve il login. Toccandolo si apre il **menu
 Cassa**:
@@ -279,9 +293,11 @@ le credenziali (cifrate) in `login.json` nella stessa cartella.
 | Impostazioni native: verifica stato, stampa di prova, errore comprensibile su porta sbagliata | `tests/desktop-client.spec.js` |
 | Menu Cassa: tastiera, entra/esci da schermo intero, impostazioni, chiudi con conferma (annulla/conferma) | `tests/till-client.spec.js` |
 | Client 1.0.0 già installato: il menu mostra solo "Impostazioni stampante" | `tests/till-client.spec.js` |
-| Banner "nuova versione" → "Aggiorna ora" | `tests/till-client.spec.js` |
+| Pulsante del menu Cassa: rotella delle impostazioni con pallino di stato | `tests/till-client.spec.js` |
+| Banner interfaccia: nuova versione → "Aggiorna ora" → in corso → "Interfaccia aggiornata" dopo il ricaricamento | `tests/till-client.spec.js` |
+| Banner programma: download con %, pronto, installazione; errore chiudibile; "Programma aggiornato alla versione X" una sola volta dopo il riavvio | `tests/till-client.spec.js` |
 | Accesso automatico con credenziali salvate; credenziali sbagliate → errore comprensibile | `tests/till-client.spec.js` |
 | "Esci" alla cassa: conferma, annulla, nessun rientro automatico dopo uscita voluta, rientro con un tocco | `tests/till-client.spec.js` |
 | "Esci" nel browser normale: esce subito senza conferma | `tests/till-client.spec.js` |
-| Client Electron vero: API 1.1.0 (stato schermo intero, nessuna credenziale), errore tastiera fuori da Windows | `tests/desktop-client.spec.js` |
+| Client Electron vero: API 1.1.0/1.2.0 (stato schermo intero, nessuna credenziale, stato aggiornamenti "dev"), errore tastiera fuori da Windows | `tests/desktop-client.spec.js` |
 | Non coperto automaticamente: stampa fisica su POSBANK, ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |

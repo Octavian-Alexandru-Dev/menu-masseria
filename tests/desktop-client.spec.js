@@ -79,6 +79,9 @@ test("il client carica la web app, espone il bridge e stampa un preconto inviato
   // false) e nessuna credenziale della cassa salvata.
   expect(await till.evaluate(() => globalThis.mdpDesktop.setFullscreen())).toBe(false);
   expect(await till.evaluate(() => globalThis.mdpDesktop.getSavedLogin())).toBeNull();
+  // API 1.2.0: stato dell'aggiornamento automatico (client non pacchettizzato
+  // → "dev", aggiornamenti disattivati).
+  expect(await till.evaluate(() => new Promise((resolve) => globalThis.mdpDesktop.onClientUpdateState((st) => resolve(st.status))))).toBe("dev");
   await staffLogin(till, TEST_ADMIN);
   await expect(till.getByRole("button", { name: /stampante: pronta/i })).toBeVisible({ timeout: 15_000 });
 

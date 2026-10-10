@@ -2,9 +2,9 @@
 // (desktop-client/, detected via window.mdpDesktop): listens for pending
 // receipt print jobs (printJobs.js) from any device and sends them to the
 // thermal printer through the client's native bridge. Also shows the
-// floating "Cassa" button (printer status at a glance; tap → menu with
-// virtual keyboard, fullscreen, printer settings, close the program) and the
-// "new version available" banner.
+// floating "Cassa" button (a gear with the printer status dot; tap → menu
+// with virtual keyboard, fullscreen, printer settings, close the program)
+// and the update banners (UpdateBanner.jsx).
 //
 // The menu only offers what the installed client supports: a till still on
 // an older client version (bridge without toggleKeyboard/setFullscreen/
@@ -13,8 +13,9 @@
 // Lazy-loaded: never part of the public menu bundle, and never loaded at all
 // in a normal browser.
 import React, { useEffect, useRef, useState } from "react";
-import { Printer, RefreshCw, Keyboard, Maximize, Minimize, Settings, Power } from "lucide-react";
+import { Keyboard, Maximize, Minimize, Settings, Power } from "lucide-react";
 import { confirmAction } from "./confirmDialog";
+import UpdateBanner from "./UpdateBanner";
 import { useStaffSession } from "./staff-shared";
 import { getDesktopBridge } from "./desktop";
 import { buildReceipt, grayToMonoBitmap, LOGO_WIDTH_DOTS } from "./escpos";
@@ -124,12 +125,9 @@ export default function PrintStation() {
   const session = useStaffSession();
   const active = session.status === "ready";
   const station = usePrintStation(bridge, active);
-  const [updateReady, setUpdateReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(null);
   const [actionError, setActionError] = useState(null);
-
-  useEffect(() => bridge.onUpdateAvailable(() => setUpdateReady(true)), [bridge]);
 
   const canKeyboard = typeof bridge.toggleKeyboard === "function";
   const canFullscreen = typeof bridge.setFullscreen === "function";
@@ -195,7 +193,10 @@ export default function PrintStation() {
           display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
         }}
       >
-        <Printer size={22} color="#333" />
+        {/* A gear rather than a printer: the button opens the whole till
+            menu (keyboard, fullscreen, settings, close), not just printing.
+            The dot still shows the printer's state. */}
+        <Settings size={24} color="#333" />
         <span style={{ position: "absolute", top: 8, right: 8, width: 12, height: 12, borderRadius: 6, background: dot, border: "2px solid #fff" }} />
       </button>
       {menuOpen && (
@@ -249,22 +250,7 @@ export default function PrintStation() {
           {station.lastError}
         </button>
       )}
-      {updateReady && (
-        <div role="status" style={{
-          position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 14, zIndex: 150,
-          display: "flex", alignItems: "center", gap: 12, padding: "10px 12px 10px 18px", borderRadius: 12,
-          background: "#2b2b2b", color: "#fff", fontFamily: "'Work Sans', sans-serif", fontSize: 15,
-          boxShadow: "0 6px 20px rgba(0,0,0,0.25)", maxWidth: "calc(100vw - 100px)",
-        }}>
-          <span>È disponibile una nuova versione dell'app.</span>
-          <button type="button" onClick={() => bridge.reloadApp()} style={{
-            display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", borderRadius: 8, border: "none",
-            background: "#fff", color: "#2b2b2b", fontSize: 15, fontWeight: 600, cursor: "pointer",
-          }}>
-            <RefreshCw size={16} /> Aggiorna ora
-          </button>
-        </div>
-      )}
+      <UpdateBanner bridge={bridge} />
     </>
   );
 }

@@ -234,6 +234,12 @@ ipcMain.handle("bridge:fullscreen", (e, wanted) => {
 
 ipcMain.on("bridge:quit", (e) => { if (fromApp(e)) app.quit(); });
 
+// Current client-update state, for a page that (re)loads mid-download.
+ipcMain.handle("bridge:update-state", (e) => {
+  if (!fromApp(e)) return { ok: false, error: "Origine non autorizzata." };
+  return { ok: true, value: updater.state() };
+});
+
 // The till account saved in Impostazioni, handed only to the web app's own
 // origin, which uses it to sign in without typing (staff-shared.jsx).
 ipcMain.handle("bridge:saved-login", (e) => {
@@ -319,6 +325,8 @@ if (!app.requestSingleInstanceLock()) {
     createMainWindow();
     updater.init((st) => {
       if (settingsWindow) settingsWindow.webContents.send("settings:update-state", st);
+      // Progress banners in the page (UpdateBanner.jsx in the web app).
+      if (mainWindow) mainWindow.webContents.send("bridge:update-state", st);
       if (st.status === "downloaded") notifyUpdateAvailable();
     });
   });

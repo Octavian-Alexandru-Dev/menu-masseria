@@ -19,6 +19,12 @@
 //   quitApp()            closes the client
 //   getSavedLogin()      → Promise<{ email, password } | null>, the till
 //                          account saved in the client's settings
+//
+// Added in client 1.2.0:
+//   onClientUpdateState(cb) → unsubscribe; cb({ status, version, progress,
+//                          error }) with the current state, then on every
+//                          change. status: dev | idle | checking |
+//                          up-to-date | downloading | downloaded | error
 export function getDesktopBridge() {
   return typeof window !== "undefined" && window.mdpDesktop ? window.mdpDesktop : null;
 }

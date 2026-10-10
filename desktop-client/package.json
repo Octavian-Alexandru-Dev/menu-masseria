@@ -1,7 +1,7 @@
 {
   "name": "masseria-cassa",
   "productName": "Masseria Cassa",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Client Windows della cassa: interfaccia web dello staff + stampa diretta dei preconti sulla stampante termica.",
   "private": true,
   "author": "Fattoria della Piana",

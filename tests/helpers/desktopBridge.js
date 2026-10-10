@@ -6,9 +6,11 @@
 // fa fallire le stampe con quel messaggio (es. carta esaurita).
 // legacy: true simula un client 1.0.0 già installato (bridge senza
 // tastiera/schermo intero/chiusura/credenziali). savedLogin: credenziali
-// della cassa salvate nel client ({ email, password }).
-export async function installDesktopBridgeMock(page, { failWith = null, legacy = false, savedLogin = null } = {}) {
-  await page.addInitScript(({ failMessage, legacyApi, login }) => {
+// della cassa salvate nel client ({ email, password }). version: versione del
+// client simulato. globalThis.__fireClientUpdate(stato) simula lo stato
+// dell'aggiornamento automatico del client (download, pronto, errore…).
+export async function installDesktopBridgeMock(page, { failWith = null, legacy = false, savedLogin = null, version = "test" } = {}) {
+  await page.addInitScript(({ failMessage, legacyApi, login, clientVersion }) => {
     globalThis.__printed = [];
     globalThis.__printFail = failMessage;
     globalThis.__settingsOpened = 0;
@@ -17,7 +19,7 @@ export async function installDesktopBridgeMock(page, { failWith = null, legacy =
     globalThis.__fullscreen = true;
     globalThis.__quit = false;
     const bridge = {
-      version: legacyApi ? "1.0.0" : "test",
+      version: legacyApi ? "1.0.0" : clientVersion,
       getConfig: async () => ({ stationName: "Cassa di test" }),
       printRaw: async (bytes) => {
         if (globalThis.__printFail) throw new Error(globalThis.__printFail);
@@ -36,10 +38,11 @@ export async function installDesktopBridgeMock(page, { failWith = null, legacy =
         },
         quitApp: () => { globalThis.__quit = true; },
         getSavedLogin: async () => login,
+        onClientUpdateState: (cb) => { globalThis.__fireClientUpdate = cb; cb({ status: "idle" }); return () => {}; },
       });
     }
     globalThis.mdpDesktop = bridge;
-  }, { failMessage: failWith, legacyApi: legacy, login: savedLogin });
+  }, { failMessage: failWith, legacyApi: legacy, login: savedLogin, clientVersion: version });
 }
 
 // Ultimi byte stampati decodificati come latin1 (le lettere accentate CP858

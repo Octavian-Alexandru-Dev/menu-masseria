@@ -4,8 +4,9 @@ import { staffLogin } from "./helpers/staffLogin";
 import { installDesktopBridgeMock } from "./helpers/desktopBridge";
 
 // Comodità della cassa nel client Windows (docs/stampa-scontrini.md): menu
-// "Cassa" sul pulsante stampante (tastiera virtuale, schermo intero,
-// impostazioni, chiusura con conferma), banner di aggiornamento, accesso
+// "Cassa" (rotella delle impostazioni con lo stato della stampante: tastiera
+// virtuale, schermo intero, impostazioni, chiusura con conferma), banner di
+// aggiornamento dell'interfaccia e del programma, accesso
 // automatico con l'account della cassa salvato nel client, conferma su
 // "Esci". Il client è simulato con window.mdpDesktop (helpers/desktopBridge.js).
 //
@@ -66,17 +67,90 @@ test("con un client vecchio (1.0.0) il menu offre solo le impostazioni stampante
   await expect(menu.getByRole("menuitem")).toHaveCount(1);
 });
 
-test("il banner di nuova versione aggiorna l'app", async ({ page }) => {
+test("il pulsante del menu Cassa è una rotella delle impostazioni con il pallino di stato della stampante", async ({ page }) => {
+  await installDesktopBridgeMock(page);
+  await page.goto("/cameriere");
+  await staffLogin(page, TEST_ADMIN);
+  const cassa = page.getByRole("button", { name: /stampante: pronta.*apri menu cassa/i });
+  await expect(cassa).toBeVisible({ timeout: 10_000 });
+  await expect(cassa.locator("svg.lucide-settings")).toHaveCount(1);
+  await expect(cassa.locator("svg.lucide-printer")).toHaveCount(0);
+});
+
+test("nuova versione dell'interfaccia: banner, 'Aggiorna ora' ricarica e dopo il ricaricamento conferma l'aggiornamento", async ({ page }) => {
   await installDesktopBridgeMock(page);
   await page.goto("/cameriere");
   await staffLogin(page, TEST_ADMIN);
   await expect(page.getByRole("button", { name: /apri menu cassa/i })).toBeVisible({ timeout: 10_000 });
-  // Nuovo deploy (o aggiornamento del client) rilevato: banner, non un
-  // ricaricamento forzato in mezzo al lavoro.
+  const banner = page.getByRole("status", { name: "Aggiornamenti" });
+  await expect(banner).toHaveCount(0);
+
+  // Nuovo deploy rilevato: banner, non un ricaricamento forzato in mezzo al lavoro.
   await page.evaluate(() => globalThis.__fireUpdateAvailable());
-  await expect(page.getByText("È disponibile una nuova versione dell'app.")).toBeVisible();
-  await page.getByRole("button", { name: /aggiorna ora/i }).click();
+  await expect(banner).toContainText("nuova versione dell'interfaccia");
+  await banner.getByRole("button", { name: /aggiorna ora/i }).click();
+  await expect(banner).toContainText("Aggiornamento dell'interfaccia in corso");
   expect(await page.evaluate(() => globalThis.__reloaded)).toBe(true);
+
+  // Il client vero ricarica la pagina: al rientro il banner lo conferma.
+  await page.reload();
+  await expect(banner).toContainText("Interfaccia aggiornata all'ultima versione.", { timeout: 10_000 });
+  await banner.getByRole("button", { name: "Chiudi avviso" }).click();
+  await expect(banner).toHaveCount(0);
+});
+
+test("aggiornamento del programma: banner di download con avanzamento, pronto, installazione", async ({ page }) => {
+  await installDesktopBridgeMock(page);
+  await page.goto("/cameriere");
+  await staffLogin(page, TEST_ADMIN);
+  await expect(page.getByRole("button", { name: /apri menu cassa/i })).toBeVisible({ timeout: 10_000 });
+  const banner = page.getByRole("status", { name: "Aggiornamenti" });
+
+  await page.evaluate(() => globalThis.__fireClientUpdate({ status: "checking" }));
+  await expect(banner).toHaveCount(0); // il semplice controllo non disturba
+  await page.evaluate(() => globalThis.__fireClientUpdate({ status: "downloading", version: "1.3.0", progress: 42 }));
+  await expect(banner).toContainText("Download dell'aggiornamento del programma (versione 1.3.0) in corso — 42%");
+  await expect(banner.getByRole("button", { name: /aggiorna ora/i })).toHaveCount(0);
+
+  // Il client segnala il download anche come "nuova versione": il testo resta quello del programma.
+  await page.evaluate(() => {
+    globalThis.__fireClientUpdate({ status: "downloaded", version: "1.3.0" });
+    globalThis.__fireUpdateAvailable();
+  });
+  await expect(banner).toContainText("Aggiornamento del programma pronto (versione 1.3.0)");
+  await banner.getByRole("button", { name: /aggiorna ora/i }).click();
+  await expect(banner).toContainText("Installazione della versione 1.3.0 in corso");
+  expect(await page.evaluate(() => globalThis.__reloaded)).toBe(true);
+});
+
+test("errore di aggiornamento del programma: avviso chiudibile, riprova da solo", async ({ page }) => {
+  await installDesktopBridgeMock(page);
+  await page.goto("/cameriere");
+  await staffLogin(page, TEST_ADMIN);
+  await expect(page.getByRole("button", { name: /apri menu cassa/i })).toBeVisible({ timeout: 10_000 });
+  const banner = page.getByRole("status", { name: "Aggiornamenti" });
+  await page.evaluate(() => globalThis.__fireClientUpdate({ status: "error", error: "net::ERR_INTERNET_DISCONNECTED" }));
+  await expect(banner).toContainText("non riuscito: riproverà da solo più tardi");
+  await expect(banner).toContainText("ERR_INTERNET_DISCONNECTED");
+  await banner.getByRole("button", { name: "Chiudi avviso" }).click();
+  await expect(banner).toHaveCount(0);
+});
+
+test("dopo il riavvio con una nuova versione del programma il banner conferma l'aggiornamento", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!globalThis.sessionStorage.getItem("seeded")) {
+      globalThis.localStorage.setItem("mdp.clientVersion", "1.1.0");
+      globalThis.sessionStorage.setItem("seeded", "1");
+    }
+  });
+  await installDesktopBridgeMock(page, { version: "1.2.0" });
+  await page.goto("/cameriere");
+  const banner = page.getByRole("status", { name: "Aggiornamenti" });
+  await expect(banner).toContainText("Programma aggiornato alla versione 1.2.0.", { timeout: 10_000 });
+  // Solo la prima volta: ricaricando non si ripete.
+  await page.reload();
+  await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 10_000 });
+  await expect(banner).toHaveCount(0);
 });
 
 test("con le credenziali della cassa salvate l'accesso è automatico", async ({ page }) => {
