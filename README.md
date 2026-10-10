@@ -38,7 +38,7 @@ publicly accessible — to try them without access to the real project, see
 
 ## Windows till client — download
 
-**[⬇ Download Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/masseria-menu-firebase/releases/latest/download/Masseria-Cassa-Setup.exe)**
+**[⬇ Download Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/menu-masseria/releases/latest/download/Masseria-Cassa-Setup.exe)**
 (Windows 10/11, 64-bit — always the latest release)
 
 The till client (`desktop-client/`, Electron) wraps the same staff web app

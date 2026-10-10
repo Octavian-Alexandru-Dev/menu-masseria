@@ -5,7 +5,7 @@ della cassa premendo "Stampa", da qualunque dispositivo dello staff: il
 telefono di un cameriere, un tablet o la cassa stessa.
 
 **Download dell'installer:**
-[Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/masseria-menu-firebase/releases/latest/download/Masseria-Cassa-Setup.exe)
+[Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/menu-masseria/releases/latest/download/Masseria-Cassa-Setup.exe)
 (Windows 10/11 a 64 bit, sempre l'ultima versione).
 
 ## 1. La stampante
@@ -83,7 +83,7 @@ uno di noi. Lo sistemiamo subito con un sorriso.", "Grazie e a presto!",
 
 ## 3. Installazione sulla cassa
 
-1. Scarica [Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/masseria-menu-firebase/releases/latest/download/Masseria-Cassa-Setup.exe) ed eseguilo.
+1. Scarica [Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/menu-masseria/releases/latest/download/Masseria-Cassa-Setup.exe) ed eseguilo.
    L'installer non è firmato digitalmente, quindi Windows mostra "PC protetto
    da Windows": scegli **Ulteriori informazioni → Esegui comunque**.
 2. Si apre a schermo intero. Accedi con un account dello staff (un account
