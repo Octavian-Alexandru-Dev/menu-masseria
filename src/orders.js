@@ -94,7 +94,13 @@ export async function sendOrderLines(orderId, lines) {
 // orders sent before this field existed) — the statistics Dashboard excludes
 // those lines from the margin instead of treating them as zero margin, and
 // reports how much of the revenue has no known cost.
-export function buildOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes, cost }) {
+//
+// originalPrice/priceNote: set when the price was changed at the till (a
+// dish offered to the customer, a discount — see TillSala.jsx): `price`
+// stays the price actually charged, so every total (receipt, history,
+// stats) is right without special cases; originalPrice keeps the menu price
+// and priceNote the reason shown on the receipt ("Offerto", "Sconto 20%").
+export function buildOrderLine({ lineId, menuItemId, name, price, quantity, categoryId, categoryName, notes, cost, originalPrice, priceNote }) {
   return {
     lineId,
     menuItemId: menuItemId || null,
@@ -105,6 +111,8 @@ export function buildOrderLine({ lineId, menuItemId, name, price, quantity, cate
     categoryName: categoryName || "",
     notes: notes || "",
     cost: cost || null,
+    originalPrice: originalPrice || null,
+    priceNote: priceNote || null,
     status: "sent",
     // arrayUnion doesn't accept serverTimestamp() for individual elements: we
     // use a client timestamp, good enough for display ordering.
@@ -140,6 +148,13 @@ export async function closeOrder(orderId) {
     closedAt: serverTimestamp(),
     expireAt: null,
   });
+}
+
+// Edits an already-sent line (quantity, price, note) — from the till's line
+// editor. Same whole-array rewrite as removeOrderLine below.
+export async function updateOrderLine(orderId, currentItems, lineId, patch) {
+  const updated = currentItems.map((line) => (line.lineId === lineId ? { ...line, ...patch } : line));
+  return updateDoc(orderRef(orderId), { items: updated });
 }
 
 // Removes an already-sent line (fixing a typo, no longer recoverable via a

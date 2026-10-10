@@ -13,27 +13,7 @@ import { createPortal } from "react-dom";
 import { X, Printer, Pencil, Check, RotateCcw } from "lucide-react";
 import { TYPE, formatCentsAsPrice, parsePriceToCents, tableIdentity } from "./shared";
 import { itemsTotalCents, copertoTotalCents, markReceiptPrinted, removeOrderLine, confirmFinalReceipt } from "./orders";
-import { enqueueReceiptPrint, subscribePrintJob, retryPrintJob } from "./printJobs";
-
-// After this long still "pending", nobody has picked the job up: most likely
-// the till client is off or not logged in.
-const STATION_SLOW_MS = 15_000;
-
-function printStatusText(job, slow, enqueueError) {
-  if (enqueueError) return { text: enqueueError, tone: "error" };
-  if (!job) return { text: "Invio alla cassa…", tone: "info" };
-  switch (job.status) {
-    case "pending":
-      return slow
-        ? { text: "La cassa non ha ancora preso la stampa: il programma della cassa è acceso e connesso?", tone: "warn" }
-        : { text: "Inviato alla cassa, in attesa…", tone: "info" };
-    case "printing": return { text: "Stampa in corso alla cassa…", tone: "info" };
-    case "printed": return { text: "Stampato alla cassa", tone: "ok" };
-    case "expired": return { text: "Richiesta scaduta: nessuna cassa l'ha stampata.", tone: "error" };
-    case "error": return { text: `Stampa non riuscita: ${job.error || "errore sconosciuto"}`, tone: "error" };
-    default: return { text: "", tone: "info" };
-  }
-}
+import { usePrintJob } from "./usePrintJob";
 
 export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = false }) {
   const [editing, setEditing] = useState(false);
@@ -45,47 +25,12 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [printJobId, setPrintJobId] = useState(null);
-  const [printJob, setPrintJob] = useState(null);
-  const [printSlow, setPrintSlow] = useState(false);
-  const [enqueueError, setEnqueueError] = useState(null);
-  const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    if (!printJobId) return;
-    return subscribePrintJob(printJobId, setPrintJob, (err) => console.error("[receipt] Stato stampa non disponibile:", err));
-  }, [printJobId]);
-
-  const jobStatus = printJob?.status;
-  useEffect(() => {
-    setPrintSlow(false);
-    if (jobStatus !== "pending") return;
-    const id = setTimeout(() => setPrintSlow(true), STATION_SLOW_MS);
-    return () => clearTimeout(id);
-  }, [jobStatus, printJob?.createdAt]);
-
-  const doSendToPrinter = async () => {
-    setSending(true);
-    setEnqueueError(null);
-    try {
-      if (printJobId && (jobStatus === "error" || jobStatus === "expired")) {
-        await retryPrintJob(printJobId);
-      } else {
-        setPrintJob(null);
-        setPrintJobId(await enqueueReceiptPrint(order, menu));
-      }
-    } catch (err) {
-      console.error("[receipt] Invio alla cassa fallito:", err);
-      setEnqueueError("Invio alla cassa non riuscito. Controlla la connessione e riprova.");
-    } finally {
-      setSending(false);
-    }
-  };
-
+  const printer = usePrintJob();
+  const doSendToPrinter = () => printer.print(order, menu);
   const doBrowserPrint = () => window.print();
-  const printBusy = sending || (printJobId && !enqueueError && (!printJob || jobStatus === "pending" || jobStatus === "printing"));
-  const printFailed = enqueueError || jobStatus === "error" || jobStatus === "expired";
-  const printStatus = printJobId || enqueueError ? printStatusText(printJob, printSlow, enqueueError) : null;
+  const printBusy = printer.busy;
+  const printFailed = printer.failed;
+  const printStatus = printer.status;
 
   const doRemove = async (lineId) => {
     setRemovingId(lineId);
@@ -150,7 +95,7 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
           {items.map((l) => (
             <div key={l.lineId} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: TYPE.smallPlus, color: t.ink }}>
               <span style={{ flex: 1 }}>
-                {l.quantity}× {l.name}{l.notes ? ` (${l.notes})` : ""}
+                {l.quantity}× {l.name}{l.priceNote ? ` — ${l.priceNote.toLowerCase()}` : ""}{l.notes ? ` (${l.notes})` : ""}
               </span>
               <span style={{ whiteSpace: "nowrap" }}>€ {formatCentsAsPrice(parsePriceToCents(l.price) * l.quantity)}</span>
               {editing && !locked && (

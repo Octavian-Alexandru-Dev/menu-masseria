@@ -76,6 +76,11 @@ sub-object, the 24h auto-close). Key points not to duplicate here:
 - `items[]` lines are a point-in-time snapshot of name/price/category/cost
   at send time — renaming a dish or changing its price later never changes
   historical orders or stats.
+- A line's `price` is the price actually charged. When it was changed at
+  the till (offered, discounted, custom — `TillSala.jsx`), the line also
+  carries `originalPrice` (the menu price) and `priceNote` ("Offerto",
+  "Sconto 20%", "Prezzo modificato", shown on the receipt); both `null`
+  otherwise. Totals, receipts and stats need no special case.
 - `closedAt: null` on an open order, set on close; combined with `status`,
   this is what both the realtime "open orders" listener and the paginated
   history query filter on.

@@ -2,7 +2,7 @@
 // (see docs/prenotazioni.md). Loaded only at /prenotazioni or from the
 // shortcut in Sala (lazy, see MenuApp.jsx/Waiter.jsx), never from the
 // public site. Accessible to waiters and admins.
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, Suspense, lazy } from "react";
 import {
   ChevronLeft, ChevronRight, LogOut, Plus, Check, X,
   Play, Users, Phone, ChevronDown, ChevronUp, CalendarDays,
@@ -11,6 +11,9 @@ import { THEMES, ital, GlobalStyle, Logo, TYPE, BackButton } from "./shared";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout, logoutHiddenAtTill,
 } from "./staff-shared";
+import { getDesktopBridge } from "./desktop";
+
+const TillSala = lazy(() => import("./TillSala"));
 import {
   dateKey, createReservation, updateReservation, confirmReservation, rejectReservation,
   cancelReservation, startReservation, subscribeReservationsForRange,
@@ -924,6 +927,16 @@ export default function Reservations({ menu, onBack }) {
   }
 
   if (!menu) return <StaffLoadingScreen theme={theme} />;
+
+  // Till client: the till's own Sala, opened on its Prenotazioni tab
+  // (TillReservations.jsx) — one consistent interface at the till.
+  if (getDesktopBridge()) {
+    return (
+      <Suspense fallback={<StaffLoadingScreen theme={theme} />}>
+        <TillSala menu={menu} session={session} initialTab="reservations" />
+      </Suspense>
+    );
+  }
 
   return <ReservationsPanel menu={menu} session={session} onBack={onBack} />;
 }

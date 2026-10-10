@@ -2,53 +2,45 @@
 // the Windows client (desktop-client/) instead of the phone layout of
 // Waiter.jsx. Same data and rules, shared through sala-shared.jsx; so the
 // till can also replace a waiter's phone (open tables, take and send
-// orders, receipts, closing) when nobody has one at hand.
+// orders, edit lines, receipts, closing) when nobody has one at hand.
+// Storico and Prenotazioni have till versions too (TillHistory.jsx,
+// TillReservations.jsx), built from the same pieces (TillUi.jsx).
 //
-// Layout follows established guidance rather than inventing anything (see
-// docs/stampa-scontrini.md, "Interfaccia della cassa"):
+// Layout follows established guidance (docs/stampa-scontrini.md §4.1):
 //  - floor at a glance: every open table is a tile in a grid that fills the
-//    screen, with number, name, covers, elapsed time, running total and
-//    kitchen progress — status is always written, never colour alone;
+//    screen — number, name, covers, elapsed time, running total, status
+//    written on a fixed colour;
 //  - order screen split like common restaurant POS: menu tiles on the left
-//    (category tabs + search), the ticket on the right with the primary
-//    actions always in the same place at its bottom;
-//  - touch targets of at least 48px (Material 48dp / Apple 44pt / WCAG
-//    2.5.5), an on-screen numeric keypad for the table number (the till has
-//    no keyboard), confirmation before irreversible actions;
-//  - no "Esci": logging out lives in the client's settings.
+//    (category tabs + search), the ticket in the side panel on the right.
+//    Tapping a ticket line opens its editor right there (quantity, price —
+//    offered, discounted, custom — note, removal): editing in context, the
+//    total stays in view; changes apply only on "Salva";
+//  - touch targets ≥ 48px, on-screen keypads (no keyboard at the till),
+//    confirmation before irreversible actions, no "Esci" (it lives in the
+//    client's settings).
+//
+// No kitchen states ("uscita"): the kitchen has no screen, lines are just
+// "sent" (see the Cucina note in docs/stampa-scontrini.md).
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import {
-  Plus, Minus, X, Delete, Users, Clock, Receipt, Search, Utensils, CalendarDays, History, LayoutGrid,
-  Play, Send, StickyNote, Lock, Printer, LogOut,
+  Plus, X, Users, Clock, Search, Utensils, CalendarDays, History, LayoutGrid,
+  Play, Send, Lock, Printer, LogOut, Gift, Percent, RotateCcw, Trash2, Check, Keyboard,
 } from "lucide-react";
 import {
   THEMES, GlobalStyle, Logo, formatCentsAsPrice, parsePriceToCents, tableIdentity, currentShiftLabel, BackButton,
 } from "./shared";
-import { orderTotalCents, copertoTotalCents, updateCovers } from "./orders";
+import { orderTotalCents, copertoTotalCents, updateCovers, updateOrderLine, removeOrderLine, markReceiptPrinted } from "./orders";
 import { coversLabel } from "./reservationsData";
 import { confirmAction } from "./confirmDialog";
 import { staffLogout, logoutHiddenAtTill } from "./staff-shared";
+import { formatTime, elapsedLabel, SyncBadge, useSalaData, useOrderDraft } from "./sala-shared";
+import { usePrintJob } from "./usePrintJob";
 import {
-  formatTime, elapsedLabel, SyncBadge, lineStatusLabel, useSalaData, useOrderDraft,
-} from "./sala-shared";
-import OrderHistory from "./OrderHistory";
-import ReceiptOverlay from "./ReceiptOverlay";
+  TOUCH, FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine,
+} from "./TillUi";
 
-const Reservations = lazy(() => import("./Reservations"));
-
-const TOUCH = 48; // minimum touch target (px)
-
-// Status colours fixed for the till, independent of the menu theme (some
-// themes are nearly monochrome): POS screens rely on a small, stable,
-// recognisable set — always paired with a written label, never alone.
-const STATUS = {
-  idle: "#7d7d7d",      // da ordinare
-  kitchen: "#c77700",   // in cucina
-  served: "#2e7d4f",    // tutto servito
-  receipt: "#2f62a8",   // preconto confermato
-  danger: "#b03a2e",    // azioni distruttive (chiudi tavolo, rimuovi)
-};
-const FONT = "'Work Sans', system-ui, sans-serif";
+const TillHistory = lazy(() => import("./TillHistory"));
+const TillReservations = lazy(() => import("./TillReservations"));
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -107,10 +99,7 @@ function TopBar({ t, session, tab, onTab, openCount }) {
       {/* Only for clients older than 1.4.0, which have no "Esci
           dall'account" in their settings yet (confirmed, see staffLogout). */}
       {!logoutHiddenAtTill() && (
-        <button type="button" onClick={staffLogout} className="mdp-btn" style={{
-          display: "flex", alignItems: "center", gap: 6, minHeight: TOUCH, padding: "0 14px", borderRadius: 10,
-          border: `1.5px solid ${t.line}`, background: t.bg, color: t.inkSoft, fontSize: 15, cursor: "pointer", fontFamily: FONT,
-        }}><LogOut size={18} /> Esci</button>
+        <TillButton t={t} icon={LogOut} size={TOUCH} onClick={staffLogout} style={{ fontSize: 15, color: t.inkSoft }}>Esci</TillButton>
       )}
       <div style={{ marginLeft: "auto", textAlign: "right", fontFamily: FONT }}>
         <div style={{ fontSize: 26, fontWeight: 700, color: t.ink, lineHeight: 1.1 }}>
@@ -126,21 +115,18 @@ function TopBar({ t, session, tab, onTab, openCount }) {
 
 /* ---------------------------------- floor ---------------------------------- */
 
-// Status of an open table, as text + colour (never colour alone).
+// Status of an open table, written + fixed colour (never colour alone).
 function tableStatus(order) {
-  const items = order.items || [];
-  if (order.receipt?.confirmedAt) return { label: "Preconto confermato", color: STATUS.receipt };
-  if (items.length === 0) return { label: "Da ordinare", color: STATUS.idle };
-  const out = items.filter((l) => l.status === "out").length;
-  if (out === items.length) return { label: "Tutto servito", color: STATUS.served };
-  return { label: `In cucina · ${out}/${items.length} uscite`, color: STATUS.kitchen };
+  if (order.receipt?.confirmedAt) return { label: "Preconto confermato", color: STATUS.info };
+  if (order.receipt?.printedAt) return { label: "Preconto stampato", color: STATUS.info };
+  if ((order.items || []).length === 0) return { label: "Da ordinare", color: STATUS.idle };
+  return { label: "Comanda inviata", color: STATUS.ok };
 }
 
 function TableTile({ t, order, onOpen }) {
   const id = tableIdentity(order);
   const status = tableStatus(order);
   const covers = (order.covers?.adults || 0) + (order.covers?.children || 0);
-  const number = order.tableNumber;
   return (
     <button
       type="button"
@@ -159,7 +145,7 @@ function TableTile({ t, order, onOpen }) {
         <span style={{ fontSize: 15, color: t.inkSoft, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>Tavolo</span>
         {order._hasPendingWrites && <SyncBadge t={t} hasPendingWrites />}
       </span>
-      <span style={{ fontSize: 44, fontWeight: 700, lineHeight: 1.05 }}>{number}</span>
+      <span style={{ fontSize: 44, fontWeight: 700, lineHeight: 1.05 }}>{order.tableNumber}</span>
       {order.tableName && (
         <span style={{ fontSize: 16, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{order.tableName}</span>
       )}
@@ -168,79 +154,33 @@ function TableTile({ t, order, onOpen }) {
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Clock size={14} /> {elapsedLabel(order.openedAt)}</span>
       </span>
       <span style={{ marginTop: "auto", paddingTop: 10, fontSize: 22, fontWeight: 700 }}>€ {formatCentsAsPrice(orderTotalCents(order))}</span>
-      <span style={{
-        alignSelf: "flex-start", marginTop: 6, padding: "4px 10px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-        color: "#fff", background: status.color,
-      }}>{status.label}</span>
+      <StatusPill color={status.color} style={{ alignSelf: "flex-start", marginTop: 6 }}>{status.label}</StatusPill>
     </button>
   );
 }
 
-function ClosedTile({ t, order, onPrint }) {
-  const id = tableIdentity(order);
-  return (
-    <div style={{
-      display: "flex", flexDirection: "column", gap: 6, minHeight: 150, padding: 16, borderRadius: 16,
-      border: `1.5px dashed ${t.line}`, background: t.bgAlt || t.bg, fontFamily: FONT, color: t.ink,
-    }}>
-      <span style={{ fontSize: 15, color: t.inkSoft, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>Chiuso {formatTime(order.closedAt) || ""}</span>
-      <span style={{ fontSize: 22, fontWeight: 700 }}>{id.primary}</span>
-      {id.secondary && <span style={{ fontSize: 14, color: t.inkSoft }}>{id.secondary}</span>}
-      <span style={{ fontSize: 18, fontWeight: 700, marginTop: "auto" }}>€ {formatCentsAsPrice(orderTotalCents(order))}</span>
-      <button type="button" onClick={onPrint} aria-label={`Preconto di ${id.primary}`} className="mdp-btn" style={{
-        minHeight: TOUCH, borderRadius: 10, border: `1.5px solid ${t.line}`, background: t.card, color: t.ink,
-        fontSize: 15, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-      }}>
-        <Printer size={18} /> Preconto
-      </button>
-    </div>
-  );
-}
-
-function FloorView({ t, menu, orders, shiftClosedOrders, todaysReservations, onNew, onOpen, onAvvia }) {
-  const [showClosed, setShowClosed] = useState(false);
-  const [printingOrder, setPrintingOrder] = useState(null);
+function FloorView({ t, orders, todaysReservations, onNew, onOpen, onAvvia }) {
   const sorted = [...orders].sort((a, b) => (a.tableNumber || 0) - (b.tableNumber || 0));
-  const segment = (key, label, active) => (
-    <button type="button" onClick={() => setShowClosed(key === "closed")} aria-pressed={active} className="mdp-btn" style={{
-      minHeight: TOUCH, padding: "0 18px", borderRadius: 10, border: `1.5px solid ${active ? t.ink : t.line}`,
-      background: active ? t.ink : t.card, color: active ? t.bg : t.ink, fontSize: 16, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
-    }}>{label}</button>
-  );
-
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
       <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "18px 20px 96px" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          {segment("open", `Aperti (${orders.length})`, !showClosed)}
-          {segment("closed", `Chiusi nel turno (${shiftClosedOrders.length})`, showClosed)}
-        </div>
-
         <div data-testid="till-floor-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 14 }}>
-          {!showClosed && (
-            <button type="button" onClick={onNew} className="mdp-btn" style={{
-              minHeight: 190, borderRadius: 16, border: `2px dashed ${t.primary}`, background: t.bg, color: t.primary,
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
-              fontSize: 19, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
-            }}>
-              <Plus size={40} strokeWidth={2.5} /> Nuovo tavolo
-            </button>
-          )}
-          {!showClosed && sorted.map((o) => <TableTile key={o.id} t={t} order={o} onOpen={() => onOpen(o.id)} />)}
-          {showClosed && shiftClosedOrders.map((o) => <ClosedTile key={o.id} t={t} order={o} onPrint={() => setPrintingOrder(o)} />)}
+          <button type="button" onClick={onNew} className="mdp-btn" style={{
+            minHeight: 190, borderRadius: 16, border: `2px dashed ${t.primary}`, background: t.bg, color: t.primary,
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8,
+            fontSize: 19, fontWeight: 700, cursor: "pointer", fontFamily: FONT,
+          }}>
+            <Plus size={40} strokeWidth={2.5} /> Nuovo tavolo
+          </button>
+          {sorted.map((o) => <TableTile key={o.id} t={t} order={o} onOpen={() => onOpen(o.id)} />)}
         </div>
-        {showClosed && shiftClosedOrders.length === 0 && (
-          <div style={{ color: t.inkSoft, fontSize: 17, padding: "30px 4px", fontFamily: FONT }}>Nessun tavolo chiuso in questo turno.</div>
-        )}
       </div>
 
       {todaysReservations.length > 0 && (
         <aside aria-label="Prenotazioni di oggi" style={{
           width: 320, flexShrink: 0, overflowY: "auto", padding: "18px 16px 96px", borderLeft: `1px solid ${t.line}`, background: t.card, fontFamily: FONT,
         }}>
-          <div style={{ fontSize: 15, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: t.secondary, marginBottom: 12 }}>
-            Prenotazioni di oggi · {todaysReservations.length}
-          </div>
+          <SectionTitle t={t} color={t.secondary} style={{ marginBottom: 12 }}>Prenotazioni di oggi · {todaysReservations.length}</SectionTitle>
           <div style={{ display: "grid", gap: 10 }}>
             {todaysReservations.map((r) => (
               <div key={r.id} style={{ padding: 12, borderRadius: 12, border: `1px solid ${t.line}`, background: t.bg }}>
@@ -248,44 +188,22 @@ function FloorView({ t, menu, orders, shiftClosedOrders, todaysReservations, onN
                 <div style={{ fontSize: 14, color: t.inkSoft, margin: "2px 0 10px" }}>
                   {coversLabel(r.covers)}{r.tableNumber ? ` · Tavolo ${r.tableNumber}` : ""}
                 </div>
-                <button type="button" onClick={() => onAvvia(r)} aria-label={`Avvia prenotazione di ${r.name || "senza nome"}`} className="mdp-btn" style={{
-                  width: "100%", minHeight: TOUCH, borderRadius: 10, border: "none", background: t.primary, color: t.bg,
-                  fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                }}>
-                  <Play size={18} /> Avvia
-                </button>
+                <TillButton t={t} variant="primary" size={TOUCH} icon={Play} onClick={() => onAvvia(r)} aria-label={`Avvia prenotazione di ${r.name || "senza nome"}`} style={{ width: "100%" }}>
+                  Avvia
+                </TillButton>
               </div>
             ))}
           </div>
         </aside>
       )}
-
-      {printingOrder && <ReceiptOverlay t={t} menu={menu} order={printingOrder} onClose={() => setPrintingOrder(null)} readOnly />}
     </div>
   );
 }
 
 /* ------------------------- table number keypad dialog ------------------------- */
 
-function Stepper({ t, label, value, onChange }) {
-  const btn = {
-    width: 56, height: 56, borderRadius: 12, border: `1.5px solid ${t.line}`, background: t.card, color: t.ink,
-    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-  };
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <span style={{ fontSize: 17, fontWeight: 600 }}>{label}</span>
-      <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button type="button" aria-label={`Diminuisci ${label.toLowerCase()}`} onClick={() => onChange(Math.max(0, value - 1))} className="mdp-btn" style={btn}><Minus size={22} /></button>
-        <span aria-label={label} style={{ minWidth: 36, textAlign: "center", fontSize: 26, fontWeight: 700 }}>{value}</span>
-        <button type="button" aria-label={`Aumenta ${label.toLowerCase()}`} onClick={() => onChange(value + 1)} className="mdp-btn" style={btn}><Plus size={22} /></button>
-      </span>
-    </div>
-  );
-}
-
-// Opening a table: table number from an on-screen keypad, covers with
-// steppers, optional name/notes. `fixedReservation` = starting a booked
+// Opening a table: table number from the on-screen keypad, covers with
+// steppers, optional name/notes. With `reservation`: starting a booked
 // table (only the number is asked).
 function NewTableDialog({ t, openOrders, onCancel, onCreate, onGoTo, busy, reservation }) {
   const [digits, setDigits] = useState(reservation?.tableNumber ? String(reservation.tableNumber) : "");
@@ -301,10 +219,6 @@ function NewTableDialog({ t, openOrders, onCancel, onCreate, onGoTo, busy, reser
     else if (k === "⌫") setDigits((d) => d.slice(0, -1));
     else setDigits((d) => (d.length >= 4 ? d : (d + k).replace(/^0+/, "")));
   };
-  const keyStyle = {
-    minHeight: 68, borderRadius: 14, border: `1.5px solid ${t.line}`, background: t.card, color: t.ink,
-    fontSize: 28, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT,
-  };
   const inputStyle = {
     width: "100%", minHeight: 52, padding: "0 14px", borderRadius: 12, border: `1.5px solid ${t.line}`,
     background: t.card, color: t.ink, fontSize: 17, fontFamily: FONT, boxSizing: "border-box",
@@ -316,7 +230,7 @@ function NewTableDialog({ t, openOrders, onCancel, onCreate, onGoTo, busy, reser
       display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }}>
       <div role="dialog" aria-modal="true" aria-label={reservation ? `Avvia ${reservation.name || "prenotazione"}` : "Nuovo tavolo"} onClick={(e) => e.stopPropagation()} style={{
-        width: "100%", maxWidth: 820, maxHeight: "100%", overflowY: "auto", background: t.bg, borderRadius: 20,
+        width: "100%", maxWidth: reservation ? 440 : 820, maxHeight: "100%", overflowY: "auto", background: t.bg, borderRadius: 20,
         padding: 24, fontFamily: FONT, color: t.ink, boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
       }}>
         <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>
@@ -333,15 +247,7 @@ function NewTableDialog({ t, openOrders, onCancel, onCreate, onGoTo, busy, reser
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, fontWeight: 700,
               color: digits ? t.ink : t.inkSoft,
             }}>{digits || "—"}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"].map((k) => (
-                <button key={k} type="button" onClick={() => press(k)} className="mdp-btn"
-                  aria-label={k === "C" ? "Cancella numero" : k === "⌫" ? "Cancella ultima cifra" : `Cifra ${k}`}
-                  style={{ ...keyStyle, ...(k === "C" || k === "⌫" ? { fontSize: 20, color: t.inkSoft } : null) }}>
-                  {k === "⌫" ? <Delete size={26} /> : k}
-                </button>
-              ))}
-            </div>
+            <Keypad t={t} onKey={press} />
           </div>
           {!reservation && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -370,21 +276,150 @@ function NewTableDialog({ t, openOrders, onCancel, onCreate, onGoTo, busy, reser
         )}
 
         <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-          <button type="button" onClick={onCancel} className="mdp-btn" style={{
-            flex: 1, minHeight: 60, borderRadius: 14, border: `1.5px solid ${t.line}`, background: t.card, color: t.ink,
-            fontSize: 18, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
-          }}>Annulla</button>
-          <button type="button" disabled={!number || busy}
-            onClick={() => onCreate({ tableNumber: number, tableName: tableName.trim(), adults, children, notes })}
-            className="mdp-btn" style={{
-              flex: 2, minHeight: 60, borderRadius: 14, border: "none", background: t.primary, color: t.bg,
-              fontSize: 19, fontWeight: 700, cursor: !number || busy ? "default" : "pointer", opacity: !number || busy ? 0.5 : 1, fontFamily: FONT,
-            }}>
+          <TillButton t={t} size={60} onClick={onCancel} style={{ flex: 1 }}>Annulla</TillButton>
+          <TillButton t={t} variant="primary" size={60} disabled={!number || busy} style={{ flex: 2 }}
+            onClick={() => onCreate({ tableNumber: number, tableName: tableName.trim(), adults, children, notes })}>
             {busy ? "Apertura…" : reservation ? "Apri comanda" : number ? `Apri tavolo ${number}` : "Apri tavolo"}
-          </button>
+          </TillButton>
         </div>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------- line editor ------------------------------- */
+
+const DISCOUNTS = [10, 20, 50];
+
+// Editor of one ticket line, in the side panel. Works on a local copy:
+// nothing changes until "Salva" (a stray tap costs nothing). Price options
+// follow what POS systems offer: back to the menu price, offered (0 €),
+// quick percentage discounts, or any price from the keypad.
+function LineEditor({ t, line, sent, locked, onSave, onRemove, onClose }) {
+  const menuPrice = line.originalPrice || line.price;
+  const [quantity, setQuantity] = useState(line.quantity);
+  const [price, setPrice] = useState(line.price);
+  const [priceNote, setPriceNote] = useState(line.priceNote || null);
+  const [notes, setNotes] = useState(line.notes || "");
+  const [customDigits, setCustomDigits] = useState(null); // null = keypad closed
+  const [saving, setSaving] = useState(false);
+
+  const menuCents = parsePriceToCents(menuPrice);
+  const unitCents = parsePriceToCents(price);
+  const setPriceCents = (cents, note) => {
+    setPrice(formatCentsAsPrice(cents));
+    setPriceNote(note);
+  };
+  const pressCustom = (k) => {
+    if (k === "C") setCustomDigits("");
+    else if (k === "⌫") setCustomDigits((d) => (d || "").slice(0, -1));
+    else setCustomDigits((d) => ((d || "").length >= 6 ? d : `${d || ""}${k}`.replace(/^0+/, "")));
+  };
+  const customCents = parseInt(customDigits || "0", 10);
+
+  const save = async () => {
+    setSaving(true);
+    const changedPrice = price !== menuPrice;
+    const ok = await onSave({
+      quantity, price, notes: notes.trim(),
+      priceNote: changedPrice ? priceNote : null,
+      originalPrice: changedPrice ? menuPrice : null,
+    });
+    setSaving(false);
+    if (ok !== false) onClose();
+  };
+
+  const option = (active) => ({
+    minHeight: TOUCH, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: locked ? "default" : "pointer", fontFamily: FONT,
+    border: `1.5px solid ${active ? t.primary : t.line}`, background: active ? t.primary : t.card, color: active ? t.bg : t.ink,
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: locked ? 0.5 : 1,
+  });
+
+  return (
+    <SidePanel
+      t={t}
+      label="Modifica riga"
+      header={(
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <BackButton t={t} onClick={onClose} label="Comanda" />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 21, fontWeight: 700, lineHeight: 1.2 }}>{line.name}</div>
+            <div style={{ fontSize: 14, color: t.inkSoft }}>{line.categoryName}{sent ? ` · inviato ${formatTime(line.sentAt) || ""}` : " · da inviare"}</div>
+          </div>
+        </div>
+      )}
+      footer={locked ? (
+        <div style={{ fontSize: 15, color: t.inkSoft, textAlign: "center" }}>Preconto confermato: le righe non si possono più modificare.</div>
+      ) : (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ fontSize: 17, fontWeight: 600 }}>Totale riga</span>
+            <span data-testid="till-line-total" style={{ fontSize: 26, fontWeight: 800 }}>€ {formatCentsAsPrice(unitCents * quantity)}</span>
+          </div>
+          <TillButton t={t} variant="primary" size={60} icon={Check} disabled={saving} onClick={save}>{saving ? "Salvataggio…" : "Salva"}</TillButton>
+        </>
+      )}
+    >
+      <div style={{ display: "grid", gap: 18, paddingTop: 6 }}>
+        <div style={{ pointerEvents: locked ? "none" : "auto", opacity: locked ? 0.5 : 1 }}>
+          <Stepper t={t} label="Quantità" value={quantity} min={1} onChange={setQuantity} />
+        </div>
+
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+            <SectionTitle t={t}>Prezzo unitario</SectionTitle>
+            <span style={{ fontSize: 20, fontWeight: 700 }}>
+              € {price}
+              {price !== menuPrice && <span style={{ fontSize: 14, color: t.inkSoft, fontWeight: 500, textDecoration: "line-through", marginLeft: 8 }}>€ {menuPrice}</span>}
+            </span>
+          </div>
+          {priceNote && price !== menuPrice && <StatusPill color={STATUS.info} style={{ marginBottom: 8 }}>{priceNote}</StatusPill>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            <button type="button" disabled={locked} aria-pressed={price === menuPrice} onClick={() => setPriceCents(menuCents, null)} className="mdp-btn" style={option(price === menuPrice)}>
+              <RotateCcw size={16} /> Pieno
+            </button>
+            <button type="button" disabled={locked} aria-pressed={unitCents === 0} onClick={() => setPriceCents(0, "Offerto")} className="mdp-btn" style={option(unitCents === 0)}>
+              <Gift size={16} /> Offerto
+            </button>
+            {DISCOUNTS.map((p) => {
+              const cents = Math.round((menuCents * (100 - p)) / 100);
+              const active = priceNote === `Sconto ${p}%`;
+              return (
+                <button key={p} type="button" disabled={locked} aria-pressed={active} aria-label={`Sconto ${p}%`} onClick={() => setPriceCents(cents, `Sconto ${p}%`)} className="mdp-btn" style={option(active)}>
+                  <Percent size={15} /> −{p}%
+                </button>
+              );
+            })}
+            <button type="button" disabled={locked} aria-pressed={customDigits != null} onClick={() => setCustomDigits((d) => (d == null ? "" : null))} className="mdp-btn" style={option(customDigits != null)}>
+              <Keyboard size={16} /> Altro
+            </button>
+          </div>
+          {customDigits != null && !locked && (
+            <div style={{ marginTop: 12, padding: 12, borderRadius: 14, border: `1.5px solid ${t.line}`, background: t.bg }}>
+              <div aria-label="Nuovo prezzo" role="textbox" aria-readonly="true" style={{
+                minHeight: 56, borderRadius: 12, border: `2px solid ${t.primary}`, background: t.card, marginBottom: 10,
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, fontWeight: 700,
+              }}>€ {formatCentsAsPrice(customCents)}</div>
+              <Keypad t={t} onKey={pressCustom} keyHeight={52} />
+              <TillButton t={t} variant="primary" style={{ width: "100%", marginTop: 10 }}
+                onClick={() => { setPriceCents(customCents, customCents === 0 ? "Offerto" : "Prezzo modificato"); setCustomDigits(null); }}>
+                Usa € {formatCentsAsPrice(customCents)}
+              </TillButton>
+            </div>
+          )}
+        </div>
+
+        <label style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft }}>
+          Nota per la cucina
+          <input disabled={locked} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="es. senza glutine" aria-label={`Nota di ${line.name}`}
+            style={{ width: "100%", minHeight: 52, marginTop: 6, padding: "0 14px", borderRadius: 12, border: `1.5px solid ${t.line}`, background: t.bg, color: t.ink, fontSize: 17, fontFamily: FONT, boxSizing: "border-box" }} />
+        </label>
+
+        {!locked && (
+          <TillButton t={t} variant="danger" icon={Trash2} onClick={onRemove}>Rimuovi dalla comanda</TillButton>
+        )}
+      </div>
+    </SidePanel>
   );
 }
 
@@ -409,14 +444,14 @@ function CoversControl({ t, order }) {
   };
   const btn = {
     width: TOUCH, height: TOUCH, borderRadius: 10, border: `1.5px solid ${t.line}`, background: t.card, color: t.ink,
-    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 22,
   };
   const group = (field, label) => (
     <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ fontSize: 15, color: t.inkSoft }}>{label}</span>
-      <button type="button" aria-label={`Diminuisci ${label.toLowerCase()}`} disabled={busy} onClick={() => change(field, -1)} className="mdp-btn" style={btn}><Minus size={18} /></button>
+      <button type="button" aria-label={`Diminuisci ${label.toLowerCase()}`} disabled={busy} onClick={() => change(field, -1)} className="mdp-btn" style={btn}>−</button>
       <span style={{ minWidth: 24, textAlign: "center", fontSize: 20, fontWeight: 700 }}>{order.covers?.[field] || 0}</span>
-      <button type="button" aria-label={`Aumenta ${label.toLowerCase()}`} disabled={busy} onClick={() => change(field, 1)} className="mdp-btn" style={btn}><Plus size={18} /></button>
+      <button type="button" aria-label={`Aumenta ${label.toLowerCase()}`} disabled={busy} onClick={() => change(field, 1)} className="mdp-btn" style={btn}>+</button>
     </span>
   );
   return (
@@ -438,7 +473,7 @@ function DishTile({ t, item, quantityInDraft, offMenu, onAdd }) {
       style={{
         position: "relative", display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left",
         minHeight: 104, padding: "12px 14px", borderRadius: 14, cursor: "pointer", fontFamily: FONT, color: t.ink,
-        border: offMenu ? `2px dashed ${t.accent2}` : `1.5px solid ${quantityInDraft ? t.primary : t.line}`,
+        border: offMenu ? `2px dashed ${STATUS.waiting}` : `1.5px solid ${quantityInDraft ? t.primary : t.line}`,
         background: quantityInDraft ? `${t.primary}14` : t.card,
       }}
     >
@@ -454,12 +489,36 @@ function DishTile({ t, item, quantityInDraft, offMenu, onAdd }) {
   );
 }
 
+// One tappable line of the ticket (sent or to send): tap → its editor.
+function TicketLine({ t, line, sent, onSelect }) {
+  const total = parsePriceToCents(line.price) * line.quantity;
+  return (
+    <button type="button" onClick={onSelect} className="mdp-btn"
+      aria-label={`Modifica ${line.name}: ${line.quantity} × € ${line.price}${line.priceNote ? `, ${line.priceNote}` : ""}`}
+      style={{
+        display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 56, padding: "8px 4px", textAlign: "left",
+        border: "none", borderBottom: `1px solid ${t.line}`, background: "none", color: t.ink, cursor: "pointer", fontFamily: FONT,
+      }}>
+      <span style={{ minWidth: 34, fontSize: 18, fontWeight: 800 }}>{line.quantity}×</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 17, fontWeight: 600 }}>{line.name}</span>
+        <span style={{ fontSize: 13, color: t.inkSoft }}>
+          {line.priceNote && <span style={{ color: STATUS.info, fontWeight: 700 }}>{line.priceNote} · </span>}
+          {line.notes ? `${line.notes} · ` : ""}{sent ? `inviato ${formatTime(line.sentAt) || ""}` : line.categoryName}
+        </span>
+      </span>
+      <span style={{ fontSize: 17, fontWeight: 700, whiteSpace: "nowrap" }}>€ {formatCentsAsPrice(total)}</span>
+    </button>
+  );
+}
+
 function OrderView({ t, menu, menuCosts, order, onBack }) {
   const d = useOrderDraft({ menu, menuCosts, order });
   const [categoryId, setCategoryId] = useState(null);
-  const [noteOpen, setNoteOpen] = useState(null);
-  const [showReceipt, setShowReceipt] = useState(false);
+  const [editing, setEditing] = useState(null); // { lineId, sent }
+  const printer = usePrintJob();
   const id = tableIdentity(order);
+  const locked = Boolean(order.receipt?.confirmedAt);
 
   const tabs = [
     ...d.normalItems.map((c) => ({ id: c.id, name: c.name })),
@@ -483,11 +542,55 @@ function OrderView({ t, menu, menuCosts, order, onBack }) {
   }
   const draftQty = (itemId) => d.draft.filter((l) => l.menuItemId === itemId).reduce((s, l) => s + l.quantity, 0);
 
+  const sentLines = order.items || [];
+  const editingLine = editing
+    ? (editing.sent ? sentLines : d.draft).find((l) => l.lineId === editing.lineId)
+    : null;
+
+  const saveLine = async (patch) => {
+    if (!editing.sent) { d.updateDraftLine(editing.lineId, patch); return true; }
+    try {
+      await updateOrderLine(order.id, sentLines, editing.lineId, patch);
+      return true;
+    } catch (err) {
+      console.error("[till] Modifica riga fallita:", err);
+      return false;
+    }
+  };
+  const removeLine = async () => {
+    if (!editing.sent) { d.removeDraftLine(editing.lineId); setEditing(null); return; }
+    const confirmed = await confirmAction({
+      title: `Rimuovere ${editingLine.name}?`,
+      message: "Il piatto è già stato inviato: viene tolto dalla comanda e dal conto.",
+      confirmLabel: "Rimuovi", danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await removeOrderLine(order.id, sentLines, editing.lineId);
+      setEditing(null);
+    } catch (err) {
+      console.error("[till] Rimozione riga fallita:", err);
+    }
+  };
+
+  const printReceipt = async () => {
+    if (d.draftCount > 0) {
+      const go = await confirmAction({
+        title: "Ci sono piatti non inviati",
+        message: `${d.draftCount} piatti nella sezione "Da inviare" non sono ancora nella comanda e non compariranno sul preconto.`,
+        confirmLabel: "Stampa comunque",
+      });
+      if (!go) return;
+    }
+    printer.print(order, menu);
+    markReceiptPrinted(order.id).catch((err) => console.error("[till] Registrazione stampa fallita:", err));
+  };
+
   const doClose = async () => {
     const pending = d.draftCount > 0 ? ` Attenzione: ${d.draftCount} piatti non ancora inviati verranno persi.` : "";
     const confirmed = await confirmAction({
       title: `Chiudere ${id.primary}?`,
-      message: `${(order.items || []).length} voci ordinate — totale € ${formatCentsAsPrice(orderTotalCents(order))}. La comanda viene archiviata (nessun preconto stampato).${pending}`,
+      message: `${sentLines.length} voci ordinate — totale € ${formatCentsAsPrice(orderTotalCents(order))}. La comanda viene archiviata nello storico.${pending}`,
       confirmLabel: "Chiudi tavolo",
       danger: true,
     });
@@ -498,15 +601,54 @@ function OrderView({ t, menu, menuCosts, order, onBack }) {
     flexShrink: 0, minHeight: 52, padding: "0 20px", borderRadius: 12, fontSize: 17, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
     border: `1.5px solid ${active ? t.primary : t.line}`, background: active ? t.primary : t.card, color: active ? t.bg : t.ink,
   });
-  const smallBtn = {
-    width: TOUCH, height: TOUCH, borderRadius: 10, border: `1.5px solid ${t.line}`, background: t.card, color: t.ink,
-    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0,
-  };
   const coperto = copertoTotalCents(order);
 
+  const ticket = (
+    <SidePanel
+      t={t}
+      label="Comanda del tavolo"
+      header={<SectionTitle t={t}>Comanda — {id.primary}</SectionTitle>}
+      footer={(
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <span style={{ fontSize: 18, fontWeight: 600 }}>Totale</span>
+            <span data-testid="till-order-total" style={{ fontSize: 30, fontWeight: 800 }}>€ {formatCentsAsPrice(d.totalCents)}</span>
+          </div>
+          {coperto > 0 && <div style={{ fontSize: 14, color: t.inkSoft, marginTop: -8, textAlign: "right" }}>di cui coperto € {formatCentsAsPrice(coperto)}</div>}
+          {d.sendError && <div role="alert" style={{ color: STATUS.danger, fontSize: 15 }}>{d.sendError}</div>}
+          <TillButton t={t} variant="primary" size={64} icon={Send} disabled={d.sending || d.draftCount === 0} onClick={d.send}>
+            {d.sending ? "Invio…" : `Invia comanda (${d.draftCount})`}
+          </TillButton>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <TillButton t={t} icon={Printer} disabled={printer.busy} onClick={printReceipt} style={{ padding: "0 8px", whiteSpace: "nowrap" }}>{printer.failed ? "Riprova stampa" : "Stampa preconto"}</TillButton>
+            <TillButton t={t} variant="danger" icon={Lock} disabled={d.closing} onClick={doClose} style={{ padding: "0 8px", whiteSpace: "nowrap" }}>{d.closing ? "Chiusura…" : "Chiudi tavolo"}</TillButton>
+          </div>
+          <PrintStatusLine status={printer.status} />
+        </>
+      )}
+    >
+      {sentLines.length === 0 && d.draft.length === 0 && (
+        <div style={{ color: t.inkSoft, fontSize: 17, padding: "16px 0", lineHeight: 1.5 }}>
+          Ancora nulla per questo tavolo.<br />Tocca un piatto a sinistra per aggiungerlo.
+        </div>
+      )}
+      {d.draft.length > 0 && (
+        <div role="group" aria-label="Da inviare" style={{ borderRadius: 14, border: `2px solid ${t.primary}`, padding: "8px 12px", background: `${t.primary}0d`, marginBottom: 14 }}>
+          <SectionTitle t={t} color={t.primary} style={{ margin: "2px 0 2px" }}>Da inviare · tocca una riga per modificarla</SectionTitle>
+          {d.draft.map((l) => <TicketLine key={l.lineId} t={t} line={l} sent={false} onSelect={() => setEditing({ lineId: l.lineId, sent: false })} />)}
+        </div>
+      )}
+      {sentLines.length > 0 && (
+        <div role="group" aria-label="Già inviato">
+          <SectionTitle t={t} color={STATUS.ok} style={{ margin: "4px 0 2px" }}>Già inviato{locked ? " · preconto confermato" : ""}</SectionTitle>
+          {sentLines.map((l) => <TicketLine key={l.lineId} t={t} line={l} sent onSelect={() => setEditing({ lineId: l.lineId, sent: true })} />)}
+        </div>
+      )}
+    </SidePanel>
+  );
+
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(360px, 34%)", fontFamily: FONT, color: t.ink }}>
-      {/* ------------------------------ menu side ------------------------------ */}
+    <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `minmax(0, 1fr) ${SIDE_PANEL_WIDTH}`, fontFamily: FONT, color: t.ink }}>
       <section aria-label="Menu" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px", borderBottom: `1px solid ${t.line}`, flexWrap: "wrap" }}>
           <BackButton t={t} onClick={onBack} label="Tavoli" />
@@ -518,7 +660,7 @@ function OrderView({ t, menu, menuCosts, order, onBack }) {
               <span>Aperto alle {formatTime(order.openedAt) || "—"}</span>
               <SyncBadge t={t} hasPendingWrites={order._hasPendingWrites} />
             </div>
-            {order.notes && <div style={{ fontSize: 14, color: STATUS.kitchen, marginTop: 2, fontWeight: 600 }}>{order.notes}</div>}
+            {order.notes && <div style={{ fontSize: 14, color: STATUS.waiting, marginTop: 2, fontWeight: 600 }}>{order.notes}</div>}
           </div>
           <div style={{ marginLeft: "auto" }}><CoversControl t={t} order={order} /></div>
         </div>
@@ -530,7 +672,7 @@ function OrderView({ t, menu, menuCosts, order, onBack }) {
               return (
                 <button key={tb.id} type="button" role="tab" aria-selected={active}
                   onClick={() => { d.setItemSearch(""); setCategoryId(tb.id); }}
-                  className="mdp-btn" style={{ ...chip(active), ...(tb.id === "__offmenu__" && !active ? { color: t.accent2, borderColor: t.accent2 } : null) }}>
+                  className="mdp-btn" style={{ ...chip(active), ...(tb.id === "__offmenu__" && !active ? { color: STATUS.waiting, borderColor: STATUS.waiting } : null) }}>
                   {tb.id === "__offmenu__" && <Utensils size={16} style={{ marginRight: 6, verticalAlign: "-2px" }} />}{tb.name}
                 </button>
               );
@@ -577,109 +719,26 @@ function OrderView({ t, menu, menuCosts, order, onBack }) {
         </div>
       </section>
 
-      {/* ------------------------------ ticket side ------------------------------ */}
-      <section aria-label="Comanda del tavolo" style={{ display: "flex", flexDirection: "column", minHeight: 0, borderLeft: `1px solid ${t.line}`, background: t.card }}>
-        <div style={{ padding: "16px 18px 10px", fontSize: 15, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.6, color: t.inkSoft }}>
-          Comanda — {id.primary}
-        </div>
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 18px 12px" }}>
-          {d.sentByCategory.length === 0 && d.draft.length === 0 && (
-            <div style={{ color: t.inkSoft, fontSize: 17, padding: "24px 0", lineHeight: 1.5 }}>
-              Ancora nulla per questo tavolo.<br />Tocca un piatto a sinistra per aggiungerlo.
-            </div>
-          )}
-
-          {d.sentByCategory.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: t.secondary, textTransform: "uppercase", letterSpacing: 0.6, margin: "4px 0 6px" }}>Già inviato</div>
-              {d.sentByCategory.map(({ categoryId: cId, categoryName, lines }) => (
-                <div key={cId} style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 13, color: t.inkSoft, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>{categoryName}</div>
-                  {lines.map((l) => (
-                    <div key={l.lineId} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "6px 0", borderBottom: `1px solid ${t.line}` }}>
-                      <span style={{ fontSize: 16 }}>
-                        <strong>{l.quantity}×</strong> {l.name}{l.notes ? <span style={{ color: t.inkSoft }}> ({l.notes})</span> : null}
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: l.status === "out" ? STATUS.served : l.status === "preparing" ? STATUS.kitchen : STATUS.idle, whiteSpace: "nowrap" }}>
-                        {lineStatusLabel(l.status)} {formatTime(l.outAt || l.sentAt) || ""}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {d.draft.length > 0 && (
-            <div aria-label="Da inviare" role="group" style={{ borderRadius: 14, border: `2px solid ${t.primary}`, padding: "8px 12px", background: `${t.primary}0d` }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: t.primary, textTransform: "uppercase", letterSpacing: 0.6, margin: "2px 0 4px" }}>Da inviare</div>
-              {d.draft.map((l) => (
-                <div key={l.lineId} style={{ padding: "8px 0", borderBottom: `1px solid ${t.line}` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 17, fontWeight: 600 }}>{l.name}</span>
-                      <span style={{ fontSize: 13, color: t.inkSoft }}>{l.categoryName} · € {formatCentsAsPrice(parsePriceToCents(l.price) * l.quantity)}</span>
-                    </span>
-                    <button type="button" aria-label={`Diminuisci quantità di ${l.name}`} onClick={() => d.changeQty(l.lineId, -1)} className="mdp-btn" style={smallBtn}><Minus size={18} /></button>
-                    <span style={{ minWidth: 26, textAlign: "center", fontSize: 20, fontWeight: 700 }}>{l.quantity}</span>
-                    <button type="button" aria-label={`Aumenta quantità di ${l.name}`} onClick={() => d.changeQty(l.lineId, 1)} className="mdp-btn" style={smallBtn}><Plus size={18} /></button>
-                    <button type="button" aria-label={`Nota per ${l.name}`} aria-pressed={noteOpen === l.lineId} onClick={() => setNoteOpen((cur) => (cur === l.lineId ? null : l.lineId))} className="mdp-btn" style={{ ...smallBtn, color: l.notes ? t.primary : t.inkSoft }}><StickyNote size={18} /></button>
-                    <button type="button" aria-label={`Rimuovi ${l.name} dalla comanda`} onClick={() => d.removeDraftLine(l.lineId)} className="mdp-btn" style={{ ...smallBtn, color: STATUS.danger }}><X size={18} /></button>
-                  </div>
-                  {(noteOpen === l.lineId || l.notes) && (
-                    <input autoFocus={noteOpen === l.lineId} value={l.notes} onChange={(e) => d.setDraftNote(l.lineId, e.target.value)}
-                      placeholder="Nota per la cucina (es. senza glutine)" aria-label={`Nota di ${l.name}`}
-                      style={{ width: "100%", minHeight: TOUCH, marginTop: 8, padding: "0 12px", borderRadius: 10, border: `1.5px solid ${t.line}`, background: t.bg, color: t.ink, fontSize: 16, fontFamily: FONT, boxSizing: "border-box" }} />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div style={{ padding: "14px 18px 18px", borderTop: `1px solid ${t.line}`, display: "grid", gap: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 18, fontWeight: 600 }}>Totale</span>
-            <span data-testid="till-order-total" style={{ fontSize: 30, fontWeight: 800 }}>€ {formatCentsAsPrice(d.totalCents)}</span>
-          </div>
-          {coperto > 0 && <div style={{ fontSize: 14, color: t.inkSoft, marginTop: -8, textAlign: "right" }}>di cui coperto € {formatCentsAsPrice(coperto)}</div>}
-          {d.sendError && <div role="alert" style={{ color: STATUS.danger, fontSize: 15 }}>{d.sendError}</div>}
-          <button type="button" onClick={d.send} disabled={d.sending || d.draftCount === 0} className="mdp-btn" style={{
-            minHeight: 64, borderRadius: 14, border: "none", background: t.primary, color: t.bg, fontSize: 20, fontWeight: 700,
-            cursor: d.sending || d.draftCount === 0 ? "default" : "pointer", opacity: d.sending || d.draftCount === 0 ? 0.45 : 1,
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontFamily: FONT,
-          }}>
-            <Send size={22} /> {d.sending ? "Invio…" : `Invia comanda (${d.draftCount})`}
-          </button>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <button type="button" onClick={() => setShowReceipt(true)} className="mdp-btn" style={{
-              minHeight: 56, borderRadius: 12, border: `1.5px solid ${t.line}`, background: t.bg, color: t.ink, fontSize: 17, fontWeight: 600,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: FONT,
-            }}><Receipt size={20} /> Preconto</button>
-            <button type="button" onClick={doClose} disabled={d.closing} className="mdp-btn" style={{
-              minHeight: 56, borderRadius: 12, border: `1.5px solid ${STATUS.danger}`, background: t.bg, color: STATUS.danger, fontSize: 17, fontWeight: 600,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: FONT,
-            }}><Lock size={20} /> {d.closing ? "Chiusura…" : "Chiudi tavolo"}</button>
-          </div>
-        </div>
-      </section>
-
-      {showReceipt && <ReceiptOverlay t={t} menu={menu} order={order} onClose={() => setShowReceipt(false)} />}
+      {editingLine
+        ? <LineEditor key={editingLine.lineId} t={t} line={editingLine} sent={editing.sent} locked={editing.sent && locked}
+            onSave={saveLine} onRemove={removeLine} onClose={() => setEditing(null)} />
+        : ticket}
     </div>
   );
 }
 
 /* ---------------------------------- shell ---------------------------------- */
 
-export default function TillSala({ menu, session }) {
+export default function TillSala({ menu, session, initialTab = "floor" }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
   const sala = useSalaData({ menu, session });
-  const [tab, setTab] = useState("floor"); // floor | reservations | history
+  const [tab, setTab] = useState(initialTab); // floor | reservations | history
   const [openOrderId, setOpenOrderId] = useState(null);
   const [dialog, setDialog] = useState(null); // { reservation? }
   const [busy, setBusy] = useState(false);
 
   const currentOrder = openOrderId ? sala.orders.find((o) => o.id === openOrderId) : null;
+  const goToOrder = (orderId) => { setTab("floor"); setOpenOrderId(orderId); };
 
   const create = async (fields) => {
     setBusy(true);
@@ -687,7 +746,7 @@ export default function TillSala({ menu, session }) {
       ? await sala.startFromReservation(dialog.reservation, fields.tableNumber)
       : await sala.createTable(fields);
     setBusy(false);
-    if (newId) { setDialog(null); setOpenOrderId(newId); }
+    if (newId) { setDialog(null); goToOrder(newId); }
   };
 
   const onAvvia = async (reservation) => {
@@ -695,19 +754,11 @@ export default function TillSala({ menu, session }) {
     setBusy(true);
     const newId = await sala.startFromReservation(reservation, reservation.tableNumber);
     setBusy(false);
-    if (newId) setOpenOrderId(newId);
+    if (newId) goToOrder(newId);
   };
 
   const goTab = (key) => { setTab(key); setOpenOrderId(null); };
-
-  // Prenotazioni keeps its own screen (with its own "Sala" back button).
-  if (tab === "reservations") {
-    return (
-      <Suspense fallback={<div style={{ padding: 40 }}>Caricamento…</div>}>
-        <Reservations menu={menu} onBack={() => setTab("floor")} />
-      </Suspense>
-    );
-  }
+  const loading = <div style={{ padding: 40, color: t.inkSoft, fontSize: 18, fontFamily: FONT }}>Caricamento…</div>;
 
   return (
     // Full screen, minus StaffHome's "Cambia area" bar when an admin account
@@ -717,9 +768,15 @@ export default function TillSala({ menu, session }) {
       <TopBar t={t} session={session} tab={tab} onTab={goTab} openCount={sala.orders.length} />
 
       {tab === "history" && (
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-          <OrderHistory t={t} menu={menu} onBack={() => setTab("floor")} isAdmin={session.role === "admin"} />
-        </div>
+        <Suspense fallback={loading}>
+          <TillHistory t={t} menu={menu} isAdmin={session.role === "admin"} />
+        </Suspense>
+      )}
+
+      {tab === "reservations" && (
+        <Suspense fallback={loading}>
+          <TillReservations t={t} session={session} onAvvia={onAvvia} onGoToTable={goToOrder} />
+        </Suspense>
       )}
 
       {tab === "floor" && !sala.ordersReady && (
@@ -739,8 +796,7 @@ export default function TillSala({ menu, session }) {
 
       {tab === "floor" && sala.ordersReady && !openOrderId && (
         <FloorView
-          t={t} menu={menu} orders={sala.orders} shiftClosedOrders={sala.shiftClosedOrders}
-          todaysReservations={sala.todaysReservations}
+          t={t} orders={sala.orders} todaysReservations={sala.todaysReservations}
           onNew={() => setDialog({})} onOpen={setOpenOrderId} onAvvia={onAvvia}
         />
       )}
@@ -749,7 +805,7 @@ export default function TillSala({ menu, session }) {
         <NewTableDialog
           t={t} openOrders={sala.orders} reservation={dialog.reservation} busy={busy}
           onCancel={() => setDialog(null)} onCreate={create}
-          onGoTo={(orderId) => { setDialog(null); setOpenOrderId(orderId); }}
+          onGoTo={(orderId) => { setDialog(null); goToOrder(orderId); }}
         />
       )}
     </div>

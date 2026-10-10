@@ -39,14 +39,22 @@ export default defineConfig({
     {
       name: "till-client",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: [/till-client\.spec\.js/, /till-sala\.spec\.js/],
+      testMatch: /till-client\.spec\.js/,
       dependencies: ["print-queue"],
+    },
+    {
+      // Prints from the till: sequential, and after the other "till" specs,
+      // so no other till page (print station) can claim its print jobs.
+      name: "till-sala",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /till-sala\.spec\.js/,
+      dependencies: ["till-client"],
     },
     {
       name: "desktop-client",
       use: { ...devices["Desktop Chrome"] },
       testMatch: /desktop-client\.spec\.js/,
-      dependencies: ["till-client"],
+      dependencies: ["till-sala"],
     },
   ],
   webServer: {

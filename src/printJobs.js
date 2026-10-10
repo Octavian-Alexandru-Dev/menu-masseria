@@ -59,7 +59,8 @@ export function buildReceiptPayload(order, menu, now = new Date()) {
     dateLabel: `${now.toLocaleDateString("it-IT")}  ${now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`,
     lines: (order.items || []).map((l) => ({
       quantity: l.quantity,
-      name: l.name,
+      // "Offerto" / "Sconto 20%" set at the till, visible to the customer.
+      name: l.priceNote ? `${l.name} (${l.priceNote.toLowerCase()})` : l.name,
       notes: l.notes || "",
       totalCents: parsePriceToCents(l.price) * l.quantity,
     })),

@@ -224,6 +224,8 @@ export function useOrderDraft({ menu, menuCosts, order }) {
   };
   const removeDraftLine = (lineId) => setDraft((d) => d.filter((l) => l.lineId !== lineId));
   const setDraftNote = (lineId, notes) => setDraft((d) => d.map((l) => (l.lineId === lineId ? { ...l, notes } : l)));
+  // Whole-line edit from the till's line editor (quantity, price, note).
+  const updateDraftLine = (lineId, patch) => setDraft((d) => d.map((l) => (l.lineId === lineId ? { ...l, ...patch } : l)));
 
   const send = async () => {
     if (draft.length === 0) return;
@@ -267,7 +269,7 @@ export function useOrderDraft({ menu, menuCosts, order }) {
   const totalCents = orderTotalCents(order) + draft.reduce((s, l) => s + parsePriceToCents(l.price) * l.quantity, 0);
 
   return {
-    draft, draftCount, addToDraft, changeQty, removeDraftLine, setDraftNote,
+    draft, draftCount, addToDraft, changeQty, removeDraftLine, setDraftNote, updateDraftLine,
     send, sending, sendError, closeTable, closing,
     normalItems, offMenuItems, searchEnabled, itemSearch, setItemSearch, isItemSearching,
     filteredNormalItems, filteredOffMenuItems, searchTagChips, toggleSearchTag,

@@ -258,10 +258,40 @@ comande, preconto, chiusura.
   tastiera), coperti con +/−, nome e note facoltativi. Se il tavolo è già
   aperto lo segnala e offre "Vai al tavolo".
 - **Comanda:** a sinistra le categorie (schede), la ricerca e i piatti a
-  riquadri (tocco = +1, con il conteggio sul riquadro); a destra lo
-  scontrino ("Già inviato" con lo stato di ogni riga, "Da inviare" con
-  +/−, nota e rimozione) e, sempre nello stesso posto in basso, Totale,
-  **Invia comanda**, **Preconto**, **Chiudi tavolo** (con conferma).
+  riquadri (tocco = +1, con il conteggio sul riquadro); a destra, nella barra
+  laterale, lo scontrino del tavolo ("Da inviare" e "Già inviato") e, sempre
+  nello stesso posto in basso, Totale, **Invia comanda**, **Stampa
+  preconto** (stampa diretta, con lo stato della stampa sotto) e **Chiudi
+  tavolo** (con conferma).
+- **Modifica di una riga** (anche già inviata): si tocca la riga nello
+  scontrino e l'editor si apre **nella barra laterale**, senza cambiare
+  schermata (il totale e il tavolo restano in vista: è il modello delle
+  casse POS più diffuse). Si possono cambiare **quantità**, **prezzo**
+  (*Pieno*, *Offerto* = 0 €, sconti rapidi *−10/−20/−50%*, *Altro* = prezzo
+  libero dal tastierino, in centesimi come sulle casse), **nota** e
+  **rimuovere** la riga (con conferma se già inviata). Nulla cambia finché
+  non si preme **Salva**. Il prezzo cambiato resta sulla riga con il motivo
+  ("Offerto", "Sconto 20%", "Prezzo modificato") e il prezzo del menù: tutti
+  i totali (preconto, storico, statistiche) usano il prezzo effettivo, e sul
+  preconto stampato compare ad esempio "Caprese (offerto)". Con il preconto
+  confermato le righe già inviate sono bloccate.
+- **Stato dei tavoli senza cucina:** non c'è un tablet in cucina, quindi la
+  cassa non mostra più stati "uscita": i riquadri dicono *Da ordinare*,
+  *Comanda inviata* (verde) o *Preconto stampato / confermato* (blu).
+- **Storico:** elenco delle comande chiuse per giorno a sinistra, dettaglio
+  nella barra laterale con **Ristampa preconto** (e, per l'admin, elimina
+  dallo storico con conferma).
+- **Prenotazioni:** calendario grande a sinistra (per ogni giorno
+  prenotazioni e coperti, pallino arancione = da confermare), prenotazioni
+  del giorno al centro con lo stato scritto, scheda o modulo nella barra
+  laterale. Nel modulo gli orari si scelgono a tocco (gli stessi del modulo
+  di prenotazione del sito: pranzo 12:30–14:30, cena 20:00–22:30), coperti e
+  tavolo con +/−; azioni Conferma / Rifiuta / Modifica / Annulla e **Avvia**
+  (il giorno stesso: apre il tavolo, chiedendo il numero col tastierino se
+  manca).
+- **Stampa interrotta:** se il programma della cassa si chiude mentre sta
+  stampando, dopo 30 secondi chi ha chiesto la stampa vede "La stampa si è
+  interrotta" e può premere **Riprova stampa**.
 - **Niente "Esci"** in nessuna parte della web app alla cassa (client
   ≥ 1.4.0): il logout è in *Impostazioni → Account della cassa → Esci
   dall'account…*, nascosto in un pannello richiudibile e con doppia
@@ -285,8 +315,8 @@ Principi seguiti (nessuna invenzione da zero):
   (conferme, tavolo già aperto), riconoscere invece di ricordare (riquadri e
   schede invece di codici).
 
-Le sezioni Prenotazioni e Storico, per ora, usano ancora il layout centrato
-del telefono.
+Sui telefoni l'interfaccia resta quella di prima (pensata per lo schermo
+piccolo, con gli stati della cucina finché esiste l'area Cucina).
 
 
 
@@ -357,8 +387,14 @@ del telefono.
 | Aggiorna ora (programma): avviso con conto alla rovescia prima di chiudere | `tests/till-client.spec.js` |
 | Client Electron vero: API 1.1.0/1.2.0 (stato schermo intero, nessuna credenziale, stato aggiornamenti "dev"), errore tastiera fuori da Windows | `tests/desktop-client.spec.js` |
 | Cassa: griglia dei tavoli a tutta larghezza, schede e "Nuovo tavolo" ≥ 48px | `tests/till-sala.spec.js` |
-| Cassa: apertura con tastierino, comanda a riquadri per categoria, nota, invio, stato e totale sul riquadro del tavolo | `tests/till-sala.spec.js` |
-| Cassa: ricerca piatti, tavolo già aperto segnalato con "Vai al tavolo", chiusura con conferma e tavolo tra i chiusi del turno, preconto, Storico/Prenotazioni | `tests/till-sala.spec.js` |
+| Cassa: apertura con tastierino, comanda a riquadri per categoria, nota dall'editor, invio, stato e totale sul riquadro del tavolo | `tests/till-sala.spec.js` |
+| Cassa: ricerca piatti, tavolo già aperto segnalato con "Vai al tavolo", chiusura con conferma e tavolo nello Storico | `tests/till-sala.spec.js` |
 | Nessun "Esci" alla cassa con client 1.4 (Dashboard e tutte le aree); logout dalle impostazioni senza rientro automatico; "Esci" con conferma per i client 1.1–1.3 | `tests/till-client.spec.js` |
 | Telefono: "Indietro" con etichetta e alto almeno 48px | `tests/waiter-order.spec.js` |
+| Cassa: modifica riga nella barra laterale (quantità, sconto, offerto, prezzo libero da tastierino), solo con "Salva"; su righe da inviare e già inviate; preconto stampato con "(sconto 20%)"/"(prezzo modificato)" | `tests/till-sala.spec.js` |
+| Cassa: rimozione di una riga già inviata con conferma | `tests/till-sala.spec.js` |
+| Cassa: nessuno stato "uscita"; riquadro "Comanda inviata" / "Preconto stampato" | `tests/till-sala.spec.js` |
+| Cassa: preconto stampato direttamente dalla barra laterale, avviso se ci sono piatti non inviati | `tests/till-sala.spec.js` |
+| Cassa: Storico con dettaglio e ristampa preconto | `tests/till-sala.spec.js` |
+| Cassa: Prenotazioni — nuova con orari a tocco, conferma, avvio con tastierino che apre il tavolo; calendario con prenotazioni e coperti del giorno | `tests/till-sala.spec.js` |
 | Non coperto automaticamente: stampa fisica su POSBANK, ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, apertura durante l'installer (notifica + uscita), notifiche di Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |
