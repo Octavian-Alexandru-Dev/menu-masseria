@@ -10,18 +10,25 @@
 // the till account (credentials.js) and self-updates (updater.js).
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { app, BrowserWindow, ipcMain, shell, session, net, screen } = require("electron");
+const { execFile } = require("node:child_process");
+const { app, BrowserWindow, ipcMain, shell, session, net, screen, Notification } = require("electron");
 const store = require("./settings-store");
 const printer = require("./printer");
 const keyboard = require("./keyboard");
 const credentials = require("./credentials");
 const updater = require("./updater");
+const { log, dir: logDir } = require("./log");
 
 // Lets the Playwright smoke test (tests/desktop-client.spec.js) run the real
 // client against a throwaway settings folder.
 if (process.env.MDP_USER_DATA_DIR) app.setPath("userData", process.env.MDP_USER_DATA_DIR);
 
+const APP_ID = "it.masseria-della-piana.cassa"; // = build.appId, needed for Windows notifications
 const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000;
+const CLEAR_CACHE_TIMEOUT_MS = 3000;
+// File name of the installer electron-updater runs during a self-update
+// (= build.nsis.artifactName).
+const INSTALLER_EXE = "Masseria-Cassa-Setup.exe";
 const MAX_PRINT_BYTES = 2 * 1024 * 1024;
 
 let settings = store.load();
@@ -74,8 +81,24 @@ function notifyUpdateAvailable() {
   if (mainWindow) mainWindow.webContents.send("bridge:update-available");
 }
 
+function notify(body) {
+  try {
+    if (Notification.isSupported()) new Notification({ title: "Masseria Cassa", body }).show();
+  } catch (err) { log("notifica non mostrata:", err); }
+}
+
+// The silent installer runs with no window for up to a minute: a Windows
+// notification says so, so nobody reopens the program in the meantime.
+function installUpdate() {
+  if (updater.state().status !== "downloaded") return false;
+  log("installazione aggiornamento", updater.state().version);
+  notify("Aggiornamento in corso: il programma si riaprirà da solo tra circa un minuto. Non riaprirlo nel frattempo.");
+  setTimeout(() => updater.installNow(), 800);
+  return true;
+}
+
 function reloadOrInstall() {
-  if (updater.installNow()) return;
+  if (installUpdate()) return;
   session.defaultSession.clearCache().finally(() => { loadApp(); startUpdateChecks(); });
 }
 
@@ -101,7 +124,11 @@ function createMainWindow() {
     icon: path.join(__dirname, "..", "build", "icon.png"),
     backgroundColor: "#f6f1e7",
     autoHideMenuBar: true,
-    show: false,
+    // Shown right away (with the background colour) rather than on
+    // "ready-to-show": a window waiting for a page that never finishes
+    // loading would leave an invisible process that swallows every later
+    // launch (single instance), with nothing on screen.
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -110,10 +137,7 @@ function createMainWindow() {
     },
   });
   mainWindow.setMenu(null);
-  mainWindow.once("ready-to-show", () => {
-    applyWindowSettings();
-    mainWindow.show();
-  });
+  applyWindowSettings();
 
   const wc = mainWindow.webContents;
   // Touch terminal: no accidental pinch-zoom; scale is the "Zoom" setting.
@@ -137,8 +161,16 @@ function createMainWindow() {
   });
 
   // No connection at startup: local page with "retry" and "settings".
+  // A crashed or hung page would leave a blank screen: reload it.
+  wc.on("render-process-gone", (_e, details) => {
+    log("pagina terminata:", details);
+    if (details.reason !== "clean-exit") setTimeout(loadApp, 1000);
+  });
+  mainWindow.on("unresponsive", () => log("finestra non risponde"));
+
   wc.on("did-fail-load", (_e, code, desc, url, isMainFrame) => {
     if (!isMainFrame || code === -3) return; // -3 = aborted (e.g. a redirect)
+    log("caricamento fallito:", code, desc, url);
     mainWindow.loadFile(path.join(__dirname, "offline.html"), { query: { error: `${desc} (${code})`, url } });
   });
 
@@ -304,7 +336,8 @@ ipcMain.on("settings:action", (e, action) => {
   if (!isSettingsWindow(e)) return;
   if (action === "reload") session.defaultSession.clearCache().finally(() => { loadApp(); startUpdateChecks(); });
   if (action === "update-check") updater.check();
-  if (action === "update-install") updater.installNow();
+  if (action === "update-install") installUpdate();
+  if (action === "open-logs") shell.openPath(logDir());
   if (action === "toggle-fullscreen" && mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
   if (action === "devtools" && mainWindow) mainWindow.webContents.openDevTools({ mode: "detach" });
   if (action === "quit") app.quit();
@@ -312,23 +345,60 @@ ipcMain.on("settings:action", (e, action) => {
 
 /* -------------------------------- lifecycle -------------------------------- */
 
+// Is the self-update installer running right now? Launching the program in
+// the middle of it would start it from files being replaced.
+function installerRunning() {
+  if (process.platform !== "win32") return Promise.resolve(false);
+  return new Promise((resolve) => {
+    execFile("tasklist", ["/FI", `IMAGENAME eq ${INSTALLER_EXE}`, "/NH"], { windowsHide: true, timeout: 4000 },
+      (err, stdout) => resolve(!err && stdout.toLowerCase().includes(INSTALLER_EXE.toLowerCase())));
+  });
+}
+
+function bringToFront() {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.focus();
+}
+
+async function start() {
+  log(`avvio versione ${app.getVersion()}`);
+  if (await installerRunning()) {
+    log("installer dell'aggiornamento in corso: esco");
+    notify("Aggiornamento in corso: il programma si riaprirà da solo appena finito.");
+    setTimeout(() => app.exit(0), 1500);
+    return;
+  }
+  // Always start from the latest deployed web app: only the HTTP cache is
+  // cleared — the login session and Firestore's offline cache are kept. With
+  // a timeout: the window must appear even if clearing gets stuck.
+  await Promise.race([
+    session.defaultSession.clearCache().catch((err) => log("pulizia cache fallita:", err)),
+    new Promise((resolve) => setTimeout(resolve, CLEAR_CACHE_TIMEOUT_MS)),
+  ]);
+  createMainWindow();
+  updater.init((st) => {
+    if (st.status !== "downloading") log("aggiornamento:", st);
+    if (settingsWindow) settingsWindow.webContents.send("settings:update-state", st);
+    // Progress banners in the page (UpdateBanner.jsx in the web app).
+    if (mainWindow) mainWindow.webContents.send("bridge:update-state", st);
+    if (st.status === "downloaded") notifyUpdateAvailable();
+  });
+}
+
+app.setAppUserModelId(APP_ID);
+
+// One program, one process tree: a second launch (e.g. tapping the icon
+// again because nothing seemed to happen) only brings the existing window
+// to the front, then exits.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus(); }
+    log("seconda apertura: porto in primo piano la finestra esistente");
+    bringToFront();
   });
-  app.whenReady().then(async () => {
-    // Always start from the latest deployed web app: only the HTTP cache is
-    // cleared — the login session and Firestore's offline cache are kept.
-    await session.defaultSession.clearCache();
-    createMainWindow();
-    updater.init((st) => {
-      if (settingsWindow) settingsWindow.webContents.send("settings:update-state", st);
-      // Progress banners in the page (UpdateBanner.jsx in the web app).
-      if (mainWindow) mainWindow.webContents.send("bridge:update-state", st);
-      if (st.status === "downloaded") notifyUpdateAvailable();
-    });
-  });
+  app.whenReady().then(start);
   app.on("window-all-closed", () => app.quit());
 }

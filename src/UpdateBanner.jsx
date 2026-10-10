@@ -15,6 +15,11 @@ import { RefreshCw, Download, CheckCircle2, AlertTriangle, X } from "lucide-reac
 const CLIENT_VERSION_KEY = "mdp.clientVersion";
 const WEB_RELOADED_KEY = "mdp.webUpdateReloaded";
 const DONE_BANNER_MS = 8000;
+// Installing a client update closes the program and runs a silent installer
+// (no window) for up to a minute: before that, give people time to read
+// that it will reopen by itself — otherwise they reopen it by hand while the
+// installer is still replacing its files.
+const INSTALL_NOTICE_S = 5;
 
 function storageGet(storage, key) {
   try { return storage.getItem(key); } catch { return null; }
@@ -53,6 +58,7 @@ export default function UpdateBanner({ bridge }) {
   const [applying, setApplying] = useState(null); // "install" | "reload"
   const [done, setDone] = useState(() => doneMessageForThisLoad(bridge));
   const [dismissedError, setDismissedError] = useState(null);
+  const [countdown, setCountdown] = useState(null);
 
   useEffect(() => bridge.onUpdateAvailable(() => setWebUpdate(true)), [bridge]);
   useEffect(() => {
@@ -67,21 +73,34 @@ export default function UpdateBanner({ bridge }) {
 
   const clientReady = client.status === "downloaded";
 
+  useEffect(() => {
+    if (countdown == null) return;
+    if (countdown <= 0) { bridge.reloadApp(); return; }
+    const id = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [countdown, bridge]);
+
   const applyNow = () => {
     // reloadApp installs a downloaded client update if there is one,
     // otherwise reloads the page with the new web app.
     if (clientReady) {
       setApplying("install");
-    } else {
-      setApplying("reload");
-      storageSet(sessionStorage, WEB_RELOADED_KEY, "1");
+      setCountdown(INSTALL_NOTICE_S);
+      return;
     }
+    setApplying("reload");
+    storageSet(sessionStorage, WEB_RELOADED_KEY, "1");
     bridge.reloadApp();
   };
 
   let banner = null;
   if (applying === "install") {
-    banner = { tone: "busy", icon: RefreshCw, text: `Installazione della versione ${client.version || ""} in corso: il programma si riavvierà da solo tra pochi secondi.` };
+    banner = {
+      tone: "busy", icon: RefreshCw,
+      text: countdown > 0
+        ? `Installazione della versione ${client.version || ""}: tra ${countdown} secondi il programma si chiude e si riapre da solo (circa un minuto). Non riaprirlo nel frattempo.`
+        : "Installazione in corso: il programma si riaprirà da solo. Non riaprirlo nel frattempo.",
+    };
   } else if (applying === "reload") {
     banner = { tone: "busy", icon: RefreshCw, text: "Aggiornamento dell'interfaccia in corso…" };
   } else if (clientReady) {

@@ -134,9 +134,12 @@ non cambia mai):
   - "Download dell'aggiornamento del programma (versione X) in corso — 42%.
     Puoi continuare a lavorare.";
   - "Aggiornamento del programma pronto (versione X)…" con **Aggiorna ora**:
-    toccandolo compare "Installazione… il programma si riavvierà da solo" e
-    in pochi secondi riparte. Se lo ignori, si installa alla prossima
-    chiusura;
+    toccandolo compare un conto alla rovescia di 5 secondi ("il programma si
+    chiude e si riapre da solo, non riaprirlo nel frattempo"). Poi il
+    programma si chiude e l'installer lavora **senza finestre** per circa un
+    minuto: una notifica di Windows lo ricorda (dalla 1.3.0). Infine il
+    programma si riapre da solo. Se ignori il banner, l'aggiornamento si
+    installa alla prossima chiusura;
   - "Aggiornamento del programma non riuscito: riproverà da solo più tardi"
     (chiudibile), per esempio senza internet;
   - dopo il riavvio: "Programma aggiornato alla versione X." per qualche
@@ -248,6 +251,8 @@ le credenziali (cifrate) in `login.json` nella stessa cartella.
 | Interfaccia troppo piccola o grande | Impostazioni → Zoom interfaccia. |
 | "Accesso automatico non riuscito" | Password dell'account della cassa cambiata: aggiornala in Impostazioni → Account della cassa. |
 | La tastiera touch non compare | Impostazioni → Tastiera virtuale → "Tastiera su schermo classica". |
+| Il programma "non si apre" subito dopo un aggiornamento | Probabilmente l'installer sta ancora lavorando: aspetta un minuto, si riapre da solo. Dalla 1.3.0 riaprirlo in quel momento mostra la notifica "Aggiornamento in corso" ed esce senza fare danni; se è già aperto, toccare l'icona porta in primo piano la finestra esistente (mai una seconda copia). Nel Task Manager **una** sola copia del programma conta comunque 5–6 processi "Masseria Cassa" (principale, GPU, rete, pagina…): è normale. |
+| Comportamenti strani da capire | Impostazioni → Avanzate → **Apri cartella log** (`%APPDATA%\Masseria Cassa\logs\main.log`): avvii, seconde aperture, aggiornamenti, errori di caricamento. |
 | Download dell'installer bloccato da Edge | §3.1. Dalla 1.1.0 non serve più riscaricarlo: si aggiorna da solo. |
 
 ## 6. Sviluppo e rilascio
@@ -299,5 +304,7 @@ le credenziali (cifrate) in `login.json` nella stessa cartella.
 | Accesso automatico con credenziali salvate; credenziali sbagliate → errore comprensibile | `tests/till-client.spec.js` |
 | "Esci" alla cassa: conferma, annulla, nessun rientro automatico dopo uscita voluta, rientro con un tocco | `tests/till-client.spec.js` |
 | "Esci" nel browser normale: esce subito senza conferma | `tests/till-client.spec.js` |
+| Seconda apertura del programma: esce subito, la finestra già aperta resta visibile, riga nel log | `tests/desktop-client.spec.js` |
+| Aggiorna ora (programma): avviso con conto alla rovescia prima di chiudere | `tests/till-client.spec.js` |
 | Client Electron vero: API 1.1.0/1.2.0 (stato schermo intero, nessuna credenziale, stato aggiornamenti "dev"), errore tastiera fuori da Windows | `tests/desktop-client.spec.js` |
-| Non coperto automaticamente: stampa fisica su POSBANK, ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |
+| Non coperto automaticamente: stampa fisica su POSBANK, ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, apertura durante l'installer (notifica + uscita), notifiche di Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |

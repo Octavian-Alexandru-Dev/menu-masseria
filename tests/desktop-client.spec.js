@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import net from "node:net";
+import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { TEST_WAITER, TEST_ADMIN } from "./test-env";
@@ -39,6 +40,8 @@ function startFakePrinter() {
 let printer;
 let app;
 let userDataDir;
+let launchEnv;
+let electronPath;
 const tableNumber = 12000 + Math.floor(Math.random() * 500);
 
 test.beforeAll(async () => {
@@ -56,11 +59,9 @@ test.beforeAll(async () => {
   // Node invece che come app.
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  app = await electron.launch({
-    executablePath: require("electron"),
-    args: [CLIENT_DIR],
-    env: { ...env, MDP_USER_DATA_DIR: userDataDir },
-  });
+  launchEnv = { ...env, MDP_USER_DATA_DIR: userDataDir };
+  electronPath = require("electron");
+  app = await electron.launch({ executablePath: electronPath, args: [CLIENT_DIR], env: launchEnv });
 });
 
 test.afterAll(async () => {
@@ -134,4 +135,19 @@ test("il menu Cassa apre le impostazioni native, con verifica stato e stampa di 
     await till.getByRole("menuitem", { name: "Tastiera" }).click();
     await expect(till.getByRole("alert")).toHaveText(/solo su windows/i);
   }
+});
+
+test("una seconda apertura del programma non crea un'altra istanza: esce e porta in primo piano quella aperta", async () => {
+  const till = await app.firstWindow();
+  const second = spawn(electronPath, [CLIENT_DIR], { env: launchEnv, stdio: "ignore" });
+  const exitCode = await new Promise((resolve) => {
+    const timer = setTimeout(() => { second.kill(); resolve("ancora in esecuzione dopo 15s"); }, 15_000);
+    second.on("exit", (code) => { clearTimeout(timer); resolve(code); });
+  });
+  expect(exitCode).toBe(0);
+  // L'istanza originale è ancora lì, visibile e funzionante.
+  await expect(till.getByRole("button", { name: /apri menu cassa/i })).toBeVisible();
+  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((w) => w.isVisible()).length)).toBeGreaterThanOrEqual(1);
+  const logText = fs.readFileSync(path.join(userDataDir, "logs", "main.log"), "utf8");
+  expect(logText).toContain("seconda apertura");
 });

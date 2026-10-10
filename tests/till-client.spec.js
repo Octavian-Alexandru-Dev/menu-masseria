@@ -119,8 +119,12 @@ test("aggiornamento del programma: banner di download con avanzamento, pronto, i
   });
   await expect(banner).toContainText("Aggiornamento del programma pronto (versione 1.3.0)");
   await banner.getByRole("button", { name: /aggiorna ora/i }).click();
-  await expect(banner).toContainText("Installazione della versione 1.3.0 in corso");
-  expect(await page.evaluate(() => globalThis.__reloaded)).toBe(true);
+  // Prima di chiudere il programma: avviso con conto alla rovescia, così
+  // nessuno lo riapre a mano mentre l'installer silenzioso lavora.
+  await expect(banner).toContainText(/Installazione della versione 1\.3\.0: tra \d secondi il programma si chiude e si riapre da solo/);
+  await expect(banner).toContainText("Non riaprirlo nel frattempo");
+  expect(await page.evaluate(() => globalThis.__reloaded)).toBe(false);
+  await expect.poll(() => page.evaluate(() => globalThis.__reloaded), { timeout: 10_000 }).toBe(true);
 });
 
 test("errore di aggiornamento del programma: avviso chiudibile, riprova da solo", async ({ page }) => {

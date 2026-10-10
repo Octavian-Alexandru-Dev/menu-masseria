@@ -142,6 +142,7 @@ $("btn-update-install").addEventListener("click", () => window.cassa.action("upd
 $("btn-fullscreen").addEventListener("click", () => window.cassa.action("toggle-fullscreen"));
 $("btn-reload").addEventListener("click", () => window.cassa.action("reload"));
 $("btn-devtools").addEventListener("click", () => window.cassa.action("devtools"));
+$("btn-logs").addEventListener("click", () => window.cassa.action("open-logs"));
 $("btn-quit").addEventListener("click", () => window.cassa.action("quit"));
 $("btn-close").addEventListener("click", () => window.close());
 
