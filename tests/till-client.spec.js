@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { TEST_WAITER, TEST_ADMIN } from "./test-env";
+import { TEST_WAITER, TEST_ADMIN, TEST_KITCHEN } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
 import { installDesktopBridgeMock } from "./helpers/desktopBridge";
 
@@ -192,26 +192,38 @@ test("con un client 1.1–1.3 'Esci' resta (non c'è il logout nelle impostazion
 test("con il client 1.4 non c'è nessun 'Esci' nell'interfaccia: il logout si fa dalle impostazioni del programma", async ({ page }) => {
   await installDesktopBridgeMock(page, { savedLogin: TEST_ADMIN });
   await page.goto("/?area=staff");
-  // Dashboard (admin): nessun "Esci".
-  await expect(page.getByText(/^Ciao,/)).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
-  // Nessun "Esci" nemmeno nelle singole aree.
-  for (const area of [/^sala/i, /^cucina/i, /^prenotazioni/i, /^gestione menù/i]) {
-    await page.getByRole("button", { name: area }).first().click();
-    await expect(page.getByRole("button", { name: "Cambia area" })).toBeVisible({ timeout: 10_000 });
+  // Alla cassa l'admin entra direttamente nella Sala (niente Dashboard da
+  // telefono): nessun "Esci" in nessuna sezione.
+  const nav = page.getByRole("navigation", { name: "Sezioni della sala" });
+  await expect(nav).toBeVisible({ timeout: 10_000 });
+  for (const section of [/^tavoli/i, /^prenotazioni$/i, /^storico$/i, /^menù$/i, /^statistiche$/i]) {
+    await nav.getByRole("button", { name: section }).click();
     await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
-    await page.getByRole("button", { name: "Cambia area" }).click();
-    await expect(page.getByText(/^Ciao,/)).toBeVisible({ timeout: 10_000 });
   }
+  // Nemmeno nella gestione completa del menù.
+  await nav.getByRole("button", { name: /^menù$/i }).click();
+  await page.getByRole("button", { name: "Gestione completa" }).click();
+  await expect(page.getByText("Identità del locale", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
+  await page.getByRole("button", { name: "Menù della cassa" }).click();
+  await expect(page.getByRole("region", { name: "Piatti del menù" })).toBeVisible();
 
   // "Esci dall'account" confermato nelle impostazioni del programma.
   await page.evaluate(() => globalThis.__fireLogoutRequest());
   const oneTap = page.getByRole("button", { name: `Accedi come ${TEST_ADMIN.email}` });
   await expect(oneTap).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1000);
-  await expect(page.getByText(/^Ciao,/)).toHaveCount(0); // nessun rientro automatico
+  await expect(nav).toHaveCount(0); // nessun rientro automatico
   await oneTap.click();
-  await expect(page.getByText(/^Ciao,/)).toBeVisible({ timeout: 10_000 });
+  await expect(nav).toBeVisible({ timeout: 10_000 });
+});
+
+test("alla cassa un account della cucina vede l'area Cucina, senza 'Esci'", async ({ page }) => {
+  await installDesktopBridgeMock(page, { savedLogin: TEST_KITCHEN });
+  await page.goto("/?area=staff");
+  await expect(page.getByText("Cucina", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("navigation", { name: "Sezioni della sala" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
 });
 
 test("credenziali della cassa sbagliate mostrano un errore comprensibile", async ({ page }) => {

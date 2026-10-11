@@ -58,14 +58,24 @@ shows "Windows protected your PC" → *More info* → *Run anyway*. Setup, print
 - **Multilingual public menu** (IT/EN/ES/DE/FR): translations are generated
   once from the admin panel (editable by hand) and read by the client with
   no network call on language switch.
-- **Real-time order flow**: the waiter sends the order from their device,
-  the kitchen sees it appear instantly (`Waiter.jsx` ↔ `Kitchen.jsx`,
-  synced via Firestore).
+- **Real-time order flow**: the waiter sends the order from their phone or
+  from the till; every staff device sees it instantly (Firestore realtime
+  listeners). The kitchen gets a **printed ticket** at the till with only the
+  dishes flagged "In comanda" in the menu (drinks excluded), big bold text,
+  no prices, minimal paper (`kitchenTicket.js`, `escpos.js`). A kitchen
+  screen (`Kitchen.jsx`) also exists.
 - **Receipt printing at the till**: "Stampa" on a receipt, from any staff
   device, queues a print job (`printJobs` in Firestore) that the Windows
   till client prints as ESC/POS on the 80mm thermal printer, with live
   status back on the device that asked (`printJobs.js`, `escpos.js`,
   `PrintStation.jsx`, `desktop-client/`).
+- **Till interface**: inside the Windows client the staff area becomes a
+  full-screen touch POS (`TillSala.jsx` and the other `Till*.jsx` screens:
+  tables grid, order with in-context line editing — quantity, offered,
+  discounts — reservations calendar, history, menu management and
+  statistics), built from shared pieces (`TillUi.jsx`) and the same data
+  layer as the phone screens. Every staff feature exists in both versions
+  (rule in `CLAUDE.md`).
 - **Table reservations** with a dedicated staff view (`Reservations.jsx`).
 - **Admin panel**: menu editor with drag & drop category/dish reordering,
   translation management, a configurable printable PDF export (language,
@@ -135,7 +145,7 @@ instead of copying `.env.example` by hand.
 | `npm run emulators:up` / `emulators:down` | Start/stop the emulator container directly. |
 | `npm run seed:emulator` | (Re-)seed the running emulator with demo data — idempotent. |
 | `cd desktop-client && npm install && npx install-electron` | Install the till client's dependencies (also enables `tests/desktop-client.spec.js`). |
-| `cd desktop-client && npm start` | Run the till client locally (settings in its window: tap the printer button). |
+| `cd desktop-client && npm start` | Run the till client locally (settings: gear button bottom left → *Impostazioni stampante*). |
 | `cd desktop-client && npm run dist:win` | Build the Windows installer into `desktop-client/dist/` (works from macOS too). |
 
 See [`CLAUDE.md`](CLAUDE.md) for the full testing workflow, including when
@@ -148,10 +158,13 @@ src/
   MenuApp.jsx        # app shell: routing (URL path/query), menu loading, save/undo
   ClientView.jsx      # public menu (no Firebase Auth import — kept light)
   Admin.jsx            # menu management panel (lazy-loaded, includes Firebase Auth)
-  StaffHome.jsx         # staff landing page / dashboard, role-based area picker
-  Waiter.jsx, Kitchen.jsx, Reservations.jsx, Stats.jsx  # staff areas
+  StaffHome.jsx         # staff landing page / dashboard, role-based area picker (straight to TillSala at the till)
+  Waiter.jsx, Kitchen.jsx, Reservations.jsx, Stats.jsx  # staff areas (phone/browser)
   OrderHistory.jsx, ReceiptOverlay.jsx, PrintMenu.jsx    # shared staff UI
-  PrintStation.jsx, printJobs.js, escpos.js, desktop.js  # receipt print queue + ESC/POS (till client only)
+  TillSala.jsx, TillReservations.jsx, TillHistory.jsx, TillMenu.jsx, TillStats.jsx, TillUi.jsx  # till interface
+  sala-shared.jsx       # Sala logic shared by Waiter.jsx and TillSala.jsx (draft, send, kitchen ticket…)
+  PrintStation.jsx, printJobs.js, usePrintJob.js, escpos.js, kitchenTicket.js, desktop.js  # print queue + ESC/POS (station runs in the till client only)
+  menuEdit.js           # menu edits as pure functions, shared by Admin.jsx and TillMenu.jsx
   shared.jsx, staff-shared.jsx   # cross-cutting UI/data helpers, no Firebase (shared.jsx) vs. auth+role (staff-shared.jsx)
   orders.js, reservationsData.js, statsData.js, menuCosts.js  # Firestore data layer, one module per domain
   firebase-db.js, firebase-auth.js, cloudinary.js  # external service clients

@@ -27,11 +27,20 @@ by `MenuApp.jsx`.
 
 **Category**: `{ id: string, name: string, subtitle: string, visible: boolean, items: Item[] }`
 
-**Item**: `{ id: string, name: string, price: string, description: string, tag?: string, image?: string, visible: boolean, staffOnly: boolean }`
+**Item**: `{ id: string, name: string, price: string, description: string, tag?: string, image?: string, searchTags?: string, visible: boolean, staffOnly: boolean, kitchenTicket?: boolean }`
 — `price` is an Italian-format string (`"12,50"`) or a free-text value like
 `"SU RICHIESTA"` (rendered specially, see `renderPrice` in `ClientView.jsx`).
 `staffOnly` items are never shown on the public menu but are orderable from
-Waiter's "Fuori menù" section.
+Waiter's "Fuori menù" section. `kitchenTicket` ("In comanda"): whether the
+dish is printed on the kitchen ticket when an order is sent (see
+`src/kitchenTicket.js`); **missing = `true`** (menus saved before the flag
+keep printing everything), drinks are typically `false`. A new dish gets
+its category's default (`false` only if no dish in the category is printed).
+
+Both menu editors write these fields: `Admin.jsx` (draft + "Salva
+modifiche", whole document) and the till's `TillMenu.jsx` (one edit at a
+time from `src/menuEdit.js`, applied in a Firestore transaction to the
+current server document — `MenuApp.jsx > handlePatch`).
 
 **Translation**: `{ restaurantName?, tagline?, footerNote?, categories: { [catId]: { name?, subtitle?, items: { [itemId]: { name?, description?, tag? } } } } }`
 — every field is optional per-entry (falls back to the Italian source, see
@@ -98,11 +107,21 @@ for date-range queries).
 
 ## `printJobs/{id}`
 
-Receipt print queue for the thermal printer at the till — see
-`docs/stampa-scontrini.md` for the full flow. One document per "Stampa"
-press: `payload` is a snapshot of the receipt (table label, lines with
-precomputed totals, cover charge, total), so what prints is what was on
-screen even if the order changes meanwhile. `status`: `pending` →
+Print queue for the thermal printer at the till — see
+`docs/stampa-scontrini.md` for the full flow. `type`:
+
+- `"receipt"`: one document per "Stampa" press; `payload` is a snapshot of
+  the receipt (table label, lines with precomputed totals, cover charge,
+  total), so what prints is what was on screen even if the order changes
+  meanwhile (`buildReceiptPayload` in `printJobs.js`).
+- `"kitchen"`: one document per "Invia comanda" that contains at least one
+  dish flagged "In comanda"; `payload` (`buildKitchenTicketPayload` in
+  `kitchenTicket.js`): `{ tableLabel, tableNumber, tableName, covers,
+  timeLabel, waiterName, tableNotes, addition, groups: [{ categoryName,
+  lines: [{ quantity, name, notes }] }] }` — no prices; `addition` = the
+  table already had dishes for the kitchen.
+
+Both carry `orderId`. `status`: `pending` →
 `printing` (claimed by a till client in a transaction, `claimedBy`) →
 `printed` | `error` (`error` holds a readable message); `pending` jobs older
 than 10 minutes become `expired` instead of printing. A retry puts the same

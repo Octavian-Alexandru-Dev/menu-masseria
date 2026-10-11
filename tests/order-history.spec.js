@@ -9,9 +9,19 @@ import { seedClosedOrders, deleteOrdersByWaiterName } from "./helpers/seedClosed
 // chiuse direttamente su Firestore invece di aprirle/chiuderle una a una
 // dall'interfaccia (troppo lento, e non aggiungerebbe copertura oltre al
 // flusso completo già testato in waiter-order.spec.js/kitchen-view.spec.js).
+// Marker univoco per test: i test di questo file partono in parallelo e
+// "DelTest<ms>" è contenuto in "NoDelTest<ms>" se iniziano nello stesso
+// millisecondo (la ricerca della riga per nome li trovava entrambi).
+function uniqueMarker(prefix) {
+  return `${prefix}${Date.now()}x${Math.random().toString(36).slice(2, 7)}`;
+}
+
 test.describe("Storico comande", () => {
   test("mostra il pulsante 'Carica altre' quando ci sono più di una pagina di risultati", async ({ page }) => {
-    const marker = `PagTest${Date.now()}`;
+    // 25 comande scritte e poi cancellate dentro il test: con gli altri file
+    // in parallelo servono più dei 15 secondi standard.
+    test.slow();
+    const marker = uniqueMarker("PagTest");
     await seedClosedOrders(25, marker);
     try {
       await page.goto("/cameriere");
@@ -34,7 +44,7 @@ test.describe("Storico comande", () => {
   });
 
   test("una riga si espande mostrando le voci e il pulsante di stampa apre il preconto in sola lettura", async ({ page }) => {
-    const marker = `ExpTest${Date.now()}`;
+    const marker = uniqueMarker("ExpTest");
     await seedClosedOrders(1, marker);
     try {
       await page.goto("/cameriere");
@@ -70,7 +80,7 @@ test.describe("Storico comande", () => {
   });
 
   test("il cameriere non vede alcun pulsante per eliminare le comande", async ({ page }) => {
-    const marker = `NoDelTest${Date.now()}`;
+    const marker = uniqueMarker("NoDelTest");
     await seedClosedOrders(1, marker);
     try {
       await page.goto("/cameriere");
@@ -90,7 +100,7 @@ test.describe("Storico comande", () => {
   });
 
   test("l'admin elimina una singola comanda dallo storico con doppia conferma", async ({ page }) => {
-    const marker = `DelTest${Date.now()}`;
+    const marker = uniqueMarker("DelTest");
     await seedClosedOrders(1, marker);
     try {
       await page.goto("/cameriere");
@@ -134,7 +144,7 @@ test.describe("Storico comande", () => {
     // default (es. stats-dashboard.spec.js). Qui si verifica solo che il
     // pulsante sia riservato all'admin e che il primo click armi la
     // conferma senza cancellare nulla.
-    const marker = `ClearAllTest${Date.now()}`;
+    const marker = uniqueMarker("ClearAllTest");
     await seedClosedOrders(1, marker);
     try {
       await page.goto("/cameriere");

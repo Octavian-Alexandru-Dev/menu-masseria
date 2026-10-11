@@ -4,7 +4,10 @@
 // till can also replace a waiter's phone (open tables, take and send
 // orders, edit lines, receipts, closing) when nobody has one at hand.
 // Storico and Prenotazioni have till versions too (TillHistory.jsx,
-// TillReservations.jsx), built from the same pieces (TillUi.jsx).
+// TillReservations.jsx) and, for admin accounts, so do Menù and Statistiche
+// (TillMenu.jsx, TillStats.jsx): every section built from the same pieces
+// (TillUi.jsx) and reached from the same top bar — at the till there's no
+// phone-style Dashboard to go back to (StaffHome.jsx).
 //
 // Layout follows established guidance (docs/stampa-scontrini.md §4.1):
 //  - floor at a glance: every open table is a tile in a grid that fills the
@@ -23,7 +26,7 @@
 // "sent" (see the Cucina note in docs/stampa-scontrini.md).
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import {
-  Plus, X, Users, Clock, Search, Utensils, CalendarDays, History, LayoutGrid,
+  Plus, X, Users, Clock, Search, Utensils, CalendarDays, History, LayoutGrid, BookOpen, BarChart3,
   Play, Send, Lock, Printer, LogOut, Gift, Percent, RotateCcw, Trash2, Check, Keyboard,
 } from "lucide-react";
 import {
@@ -41,6 +44,8 @@ import {
 
 const TillHistory = lazy(() => import("./TillHistory"));
 const TillReservations = lazy(() => import("./TillReservations"));
+const TillMenu = lazy(() => import("./TillMenu"));
+const TillStats = lazy(() => import("./TillStats"));
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -55,20 +60,24 @@ const DATE_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "num
 
 /* --------------------------------- top bar --------------------------------- */
 
-function TopBar({ t, session, tab, onTab, openCount }) {
+function TopBar({ t, session, tab, onTab, openCount, withAdmin }) {
   const now = useClock();
   const tabs = [
     { key: "floor", label: "Tavoli", icon: LayoutGrid, badge: openCount },
     { key: "reservations", label: "Prenotazioni", icon: CalendarDays },
     { key: "history", label: "Storico", icon: History },
+    ...(withAdmin ? [
+      { key: "menu", label: "Menù", icon: BookOpen },
+      { key: "stats", label: "Statistiche", icon: BarChart3 },
+    ] : []),
   ];
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 18, padding: "10px 20px", minHeight: 76, flexShrink: 0,
+      display: "flex", alignItems: "center", gap: 14, padding: "10px 16px", minHeight: 76, flexShrink: 0,
       background: t.card, borderBottom: `1px solid ${t.line}`,
     }}>
-      <Logo width={64} />
-      <nav aria-label="Sezioni della sala" style={{ display: "flex", gap: 8 }}>
+      <Logo width={withAdmin ? 52 : 64} />
+      <nav aria-label="Sezioni della sala" style={{ display: "flex", gap: 6, minWidth: 0, overflowX: "auto" }}>
         {tabs.map((tb) => {
           const active = tab === tb.key;
           return (
@@ -79,7 +88,7 @@ function TopBar({ t, session, tab, onTab, openCount }) {
               aria-current={active ? "page" : undefined}
               className="mdp-btn"
               style={{
-                display: "flex", alignItems: "center", gap: 8, minHeight: 56, padding: "0 20px", borderRadius: 12,
+                display: "flex", alignItems: "center", gap: 8, minHeight: 56, padding: withAdmin ? "0 14px" : "0 20px", borderRadius: 12, flexShrink: 0, whiteSpace: "nowrap",
                 border: `1.5px solid ${active ? t.primary : t.line}`, background: active ? t.primary : t.bg,
                 color: active ? t.bg : t.ink, fontSize: 17, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
               }}
@@ -101,7 +110,7 @@ function TopBar({ t, session, tab, onTab, openCount }) {
       {!logoutHiddenAtTill() && (
         <TillButton t={t} icon={LogOut} size={TOUCH} onClick={staffLogout} style={{ fontSize: 15, color: t.inkSoft }}>Esci</TillButton>
       )}
-      <div style={{ marginLeft: "auto", textAlign: "right", fontFamily: FONT }}>
+      <div style={{ marginLeft: "auto", textAlign: "right", fontFamily: FONT, flexShrink: 0, whiteSpace: "nowrap" }}>
         <div style={{ fontSize: 26, fontWeight: 700, color: t.ink, lineHeight: 1.1 }}>
           {now.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}
         </div>
@@ -512,8 +521,8 @@ function TicketLine({ t, line, sent, onSelect }) {
   );
 }
 
-function OrderView({ t, menu, menuCosts, order, onBack }) {
-  const d = useOrderDraft({ menu, menuCosts, order });
+function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
+  const d = useOrderDraft({ menu, menuCosts, order, senderName });
   const [categoryId, setCategoryId] = useState(null);
   const [editing, setEditing] = useState(null); // { lineId, sent }
   const printer = usePrintJob();
@@ -619,6 +628,10 @@ function OrderView({ t, menu, menuCosts, order, onBack }) {
           <TillButton t={t} variant="primary" size={64} icon={Send} disabled={d.sending || d.draftCount === 0} onClick={d.send}>
             {d.sending ? "Invio…" : `Invia comanda (${d.draftCount})`}
           </TillButton>
+          <PrintStatusLine status={d.kitchenTicket.status} label="Stampa comanda cucina" prefix="Comanda cucina" />
+          {d.kitchenTicket.failed && (
+            <TillButton t={t} icon={Printer} disabled={d.kitchenTicket.busy} onClick={d.kitchenTicket.retry}>Ristampa comanda cucina</TillButton>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <TillButton t={t} icon={Printer} disabled={printer.busy} onClick={printReceipt} style={{ padding: "0 8px", whiteSpace: "nowrap" }}>{printer.failed ? "Riprova stampa" : "Stampa preconto"}</TillButton>
             <TillButton t={t} variant="danger" icon={Lock} disabled={d.closing} onClick={doClose} style={{ padding: "0 8px", whiteSpace: "nowrap" }}>{d.closing ? "Chiusura…" : "Chiudi tavolo"}</TillButton>
@@ -729,10 +742,14 @@ function OrderView({ t, menu, menuCosts, order, onBack }) {
 
 /* ---------------------------------- shell ---------------------------------- */
 
-export default function TillSala({ menu, session, initialTab = "floor" }) {
+// admin: Gestione menù props from StaffHome/MenuApp (setMenu, onSave, onPatch…)
+// — present only for admin accounts, and it adds the Menù and Statistiche
+// sections.
+export default function TillSala({ menu, session, initialTab = "floor", admin = null }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
   const sala = useSalaData({ menu, session });
-  const [tab, setTab] = useState(initialTab); // floor | reservations | history
+  const withAdmin = Boolean(admin);
+  const [tab, setTab] = useState(() => (!withAdmin && (initialTab === "menu" || initialTab === "stats") ? "floor" : initialTab)); // floor | reservations | history | menu | stats
   const [openOrderId, setOpenOrderId] = useState(null);
   const [dialog, setDialog] = useState(null); // { reservation? }
   const [busy, setBusy] = useState(false);
@@ -765,7 +782,19 @@ export default function TillSala({ menu, session, initialTab = "floor" }) {
     // is at the till (--mdp-area-bar, 0 otherwise).
     <div className="mdp-root" style={{ height: "calc(100vh - var(--mdp-area-bar, 0px))", display: "flex", flexDirection: "column", background: t.bg, overflow: "hidden" }}>
       <GlobalStyle t={t} />
-      <TopBar t={t} session={session} tab={tab} onTab={goTab} openCount={sala.orders.length} />
+      <TopBar t={t} session={session} tab={tab} onTab={goTab} openCount={sala.orders.length} withAdmin={withAdmin} />
+
+      {tab === "menu" && withAdmin && (
+        <Suspense fallback={loading}>
+          <TillMenu t={t} menu={menu} admin={admin} />
+        </Suspense>
+      )}
+
+      {tab === "stats" && withAdmin && (
+        <Suspense fallback={loading}>
+          <TillStats t={t} />
+        </Suspense>
+      )}
 
       {tab === "history" && (
         <Suspense fallback={loading}>
@@ -784,7 +813,7 @@ export default function TillSala({ menu, session, initialTab = "floor" }) {
       )}
 
       {tab === "floor" && sala.ordersReady && openOrderId && currentOrder && (
-        <OrderView key={currentOrder.id} t={t} menu={menu} menuCosts={sala.menuCosts} order={currentOrder} onBack={() => setOpenOrderId(null)} />
+        <OrderView key={currentOrder.id} t={t} menu={menu} menuCosts={sala.menuCosts} order={currentOrder} senderName={session.name} onBack={() => setOpenOrderId(null)} />
       )}
 
       {tab === "floor" && sala.ordersReady && openOrderId && !currentOrder && (

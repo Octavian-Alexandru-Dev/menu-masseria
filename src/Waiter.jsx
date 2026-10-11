@@ -274,12 +274,12 @@ function CoversEditor({ t, order }) {
   );
 }
 
-function OrderDetail({ t, menu, menuCosts, order, onBack }) {
+function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
   const {
     draft, draftCount, addToDraft, changeQty, removeDraftLine, setDraftNote, send, sending, sendError, closeTable, closing,
     searchEnabled, itemSearch, setItemSearch, isItemSearching, filteredNormalItems, filteredOffMenuItems,
-    searchTagChips, toggleSearchTag, sentByCategory, totalCents,
-  } = useOrderDraft({ menu, menuCosts, order });
+    searchTagChips, toggleSearchTag, sentByCategory, totalCents, kitchenTicket,
+  } = useOrderDraft({ menu, menuCosts, order, senderName });
   const [confirmClose, setConfirmClose] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
 
@@ -482,6 +482,24 @@ function OrderDetail({ t, menu, menuCosts, order, onBack }) {
           position: "fixed", left: 0, right: 0, bottom: 0, background: t.card, borderTop: `1px solid ${t.line}`,
           padding: "12px 16px",
         }}>
+          {kitchenTicket.status && (
+            <div style={{ maxWidth: 640, margin: "0 auto 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div role="status" aria-label="Stampa comanda cucina" style={{
+                fontSize: TYPE.tinyPlus, fontWeight: 600,
+                color: kitchenTicket.status.tone === "error" ? t.accent2 : kitchenTicket.status.tone === "ok" ? t.secondary : t.inkSoft,
+              }}>
+                Comanda cucina: {kitchenTicket.status.text}
+              </div>
+              {kitchenTicket.failed && (
+                <button onClick={kitchenTicket.retry} disabled={kitchenTicket.busy} className="mdp-btn" style={{
+                  minHeight: 40, padding: "0 12px", background: "none", border: `1px solid ${t.line}`, color: t.ink,
+                  borderRadius: 8, fontSize: TYPE.tinyPlus, cursor: "pointer", whiteSpace: "nowrap",
+                }}>
+                  Ristampa
+                </button>
+              )}
+            </div>
+          )}
           <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div>
               <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink }}>Totale € {formatCentsAsPrice(totalCents)}</div>
@@ -625,7 +643,7 @@ function WaiterPanel({ menu, session }) {
         <NewTableForm t={t} onCancel={() => setView({ mode: "list" })} onCreate={createTable} busy={creating} />
       )}
       {ordersReady && view.mode === "detail" && currentOrder && (
-        <OrderDetail t={t} menu={menu} menuCosts={menuCosts} order={currentOrder} onBack={() => setView({ mode: "list" })} />
+        <OrderDetail t={t} menu={menu} menuCosts={menuCosts} order={currentOrder} senderName={session.name} onBack={() => setView({ mode: "list" })} />
       )}
       {ordersReady && view.mode === "detail" && !currentOrder && (
         <div style={{ textAlign: "center", padding: 40, color: t.inkSoft }}>

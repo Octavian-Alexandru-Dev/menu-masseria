@@ -28,3 +28,9 @@ export function subscribeMenuCosts(onChange, onError) {
 export async function saveMenuCosts(costs) {
   return setDoc(menuCostsRef(), costs);
 }
+
+// One dish's cost, without rewriting the others (the till's menu editor
+// saves one dish at a time — TillMenu.jsx).
+export async function saveMenuCost(itemId, value) {
+  return setDoc(menuCostsRef(), { [itemId]: value }, { merge: true });
+}

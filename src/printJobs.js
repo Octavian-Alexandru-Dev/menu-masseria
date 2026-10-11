@@ -1,4 +1,5 @@
-// Print queue for receipts ("preconto") — see docs/stampa-scontrini.md.
+// Print queue for receipts ("preconto") and kitchen tickets ("comanda" for
+// the kitchen board) — see docs/stampa-scontrini.md.
 //
 // A phone's browser can't open a raw TCP connection to the thermal printer,
 // so whoever presses "Stampa" (a waiter's phone, the till itself, ...) only
@@ -18,6 +19,7 @@ import { db } from "./firebase-db";
 import { auth } from "./firebase-auth";
 import { parsePriceToCents, tableIdentity } from "./shared";
 import { itemsTotalCents, copertoTotalCents } from "./orders";
+import { buildKitchenTicketPayload } from "./kitchenTicket";
 
 export const PRINT_JOBS_COLLECTION = "printJobs";
 
@@ -75,6 +77,29 @@ export async function enqueueReceiptPrint(order, menu) {
     type: "receipt",
     orderId: order.id,
     payload: buildReceiptPayload(order, menu),
+    status: "pending",
+    createdAt: serverTimestamp(),
+    requestedBy: { uid: user?.uid || null, email: user?.email || null },
+    claimedBy: null,
+    claimedAt: null,
+    finishedAt: null,
+    error: null,
+  });
+  return ref.id;
+}
+
+// Kitchen ticket for the lines just sent with "Invia comanda" (see
+// kitchenTicket.js): only dishes flagged "In comanda" are printed. `order` is
+// the order before these lines were added. Resolves to the job id, or null
+// when nothing in the batch goes to the kitchen (no job is created).
+export async function enqueueKitchenTicket(order, lines, menu, senderName) {
+  const payload = buildKitchenTicketPayload(order, lines, menu, { senderName });
+  if (!payload) return null;
+  const user = auth.currentUser;
+  const ref = await addDoc(printJobsRef(), {
+    type: "kitchen",
+    orderId: order.id,
+    payload,
     status: "pending",
     createdAt: serverTimestamp(),
     requestedBy: { uid: user?.uid || null, email: user?.email || null },

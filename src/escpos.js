@@ -204,3 +204,85 @@ export function buildReceipt(payload, { logo = null, columns = RECEIPT_COLUMNS }
   raw(0x0a, 0x0a, 0x0a, GS, 0x56, 0x42, 0x00); // feed + partial cut
   return Uint8Array.from(out);
 }
+
+// Kitchen ticket ("comanda" for the kitchen board, see kitchenTicket.js):
+// read from a distance by someone with less than perfect eyesight, and
+// printed many times a night, so:
+//  - everything bold, dishes at double width and height (21 columns), the
+//    table number at triple size (14 columns) — the first thing looked for;
+//  - notes (allergies, "senza glutine"…) in reverse print, so they can't be
+//    missed; "AGGIUNTA" the same way when the table already has a ticket up;
+//  - no logo, no prices, no blank lines, no closing text: the paper is cut
+//    right after the last dish.
+export const KITCHEN_DISH_COLUMNS = RECEIPT_COLUMNS / 2;
+export const KITCHEN_TABLE_COLUMNS = Math.floor(RECEIPT_COLUMNS / 3);
+
+export function buildKitchenTicket(payload, { columns = RECEIPT_COLUMNS } = {}) {
+  const out = [];
+  const raw = (...bytes) => out.push(...bytes);
+  const text = (s) => out.push(...encodeText(s));
+  const line = (s = "") => text(s + "\n");
+  const align = (n) => raw(ESC, 0x61, n);
+  const size = (w, h) => raw(GS, 0x21, ((w - 1) << 4) | (h - 1));
+  const reverse = (on) => raw(GS, 0x42, on ? 1 : 0);
+  const dishColumns = Math.floor(columns / 2);
+  const tableColumns = Math.floor(columns / 3);
+
+  raw(ESC, 0x40, ESC, 0x74, CP858_ESC_T);
+  raw(ESC, 0x45, 1); // bold for the whole ticket: darker, easier to read
+
+  align(1);
+  size(3, 3);
+  const tableTitle = payload.tableNumber != null ? `TAVOLO ${payload.tableNumber}` : payload.tableLabel;
+  for (const s of wrapText(tableTitle, tableColumns)) line(s);
+  if (payload.tableName) {
+    size(2, 2);
+    for (const s of wrapText(payload.tableName, dishColumns)) line(s);
+  }
+  size(1, 2);
+  const info = [payload.timeLabel, payload.covers, payload.waiterName].filter(Boolean).join(" - ");
+  if (info) for (const s of wrapText(info, columns)) line(s);
+  if (payload.addition) {
+    size(2, 2);
+    reverse(true);
+    line(" AGGIUNTA ");
+    reverse(false);
+  }
+  align(0);
+  if (payload.tableNotes) {
+    size(2, 2);
+    reverse(true);
+    for (const s of wrapText(`! ${payload.tableNotes}`, dishColumns)) line(s);
+    reverse(false);
+  }
+
+  for (const group of payload.groups || []) {
+    size(1, 1);
+    line("-".repeat(columns));
+    if (group.categoryName) {
+      size(1, 2);
+      line(group.categoryName.toUpperCase());
+    }
+    for (const l of group.lines) {
+      size(2, 2);
+      const prefix = `${l.quantity}x `;
+      const wrapped = wrapText(l.name, dishColumns - prefix.length);
+      wrapped.forEach((s, i) => line((i === 0 ? prefix : " ".repeat(prefix.length)) + s));
+      if (l.notes) {
+        // Indent outside the reverse print, so only the note is highlighted.
+        for (const s of wrapText(`> ${l.notes}`, dishColumns - prefix.length)) {
+          text(" ".repeat(prefix.length));
+          reverse(true);
+          text(s);
+          reverse(false);
+          line();
+        }
+      }
+    }
+  }
+
+  size(1, 1);
+  raw(ESC, 0x45, 0);
+  raw(0x0a, GS, 0x56, 0x42, 0x00); // feed to the cutter + partial cut
+  return Uint8Array.from(out);
+}

@@ -6,7 +6,7 @@
 // /cameriere and /cucina remain directly reachable too (useful for a
 // dedicated device, e.g. the fixed kitchen tablet): this page is the common
 // entry point, not the only one.
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, BarChart3 } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel, useUrlState, BackButton } from "./shared";
 import {
@@ -19,6 +19,12 @@ import Waiter from "./Waiter";
 import Kitchen from "./Kitchen";
 import Reservations from "./Reservations";
 import Stats from "./Stats";
+import { getDesktopBridge } from "./desktop";
+
+const TillSala = lazy(() => import("./TillSala"));
+
+// Dashboard choice (?sezione) → section of the till's top bar.
+const TILL_TAB_FOR_AREA = { waiter: "floor", reservations: "reservations", admin: "menu", stats: "stats" };
 
 const TODAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
@@ -103,7 +109,7 @@ function BackToAreasBar({ t, onBack }) {
   );
 }
 
-export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo }) {
+export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo, onPatch, hasUnsavedChanges }) {
   const session = useStaffSession();
   // Section chosen in the Dashboard (admin/waiter/kitchen/reservations),
   // synced with ?sezione in the URL — so here too the browser's Back button
@@ -139,7 +145,8 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   ].filter(Boolean);
 
   const chosen = area || (coreOptions.length === 1 ? coreOptions[0].key : null);
-  const showingDashboard = session.status === "ready" && !chosen && coreOptions.length > 0;
+  const atTill = Boolean(getDesktopBridge()) && canWaiter;
+  const showingDashboard = !atTill && session.status === "ready" && !chosen && coreOptions.length > 0;
 
   // The Dashboard's live counters are only mounted when the Dashboard is
   // actually shown: an account that jumps straight into an area
@@ -183,6 +190,23 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
         message="Questo account non è abilitato per nessuna area riservata."
         onLogout={staffLogout}
       />
+    );
+  }
+
+  // At the till (Windows client) every area a waiter or admin needs is a
+  // section of one full-screen interface (TillSala.jsx: Tavoli, Prenotazioni,
+  // Storico and, for admins, Menù and Statistiche) — no phone-style Dashboard
+  // and "Cambia area" in between. The Cucina area isn't offered there: the
+  // kitchen has no screen, it gets the printed ticket (kitchenTicket.js).
+  if (atTill && !menu && !saveError) return <StaffLoadingScreen theme={theme} />;
+  if (atTill && menu) {
+    const admin = canAdmin
+      ? { setMenu, onSave, saving, savedAt, saveError, onUndo, canUndo, onPatch, hasUnsavedChanges }
+      : null;
+    return (
+      <Suspense fallback={<StaffLoadingScreen theme={theme} />}>
+        <TillSala menu={menu} session={session} initialTab={TILL_TAB_FOR_AREA[area] || "floor"} admin={admin} />
+      </Suspense>
     );
   }
 

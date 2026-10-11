@@ -2,7 +2,9 @@
 
 Il preconto (documento **non fiscale**) si stampa sulla stampante termica
 della cassa premendo "Stampa", da qualunque dispositivo dello staff: il
-telefono di un cameriere, un tablet o la cassa stessa.
+telefono di un cameriere, un tablet o la cassa stessa. Sulla stessa
+stampante esce anche la **comanda per la cucina** a ogni "Invia comanda",
+solo con i piatti segnati "In comanda" (§2.1).
 
 **Download dell'installer:**
 [Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/menu-masseria/releases/latest/download/Masseria-Cassa-Setup.exe)
@@ -31,9 +33,11 @@ non cambia dopo un riavvio. Se dovesse cambiare comunque, si risolve da
 Telefono cameriere / cassa                   Firestore                    Client Windows (cassa)
   "Stampa" nel preconto  ──addDoc──►  printJobs/{id} status=pending  ──onSnapshot──►  PrintStation.jsx
                                                                             transazione: pending → printing
+  "Invia comanda"       ──addDoc──►  (type=kitchen, solo piatti
+                                      "In comanda")
   stato in tempo reale  ◄──────────  printing → printed | error  ◄──────  escpos.js → bytes
-  (ReceiptOverlay.jsx)                                                     window.mdpDesktop.printRaw
-                                                                            → main.js → TCP 9100 → stampante
+  (ReceiptOverlay.jsx,                                                     window.mdpDesktop.printRaw
+   sotto "Invia comanda")                                                  → main.js → TCP 9100 → stampante
 ```
 
 - Un browser non può aprire una connessione TCP diretta verso la stampante:
@@ -80,6 +84,41 @@ importo allineato a destra), coperto, **TOTALE** a doppia altezza, riquadro
 "**Qualcosa non torna?** Controlla il tuo conto e se trovi un errore, dillo a
 uno di noi. Lo sistemiamo subito con un sorriso.", "Grazie e a presto!",
 "DOCUMENTO NON FISCALE", taglio.
+
+### 2.1 Comanda per la cucina
+
+In cucina non c'è uno schermo: le comande si appendono al tabellone. A ogni
+**Invia comanda** (dal telefono o dalla cassa) la cassa stampa un biglietto
+con **solo i piatti appena inviati che hanno "In comanda" acceso** nel menù
+(`src/kitchenTicket.js`). Le bevande, per esempio, non si stampano.
+
+- **Il flag "In comanda"** si imposta per ogni piatto: alla cassa in
+  *Menù → piatto → In comanda*, oppure per tutta la categoria con *Tutti in
+  comanda / Nessuno in comanda*; dal telefono in Gestione menù
+  (interruttore "In comanda (stampato in cucina)"). Se un piatto non ha
+  ancora il campo vale **sì**: meglio una bibita stampata per sbaglio che un
+  piatto che la cucina non vede. Un piatto nuovo eredita l'impostazione
+  della sua categoria.
+- **Cosa c'è sul biglietto** (`buildKitchenTicket` in `src/escpos.js`):
+  - in alto il **numero del tavolo** a dimensione tripla, poi il nome del
+    tavolo se c'è;
+  - ora, coperti e chi ha inviato;
+  - **AGGIUNTA** in negativo se il tavolo aveva già piatti per la cucina;
+  - le note del tavolo (allergie) in negativo;
+  - i piatti per portata, nell'ordine del menù: nome della categoria, poi
+    "2x Orecchiette" a doppia altezza e larghezza (21 caratteri per riga) e
+    la nota del piatto in negativo.
+- **Pensata per essere letta da lontano e con poca carta:** tutto in
+  grassetto, nessun logo, nessun prezzo, nessuna riga vuota né testo finale,
+  taglio subito dopo l'ultimo piatto.
+- **Stato visibile a chi invia:** sotto "Invia comanda" compare "Comanda
+  cucina: Stampato alla cassa" (o in attesa / errore, come per il
+  preconto). In caso di errore c'è **Ristampa comanda cucina** (alla
+  cassa) o **Ristampa** (telefono). Se nessun piatto va in cucina, non
+  viene stampato nulla e non compare nessuno stato.
+- **Limite noto:** le modifiche dopo l'invio (quantità cambiata, riga
+  rimossa) non stampano un biglietto di variazione. Va detto a voce in
+  cucina, oppure si può aggiungere in futuro.
 
 ## 3. Installazione sulla cassa
 
@@ -176,8 +215,8 @@ chi fa cosa e si può revocare senza toccare gli altri.
    documento = l'UID copiato e due campi stringa:
    - `name`: `Cassa`
    - `role`: `waiter` (vede la Sala con preconti e chiusura tavoli, oltre a
-     storico e prenotazioni). Usa `admin` solo se alla cassa devono servire
-     anche gestione menù e statistiche.
+     storico e prenotazioni). Usa `admin` se alla cassa devono servire
+     anche le sezioni **Menù** e **Statistiche** (§4.1).
 
    In alternativa, dal pannello **Gestione menù** dell'app c'è la sezione
    staff per assegnare il ruolo a un UID.
@@ -247,13 +286,16 @@ regole della Sala da telefono (`src/sala-shared.jsx`), quindi la cassa può
 sostituire il telefono di un cameriere: aprire tavoli, prendere e inviare
 comande, preconto, chiusura.
 
+- **Un'unica interfaccia, senza Dashboard:** alla cassa si entra subito
+  nella Sala. Le sezioni stanno sempre nella barra in alto: **Tavoli ·
+  Prenotazioni · Storico** e, per gli account admin, **Menù · Statistiche**.
+  A destra ci sono l'ora, il turno e l'utente. Non c'è la Cucina: in cucina
+  arriva la comanda stampata (§2.1). Un account con ruolo "cucina" alla
+  cassa vede comunque l'area Cucina.
 - **Tavoli:** griglia che riempie lo schermo, ordinata per numero. Ogni
   riquadro mostra numero, nome, coperti, tempo, totale e lo stato **scritto**
-  su un colore fisso: grigio "Da ordinare", ambra "In cucina · x/y uscite",
-  verde "Tutto servito", blu "Preconto confermato". In alto ci sono le
-  sezioni Tavoli / Prenotazioni / Storico, l'ora, il turno e l'utente; ci
-  sono anche i filtri "Aperti" / "Chiusi nel turno" e, a destra, le
-  prenotazioni di oggi con "Avvia".
+  su un colore fisso (vedi *Stato dei tavoli senza cucina* sotto). A destra
+  ci sono le prenotazioni di oggi con "Avvia".
 - **Nuovo tavolo:** tastierino numerico a schermo (la cassa non ha
   tastiera), coperti con +/−, nome e note facoltativi. Se il tavolo è già
   aperto lo segnala e offre "Vai al tavolo".
@@ -289,6 +331,35 @@ comande, preconto, chiusura.
   tavolo con +/−; azioni Conferma / Rifiuta / Modifica / Annulla e **Avvia**
   (il giorno stesso: apre il tavolo, chiedendo il numero col tastierino se
   manca).
+- **Menù** (solo admin, `src/TillMenu.jsx`): stesso schema della comanda.
+  A sinistra le categorie (schede) e i piatti a riquadri; ogni riquadro dice
+  prezzo e, scritto, *Non in comanda*, *Nascosto* o *Fuori menù*.
+  - **Piatto nella barra laterale**: nome, prezzo dal tastierino (in
+    centesimi) o "Su richiesta", interruttori grandi *In comanda* /
+    *Disponibile* / *Fuori menù*, descrizione, etichetta, costo interno, tag
+    di ricerca, foto, categoria. Nulla cambia finché non si preme **Salva**.
+    *Sposta prima/dopo* ed *Elimina* (con conferma) agiscono subito.
+  - **Nessun piatto selezionato**: la barra mostra la categoria (nome,
+    sottotitolo, visibilità, *Tutti/Nessuno in comanda*, posizione,
+    eliminazione).
+  - **Impostazioni**: coperto adulti/bambini dal tastierino, ricerca piatti,
+    **traduzioni automatiche** dei testi mancanti per lingua.
+  - **Gestione completa**: apre l'editor classico per ciò che alla cassa
+    serve di rado (traduzioni testo per testo, PDF, backup JSON, link,
+    personale). Uscendo con modifiche non salvate chiede di salvarle.
+  - **Ogni "Salva" modifica solo quel piatto o quella categoria,** dentro una
+    transazione sul menù com'è sul server in quel momento: la cassa resta
+    aperta tutto il giorno e non riscrive mai la sua copia intera,
+    cancellando ciò che è stato cambiato nel frattempo da un telefono. Le
+    modifiche fatte altrove compaiono da sole, senza ricaricare (anche nella
+    Sala: prezzi e piatti nuovi).
+- **Statistiche** (solo admin, `src/TillStats.jsx`): periodo a tocco (Oggi,
+  Ieri, Ultimi 7 giorni, Mese corrente, Ultimi 30 giorni, Anno corrente),
+  numeri grandi (incasso, scontrino medio, coperti, comande, piatti, margine),
+  confronto con il periodo precedente (variazione scritta con freccia),
+  classifica dei piatti per quantità/incasso/margine e, nella barra
+  laterale, incasso per categoria e per cameriere. Il confronto su date
+  libere e i grafici orari restano nella versione da telefono/computer.
 - **Stampa interrotta:** se il programma della cassa si chiude mentre sta
   stampando, dopo 30 secondi chi ha chiesto la stampa vede "La stampa si è
   interrotta" e può premere **Riprova stampa**.
@@ -316,15 +387,18 @@ Principi seguiti (nessuna invenzione da zero):
   schede invece di codici).
 
 Sui telefoni l'interfaccia resta quella di prima (pensata per lo schermo
-piccolo, con gli stati della cucina finché esiste l'area Cucina).
+piccolo, con gli stati della cucina finché esiste l'area Cucina). Ogni
+funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
 
-
+## 5. Risoluzione problemi
 
 | Sintomo | Cosa fare |
 |---|---|
 | Sul telefono resta "La cassa non ha ancora preso la stampa" | Il client della cassa è acceso? È stato fatto il login (pallino non grigio)? La cassa è connessa a internet? |
 | "La stampante non risponde" / "Indirizzo non raggiungibile" | Stampante accesa, cavo di rete collegato? Poi **Verifica stato**. Se l'IP è cambiato: **Cerca stampanti in rete → Usa questa → Salva**. |
-| "Carta esaurita" | Sostituisci il rotolo, poi **Riprova stampa** dal preconto. |
+| "Carta esaurita" | Sostituisci il rotolo, poi **Riprova stampa** dal preconto (o **Ristampa comanda cucina** sotto "Invia comanda"). |
+| Una bibita esce sulla comanda della cucina (o un piatto non esce) | Cassa → Menù → tocca il piatto → **In comanda** → Salva. Per tutte le bevande insieme: scheda Bevande → **Nessuno in comanda**. |
+| Alla cassa non ci sono Menù e Statistiche | Servono a un account **admin**: cambia `role` dell'account della cassa (§3.3). |
 | Caratteri strani al posto di accenti o € | La stampante non è in CP858: segnalalo, il layout si corregge in `src/escpos.js` con un semplice deploy. |
 | Schermata "Impossibile caricare l'app" | Manca internet sulla cassa. La pagina riprova da sola ogni 30 secondi, oppure premi **Riprova**. |
 | Interfaccia troppo piccola o grande | Impostazioni → Zoom interfaccia. |
@@ -397,4 +471,16 @@ piccolo, con gli stati della cucina finché esiste l'area Cucina).
 | Cassa: preconto stampato direttamente dalla barra laterale, avviso se ci sono piatti non inviati | `tests/till-sala.spec.js` |
 | Cassa: Storico con dettaglio e ristampa preconto | `tests/till-sala.spec.js` |
 | Cassa: Prenotazioni — nuova con orari a tocco, conferma, avvio con tastierino che apre il tavolo; calendario con prenotazioni e coperti del giorno | `tests/till-sala.spec.js` |
-| Non coperto automaticamente: stampa fisica su POSBANK, ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, apertura durante l'installer (notifica + uscita), notifiche di Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |
+| Comanda per la cucina: solo piatti "In comanda", ordine del menù, piatti tolti dal menù stampati, AGGIUNTA solo se c'erano già piatti per la cucina, niente da stampare con sole bevande | `tests/escpos.spec.js` |
+| Comanda stampata: tavolo a dimensione tripla, piatti a doppia (≤ 21 colonne), note e AGGIUNTA in negativo, grassetto, niente prezzi/logo, taglio subito | `tests/escpos.spec.js` |
+| Piatto nuovo: "In comanda" ereditato dalla categoria | `tests/escpos.spec.js`, `tests/till-sala.spec.js` |
+| Cassa: "Invia comanda" stampa la comanda (senza bevande), stato "Comanda cucina", nessuna stampa con sole bevande, AGGIUNTA al secondo invio | `tests/till-sala.spec.js` |
+| Telefono: dopo "Invia comanda" lo stato della comanda cucina è visibile (in attesa con cassa spenta) | `tests/waiter-order.spec.js` |
+| Gestione menù da telefono: interruttore "In comanda" | `tests/admin.spec.js` |
+| Cassa (admin): niente Dashboard, sezioni Menù e Statistiche nella barra; un cameriere non le vede | `tests/till-sala.spec.js`, `tests/till-client.spec.js` |
+| Cassa: Menù — piatto nuovo con prezzo dal tastierino, modifica (disponibile, in comanda) solo con "Salva", eliminazione con conferma, salvataggio verificato sul server | `tests/till-sala.spec.js` |
+| Cassa: Menù — le modifiche da un altro dispositivo compaiono da sole e un salvataggio dalla cassa non le cancella | `tests/till-sala.spec.js` |
+| Cassa: Menù — "Tutti/Nessuno in comanda" per categoria | `tests/till-sala.spec.js` |
+| Cassa: Statistiche — periodo a tocco (≥ 48px), numeri, classifica, confronto con il periodo precedente | `tests/till-sala.spec.js` |
+| Cassa: account cucina → area Cucina senza "Esci"; "Gestione completa" senza "Esci" | `tests/till-client.spec.js` |
+| Non coperto automaticamente: stampa fisica su POSBANK (anche la leggibilità reale della comanda a doppia/tripla dimensione), ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, apertura durante l'installer (notifica + uscita), notifiche di Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |

@@ -41,3 +41,16 @@ export async function deletePrintJobsByTableLabel(tableLabel) {
     console.error(`[test cleanup] Eliminazione stampe "${tableLabel}" fallita:`, err.message || err);
   }
 }
+
+// Diagnostica per i test di stampa: stato delle richieste di un tavolo (chi
+// le ha prese, quando, con quale esito), da allegare al report quando un
+// test fallisce.
+export async function describePrintJobsByTableLabel(tableLabel) {
+  await ensureSignedIn();
+  const snap = await getDocs(query(collection(db, "printJobs"), where("payload.tableLabel", "==", tableLabel)));
+  return snap.docs.map((d) => {
+    const j = d.data();
+    const ms = (ts) => (ts?.toMillis ? ts.toMillis() : null);
+    return { id: d.id, type: j.type, status: j.status, claimedBy: j.claimedBy, error: j.error, createdAt: ms(j.createdAt), claimedAt: ms(j.claimedAt), finishedAt: ms(j.finishedAt) };
+  });
+}

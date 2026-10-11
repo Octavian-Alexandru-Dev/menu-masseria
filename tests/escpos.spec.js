@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
 import {
-  encodeText, wrapText, labelAmountLines, buildReceipt, grayToMonoBitmap, RECEIPT_COLUMNS,
+  encodeText, wrapText, labelAmountLines, buildReceipt, buildKitchenTicket, grayToMonoBitmap, RECEIPT_COLUMNS,
 } from "../src/escpos.js";
+import { buildKitchenTicketPayload, defaultKitchenTicketForCategory } from "../src/kitchenTicket.js";
 
 // Generatore ESC/POS dello scontrino (src/escpos.js), funzioni pure senza
 // browser. I valori attesi sono quelli verificati sulla stampante vera
@@ -60,4 +61,79 @@ test("il logo diventa un raster ESC/POS largo quanto la carta", () => {
   // GS v 0, 64 byte per riga (512 punti), 3 righe.
   expect(text).toContain("\x1dv0\x00\x40\x00\x03\x00");
   expect(text).not.toContain("Fattoria della Piana");
+});
+
+/* ---------------------- comanda per la cucina (kitchenTicket.js) ---------------------- */
+
+const KITCHEN_MENU = {
+  categories: [
+    { id: "cat-antipasti", name: "Antipasti", items: [{ id: "bru", name: "Bruschetta" }] },
+    { id: "cat-primi", name: "Primi", items: [{ id: "ore", name: "Orecchiette alle cime di rapa con mollica", kitchenTicket: true }] },
+    { id: "cat-bevande", name: "Bevande", items: [{ id: "acq", name: "Acqua", kitchenTicket: false }, { id: "vin", name: "Vino", kitchenTicket: false }] },
+  ],
+};
+const line = (menuItemId, name, categoryId, categoryName, quantity = 1, notes = "") => ({ menuItemId, name, categoryId, categoryName, quantity, notes });
+
+test("la comanda per la cucina contiene solo i piatti 'In comanda', nell'ordine del menù", () => {
+  const order = { id: "o1", tableNumber: 12, tableName: "", covers: { adults: 3, children: 1 }, notes: "", waiterName: "Marco", items: [] };
+  const payload = buildKitchenTicketPayload(order, [
+    line("acq", "Acqua", "cat-bevande", "Bevande", 2),
+    line("ore", "Orecchiette alle cime di rapa con mollica", "cat-primi", "Primi", 2, "senza glutine"),
+    line("bru", "Bruschetta", "cat-antipasti", "Antipasti", 1),
+    line("gone", "Piatto tolto dal menù", "cat-x", "Altro", 1),
+  ], KITCHEN_MENU, { now: new Date(2026, 9, 10, 20, 41), senderName: "Cassa" });
+  expect(payload.groups.map((g) => g.categoryName)).toEqual(["Antipasti", "Primi", "Altro"]);
+  expect(JSON.stringify(payload)).not.toContain("Acqua");
+  expect(payload.addition).toBe(false);
+  expect(payload.covers).toBe("4 coperti (1 bamb.)");
+  expect(payload.waiterName).toBe("Cassa");
+  expect(payload.timeLabel).toBe("20:41");
+
+  // Solo bevande: niente da stampare (nessuna richiesta accodata).
+  expect(buildKitchenTicketPayload(order, [line("vin", "Vino", "cat-bevande", "Bevande")], KITCHEN_MENU)).toBeNull();
+  // Il tavolo aveva già piatti per la cucina: è un'aggiunta.
+  const again = buildKitchenTicketPayload({ ...order, items: [line("bru", "Bruschetta", "cat-antipasti", "Antipasti")] },
+    [line("ore", "Orecchiette", "cat-primi", "Primi")], KITCHEN_MENU);
+  expect(again.addition).toBe(true);
+  // ...ma non se prima c'erano solo bevande.
+  const afterDrinks = buildKitchenTicketPayload({ ...order, items: [line("acq", "Acqua", "cat-bevande", "Bevande")] },
+    [line("ore", "Orecchiette", "cat-primi", "Primi")], KITCHEN_MENU);
+  expect(afterDrinks.addition).toBe(false);
+});
+
+test("un piatto nuovo eredita 'In comanda' dalla sua categoria", () => {
+  expect(defaultKitchenTicketForCategory(KITCHEN_MENU.categories[2])).toBe(false);
+  expect(defaultKitchenTicketForCategory(KITCHEN_MENU.categories[0])).toBe(true);
+  expect(defaultKitchenTicketForCategory({ items: [] })).toBe(true);
+});
+
+test("la comanda stampata è grande, senza prezzi né logo, e si taglia subito dopo l'ultimo piatto", () => {
+  const order = { id: "o1", tableNumber: 12, tableName: "Famiglia Rossi", covers: { adults: 2, children: 0 }, notes: "allergia noci", waiterName: "Marco", items: [line("bru", "Bruschetta", "cat-antipasti", "Antipasti")] };
+  const payload = buildKitchenTicketPayload(order, [
+    line("ore", "Orecchiette alle cime di rapa con mollica", "cat-primi", "Primi", 2, "senza glutine"),
+  ], KITCHEN_MENU, { now: new Date(2026, 9, 10, 20, 41) });
+  const bytes = Array.from(buildKitchenTicket(payload));
+  const txt = String.fromCharCode(...bytes);
+
+  expect(txt).toContain("\x1dV" + "B\x00");
+  expect(txt.endsWith("\n\x1dVB\x00")).toBe(true); // una sola riga di avanzamento prima del taglio
+  expect(txt).toContain("\x1b\x45\x01"); // tutto in grassetto
+  expect(txt).toContain("\x1d!\x22TAVOLO 12\n"); // numero del tavolo a dimensione tripla
+  expect(txt).toContain("Famiglia Rossi");
+  expect(txt).toContain("20:41 - 2 coperti - Marco");
+  expect(txt).toContain("\x1dB\x01 AGGIUNTA \n\x1dB\x00"); // in negativo
+  expect(txt).toContain("\x1dB\x01! allergia noci");
+  expect(txt).toContain("PRIMI");
+  expect(txt).toContain("\x1d!\x112x Orecchiette alle");
+  expect(txt).toContain("\x1dB\x01> senza glutine");
+  expect(txt).not.toContain("\xd5"); // nessun simbolo €: niente prezzi
+  expect(txt).not.toContain("\x1dv0"); // nessun logo
+  expect(txt).not.toContain("Preconto");
+
+  // Ogni riga a doppia larghezza sta nelle 21 colonne.
+  const dishSegments = txt.split("\x1d!\x11").slice(1).map((seg) => seg.split("\x1d!")[0]);
+  for (const seg of dishSegments) {
+    const plain = seg.split("\x1dB\x01").join("").split("\x1dB\x00").join(""); // senza i comandi di stampa in negativo
+    for (const l of plain.split("\n")) expect(l.length).toBeLessThanOrEqual(RECEIPT_COLUMNS / 2);
+  }
 });

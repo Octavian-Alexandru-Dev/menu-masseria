@@ -14,11 +14,12 @@
 //    its own timeout); only after the last failed attempt do we settle on
 //    an explicit message with a reload button.
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, runTransaction } from "firebase/firestore";
 import { db } from "./firebase-db";
 import { MENU_DOC_PATH, FALLBACK_STYLE, useUrlState } from "./shared";
 import ClientView from "./ClientView";
 import { getDesktopBridge } from "./desktop";
+import { MenuEditError } from "./menuEdit";
 
 const StaffHome = lazy(() => import("./StaffHome"));
 const PrintMenu = lazy(() => import("./PrintMenu"));
@@ -63,6 +64,16 @@ export default function App() {
 
   const viewRef = useRef(view);
   useEffect(() => { viewRef.current = view; }, [view]);
+  // Unsaved edits in the Admin editor. Only then does the restricted area
+  // ignore menu updates from the server: otherwise it follows them live, so
+  // the till (open all day) and the waiters' phones see a price or a dish
+  // changed from another device without reloading.
+  const dirtyRef = useRef(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const markDirty = useCallback((value) => {
+    dirtyRef.current = value;
+    setHasUnsavedChanges(value);
+  }, []);
 
   const menuDocRef = doc(db, ...MENU_DOC_PATH);
 
@@ -119,7 +130,7 @@ export default function App() {
             // coming from the server or the cache.
             setMenuState((prev) => {
               if (!prev) return loaded;
-              if (viewRef.current === "staff") return prev;
+              if (viewRef.current === "staff" && dirtyRef.current) return prev;
               return loaded;
             });
             setLoadNotice(null);
@@ -162,6 +173,7 @@ export default function App() {
   // automatically becomes undoable without having to touch every single
   // handler in Admin.jsx.
   const setMenu = useCallback((updater) => {
+    markDirty(true);
     setMenuState((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       if (prev !== null && next !== prev) {
@@ -169,7 +181,7 @@ export default function App() {
       }
       return next;
     });
-  }, []);
+  }, [markDirty]);
 
   // Exiting the restricted area ("Esci"/"Anteprima" buttons in Admin, or
   // from the waiter/kitchen/reservations login inside StaffHome): besides
@@ -191,8 +203,55 @@ export default function App() {
     if (undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
     setUndoStack((stack) => stack.slice(0, -1));
+    markDirty(true);
     setMenuState(previous);
   };
+
+  // One edit from the till's menu editor (TillMenu.jsx, edits from
+  // menuEdit.js), saved at once: applied in a transaction to the menu as it
+  // is on the server right now — not to this device's copy, which may be
+  // hours old — then to the copy on screen (keeping any unsaved Admin edits).
+  // Rejects with a readable message.
+  const handlePatch = useCallback(async (edit) => {
+    const { auth } = await import("./firebase-auth");
+    if (!auth.currentUser) throw new Error("Sessione scaduta: accedi di nuovo e riprova.");
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error("Nessuna risposta dal server: controlla la connessione e riprova.")), SAVE_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([
+        runTransaction(db, async (tx) => {
+          const ref = doc(db, ...MENU_DOC_PATH);
+          const snap = await tx.get(ref);
+          if (!snap.exists()) throw new MenuEditError("Il menù non esiste ancora: crealo da Gestione completa.");
+          const next = edit(snap.data());
+          if (new Blob([JSON.stringify(next)]).size > 900_000) {
+            throw new MenuEditError("I dati del menù sono troppo grandi per essere salvati.");
+          }
+          tx.set(ref, next);
+        }),
+        timeout,
+      ]);
+    } catch (err) {
+      console.error("[menu] Modifica dalla cassa fallita:", err);
+      if (err instanceof MenuEditError) throw err;
+      if (err?.code === "permission-denied") throw new Error("Salvataggio non autorizzato: l'account non può modificare il menù.");
+      if (err?.message?.startsWith("Nessuna risposta")) throw err;
+      // Only a real connection problem is reported as one: anything else
+      // (e.g. data Firestore refuses) would send people chasing the wifi.
+      if (err?.code === "unavailable" || err?.code === "deadline-exceeded") {
+        throw new Error("Salvataggio non riuscito: controlla la connessione e riprova.");
+      }
+      throw new Error("Salvataggio non riuscito per un errore imprevisto. Riprova; se si ripete, usa Gestione completa.");
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    setMenuState((prev) => {
+      if (!prev) return prev;
+      try { return edit(prev); } catch { return prev; } // stale copy: the live update brings the saved one
+    });
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -226,6 +285,7 @@ export default function App() {
       } finally {
         clearTimeout(timeoutId);
       }
+      markDirty(false);
       setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
     } catch (e) {
       console.error("[menu] Salvataggio fallito:", e);
@@ -291,6 +351,8 @@ export default function App() {
           onExit={handleExitStaff}
           onUndo={handleUndo}
           canUndo={undoStack.length > 0}
+          onPatch={handlePatch}
+          hasUnsavedChanges={hasUnsavedChanges}
         />
       </Suspense>
     );

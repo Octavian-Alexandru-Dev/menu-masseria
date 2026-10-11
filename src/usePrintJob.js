@@ -1,6 +1,7 @@
-// Sending a receipt to the till's printer queue (printJobs.js) and following
-// its status in realtime — shared by the phone receipt (ReceiptOverlay.jsx)
-// and the till (TillSala.jsx), so both say the same things the same way.
+// Sending something to the till's printer queue (printJobs.js) and following
+// its status in realtime — shared by the phone receipt (ReceiptOverlay.jsx),
+// the till (TillSala.jsx, TillHistory.jsx) and the kitchen ticket sent with
+// "Invia comanda" (sala-shared.jsx), so all say the same things the same way.
 import { useState, useEffect } from "react";
 import { enqueueReceiptPrint, subscribePrintJob, retryPrintJob } from "./printJobs";
 
@@ -31,9 +32,13 @@ function statusText(job, slow, enqueueError) {
   }
 }
 
-// print(order, menu): new job, or a retry of the current one after an error
-// or expiry. status: { text, tone: info|warn|ok|error } | null.
-export function usePrintJob() {
+// enqueue(...args) → Promise<jobId | null> (null = nothing to print).
+// print(...args): a new job — or, after an error/expiry/interrupted print,
+// a retry of the current one (same button, "Riprova stampa").
+// printNew(...args): always a new job (a new "Invia comanda" after a failed
+// one must print the new lines, not the old ones again).
+// status: { text, tone: info|warn|ok|error } | null.
+export function usePrintJob(enqueue = enqueueReceiptPrint) {
   const [jobId, setJobId] = useState(null);
   const [job, setJob] = useState(null);
   const [slow, setSlow] = useState(false);
@@ -56,15 +61,15 @@ export function usePrintJob() {
   const stuck = jobStatus === "printing" && slow;
   const failed = Boolean(enqueueError) || jobStatus === "error" || jobStatus === "expired" || stuck;
 
-  const print = async (order, menu) => {
+  const run = async (retry, args) => {
     setSending(true);
     setEnqueueError(null);
     try {
-      if (jobId && (jobStatus === "error" || jobStatus === "expired" || stuck)) {
+      if (retry) {
         await retryPrintJob(jobId);
       } else {
         setJob(null);
-        setJobId(await enqueueReceiptPrint(order, menu));
+        setJobId(await enqueue(...args));
       }
     } catch (err) {
       console.error("[print] Invio alla cassa fallito:", err);
@@ -74,7 +79,11 @@ export function usePrintJob() {
     }
   };
 
+  const canRetry = Boolean(jobId) && (jobStatus === "error" || jobStatus === "expired" || stuck);
+  const print = (...args) => run(canRetry, args);
+  const printNew = (...args) => run(false, args);
+
   const busy = sending || Boolean(jobId && !enqueueError && !stuck && (!job || jobStatus === "pending" || jobStatus === "printing"));
   const status = jobId || enqueueError ? statusText(job, slow, enqueueError) : null;
-  return { print, busy, failed, status };
+  return { print, printNew, busy, failed, status };
 }

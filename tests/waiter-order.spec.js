@@ -78,6 +78,9 @@ test.describe("Area cameriere", () => {
 
     // La riga inviata compare nella comanda con lo stato "Inviata".
     await expect(page.getByText(/inviata/i).first()).toBeVisible();
+    // La comanda per la cucina va in coda alla stampante della cassa (qui
+    // nessuna cassa è accesa: resta in attesa, e il cameriere lo vede).
+    await expect(page.getByRole("status", { name: "Stampa comanda cucina" })).toHaveText(/comanda cucina: inviato alla cassa, in attesa/i, { timeout: 10_000 });
 
     // Chiude il tavolo: torna all'elenco (non più aperto)...
     await page.getByRole("button", { name: /chiudi tavolo/i }).click();

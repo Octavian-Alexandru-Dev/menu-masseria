@@ -13,6 +13,8 @@ import {
 } from "./orders";
 import { subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup } from "./reservationsData";
 import { subscribeMenuCosts } from "./menuCosts";
+import { enqueueKitchenTicket } from "./printJobs";
+import { usePrintJob } from "./usePrintJob";
 
 export function formatTime(ts) {
   return ts?.toDate ? ts.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
@@ -164,9 +166,10 @@ export function useSalaData({ menu, session }) {
 }
 
 // One table's order screen: the menu to pick from (with search and tag
-// chips), the draft of lines not yet sent, sending, closing, and the lines
-// already sent grouped by menu category.
-export function useOrderDraft({ menu, menuCosts, order }) {
+// chips), the draft of lines not yet sent, sending (plus the kitchen ticket
+// printed at the till, see kitchenTicket.js), closing, and the lines already
+// sent grouped by menu category. senderName: who is sending (on the ticket).
+export function useOrderDraft({ menu, menuCosts, order, senderName }) {
   const [draft, setDraft] = useState([]); // { lineId, menuItemId, name, price, categoryId, categoryName, quantity, notes }
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -227,13 +230,26 @@ export function useOrderDraft({ menu, menuCosts, order }) {
   // Whole-line edit from the till's line editor (quantity, price, note).
   const updateDraftLine = (lineId, patch) => setDraft((d) => d.map((l) => (l.lineId === lineId ? { ...l, ...patch } : l)));
 
+  // Kitchen ticket of the last send: its print status is shown next to
+  // "Invia comanda"; retryKitchenTicket reprints it after a printer error.
+  const kitchenPrinter = usePrintJob(enqueueKitchenTicket);
+  const lastKitchenArgs = useRef(null);
+  const retryKitchenTicket = () => {
+    if (lastKitchenArgs.current) kitchenPrinter.print(...lastKitchenArgs.current);
+  };
+
   const send = async () => {
     if (draft.length === 0) return;
     setSending(true);
     setSendError("");
     try {
-      await sendOrderLines(order.id, draft.map((l) => buildOrderLine(l)));
+      const lines = draft.map((l) => buildOrderLine(l));
+      await sendOrderLines(order.id, lines);
       setDraft([]);
+      // `order` is still the snapshot from before these lines: the ticket
+      // says "AGGIUNTA" if the table already had dishes for the kitchen.
+      lastKitchenArgs.current = [order, lines, menu, senderName];
+      kitchenPrinter.printNew(...lastKitchenArgs.current);
     } catch (err) {
       console.error("[waiter] Invio comanda fallito:", err);
       setSendError("Invio non riuscito. Verifica la connessione e riprova.");
@@ -271,6 +287,7 @@ export function useOrderDraft({ menu, menuCosts, order }) {
   return {
     draft, draftCount, addToDraft, changeQty, removeDraftLine, setDraftNote, updateDraftLine,
     send, sending, sendError, closeTable, closing,
+    kitchenTicket: { status: kitchenPrinter.status, failed: kitchenPrinter.failed, busy: kitchenPrinter.busy, retry: retryKitchenTicket },
     normalItems, offMenuItems, searchEnabled, itemSearch, setItemSearch, isItemSearching,
     filteredNormalItems, filteredOffMenuItems, searchTagChips, toggleSearchTag,
     sentByCategory, totalCents,

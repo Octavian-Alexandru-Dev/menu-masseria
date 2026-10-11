@@ -14,6 +14,8 @@ import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTransla
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 import { subscribeMenuCosts, saveMenuCosts } from "./menuCosts";
 import { logoutHiddenAtTill } from "./staff-shared";
+import { pruneTranslations, moveTranslationItem, withTranslations } from "./menuEdit";
+import { itemGoesToKitchen, defaultKitchenTicketForCategory } from "./kitchenTicket";
 
 // Reads and validates a .json file chosen for import: used both by the
 // regular Admin panel ("Importa JSON") and by the bootstrap screen when the
@@ -46,65 +48,6 @@ function parseMenuJsonFile(file) {
     reader.onerror = () => reject(new Error("Impossibile leggere il file."));
     reader.readAsText(file);
   });
-}
-
-// Removes, from every saved language, the translation of an entry (or, if
-// itemId is omitted, of the whole category) just deleted from the Italian
-// menu — otherwise it would stay as orphaned data in `menu.translations`,
-// never read again by anything (applyTranslation only walks the
-// categories/entries still present) but still saved on every "Salva".
-function pruneTranslations(translations, catId, itemId) {
-  if (!translations) return translations;
-  let changed = false;
-  const next = {};
-  for (const [langCode, langData] of Object.entries(translations)) {
-    const cat = langData?.categories?.[catId];
-    if (!cat) {
-      next[langCode] = langData;
-      continue;
-    }
-    if (itemId) {
-      if (!cat.items || !(itemId in cat.items)) {
-        next[langCode] = langData;
-        continue;
-      }
-      const items = { ...cat.items };
-      delete items[itemId];
-      next[langCode] = { ...langData, categories: { ...langData.categories, [catId]: { ...cat, items } } };
-    } else {
-      const categories = { ...langData.categories };
-      delete categories[catId];
-      next[langCode] = { ...langData, categories };
-    }
-    changed = true;
-  }
-  return changed ? next : translations;
-}
-
-// Moves an entry's translation from one category to another in every saved
-// language, when the entry itself is moved to a different category —
-// without this, pruneTranslations-style logic would mistake it for orphaned
-// data and lose it on the next edit.
-function moveTranslationItem(translations, fromCatId, toCatId, itemId) {
-  if (!translations) return translations;
-  let changed = false;
-  const next = {};
-  for (const [langCode, langData] of Object.entries(translations)) {
-    const fromCat = langData?.categories?.[fromCatId];
-    const itemData = fromCat?.items?.[itemId];
-    if (!itemData) {
-      next[langCode] = langData;
-      continue;
-    }
-    const fromItems = { ...fromCat.items };
-    delete fromItems[itemId];
-    const categories = { ...langData.categories, [fromCatId]: { ...fromCat, items: fromItems } };
-    const toCat = categories[toCatId] || {};
-    categories[toCatId] = { ...toCat, items: { ...(toCat.items || {}), [itemId]: itemData } };
-    next[langCode] = { ...langData, categories };
-    changed = true;
-  }
-  return changed ? next : translations;
 }
 
 // Collision detection for drag&drop (dnd-kit): restricts valid drop targets
@@ -719,7 +662,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
       ...m,
       categories: m.categories.map((c) =>
         c.id === catId
-          ? { ...c, items: [...c.items, { id, name: "Nuova voce", price: "0,00", description: "", image: "", visible: true, staffOnly: false }] }
+          ? { ...c, items: [...c.items, { id, name: "Nuova voce", price: "0,00", description: "", image: "", visible: true, staffOnly: false, kitchenTicket: defaultKitchenTicketForCategory(c) }] }
           : c
       ),
     }));
@@ -727,13 +670,12 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   };
 
   const removeItem = (catId, itemId) => {
-    setMenu((m) => ({
+    setMenu((m) => withTranslations({
       ...m,
       categories: m.categories.map((c) =>
         c.id === catId ? { ...c, items: c.items.filter((it) => it.id !== itemId) } : c
       ),
-      translations: pruneTranslations(m.translations, catId, itemId),
-    }));
+    }, pruneTranslations(m.translations, catId, itemId)));
     setConfirmDelete(null);
     setNewItemId((prev) => (prev === itemId ? null : prev));
   };
@@ -745,11 +687,10 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
   };
 
   const removeCategory = (catId) => {
-    setMenu((m) => ({
+    setMenu((m) => withTranslations({
       ...m,
       categories: m.categories.filter((c) => c.id !== catId),
-      translations: pruneTranslations(m.translations, catId),
-    }));
+    }, pruneTranslations(m.translations, catId)));
     setConfirmDelete(null);
   };
 
@@ -795,11 +736,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
       const categories = withoutItem.map((c) =>
         c.id === toCatId ? { ...c, items: [...c.items, movedItem] } : c
       );
-      return {
-        ...m,
-        categories,
-        translations: moveTranslationItem(m.translations, fromCatId, toCatId, itemId),
-      };
+      return withTranslations({ ...m, categories }, moveTranslationItem(m.translations, fromCatId, toCatId, itemId));
     });
     setOpenCats((prev) => new Set(prev).add(toCatId));
   };
@@ -871,11 +808,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
           if (idx !== -1) insertIndex = idx;
         }
         toCat.items.splice(insertIndex, 0, movedItem);
-        return {
-          ...m,
-          categories,
-          translations: moveTranslationItem(m.translations, fromCatId, toCatId, movedItem.id),
-        };
+        return withTranslations({ ...m, categories }, moveTranslationItem(m.translations, fromCatId, toCatId, movedItem.id));
       });
     }
   };
@@ -1412,6 +1345,13 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                               checked={item.staffOnly === true}
                               onChange={(v) => updateItem(cat.id, item.id, "staffOnly", v)}
                               label={item.staffOnly === true ? "Riservato allo staff (fuori menù)" : "Nel menù pubblico"}
+                            />
+                            {/* Kitchen ticket printed at the till on "Invia comanda" (kitchenTicket.js). */}
+                            <Toggle
+                              t={t}
+                              checked={itemGoesToKitchen(item)}
+                              onChange={(v) => updateItem(cat.id, item.id, "kitchenTicket", v)}
+                              label={itemGoesToKitchen(item) ? "In comanda (stampato in cucina)" : "Non stampato in comanda"}
                             />
                           </div>
                           <button

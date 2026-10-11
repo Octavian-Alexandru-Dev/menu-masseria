@@ -3,7 +3,7 @@ import { TEST_WAITER, TEST_ADMIN } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
 import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
 import { installDesktopBridgeMock, printedTexts } from "./helpers/desktopBridge";
-import { seedPrintJob, getPrintJob, deletePrintJobsByTableLabel } from "./helpers/printJobs";
+import { seedPrintJob, getPrintJob, deletePrintJobsByTableLabel, describePrintJobsByTableLabel } from "./helpers/printJobs";
 
 // Stampa dei preconti sulla stampante termica della cassa (docs/stampa-scontrini.md):
 // "Stampa" nel preconto accoda una richiesta in printJobs da qualunque
@@ -52,6 +52,8 @@ async function openReceiptOnPhone(page) {
 async function openTill(browser, options) {
   const context = await browser.newContext();
   const page = await context.newPage();
+  // Errori della stazione di stampa nel report del test (console della cassa).
+  page.on("console", (msg) => { if (msg.type() === "error") console.log(`[cassa] ${msg.text()}`); });
   await installDesktopBridgeMock(page, options);
   await page.goto("/cameriere");
   await staffLogin(page, TEST_ADMIN);
@@ -74,7 +76,13 @@ test("dal telefono 'Stampa' accoda il preconto, la cassa lo stampa e lo stato to
   // Si accende la cassa: prende la richiesta rimasta in coda e la stampa.
   const till = await openTill(browser);
   try {
-    await expect(status).toHaveText(/stampato alla cassa/i, { timeout: 15_000 });
+    try {
+      await expect(status).toHaveText(/stampato alla cassa/i, { timeout: 15_000 });
+    } catch (err) {
+      // Diagnostica: stato delle richieste del tavolo sul server e console della cassa.
+      await test.info().attach("printJobs", { body: JSON.stringify(await describePrintJobsByTableLabel(`Tavolo ${tableNumber}`), null, 2), contentType: "application/json" });
+      throw err;
+    }
     const texts = await printedTexts(till.page);
     const receipt = texts.find((t) => t.includes(`Tavolo ${tableNumber}`));
     expect(receipt, "scontrino del tavolo stampato").toBeTruthy();

@@ -23,6 +23,13 @@ export async function deleteTestOrderByTableNumber(tableNumber) {
     const q = query(collection(db, "orders"), where("tableNumber", "==", tableNumber));
     const snap = await getDocs(q);
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+    // Anche le stampe del tavolo (comanda per la cucina accodata da "Invia
+    // comanda", preconti): senza una cassa accesa resterebbero in coda e la
+    // prima cassa simulata di un altro file le stamperebbe tutte.
+    for (const d of snap.docs) {
+      const jobs = await getDocs(query(collection(db, "printJobs"), where("orderId", "==", d.id)));
+      await Promise.all(jobs.docs.map((j) => deleteDoc(j.ref)));
+    }
   } catch (err) {
     console.error(`[test cleanup] Eliminazione tavolo ${tableNumber} fallita:`, err.message || err);
   }

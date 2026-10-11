@@ -130,6 +130,12 @@ test.describe("Admin — editor menù (solo in memoria, mai salvato su Firestore
     await expect(nameField).toHaveValue("Voce B1 Modificata");
     await expect(priceField).toHaveValue("9,99");
     await expect(descField).toHaveValue("Descrizione modificata dal test");
+
+    // "In comanda": acceso di default (voce senza il campo), si spegne con un tocco.
+    await page.getByRole("checkbox", { name: "In comanda (stampato in cucina)" }).click();
+    await expect(page.getByRole("checkbox", { name: "Non stampato in comanda" })).not.toBeChecked();
+    await page.getByRole("checkbox", { name: "Non stampato in comanda" }).click();
+    await expect(page.getByRole("checkbox", { name: "In comanda (stampato in cucina)" })).toBeChecked();
   });
 
   test("aggiunge una voce (mostra l'avviso di traduzione mancante) e la elimina", async ({ page }) => {

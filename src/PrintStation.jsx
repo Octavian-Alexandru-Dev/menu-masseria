@@ -1,6 +1,6 @@
 // Print station — mounted by MenuApp.jsx only inside the Windows till client
 // (desktop-client/, detected via window.mdpDesktop): listens for pending
-// receipt print jobs (printJobs.js) from any device and sends them to the
+// print jobs (printJobs.js: receipts and kitchen tickets) from any device and sends them to the
 // thermal printer through the client's native bridge. Also shows the
 // floating "Cassa" button (a gear with the printer status dot; tap → menu
 // with virtual keyboard, fullscreen, printer settings, close the program)
@@ -18,7 +18,7 @@ import { confirmAction } from "./confirmDialog";
 import UpdateBanner from "./UpdateBanner";
 import { useStaffSession, tillLogout } from "./staff-shared";
 import { getDesktopBridge } from "./desktop";
-import { buildReceipt, grayToMonoBitmap, LOGO_WIDTH_DOTS } from "./escpos";
+import { buildReceipt, buildKitchenTicket, grayToMonoBitmap, LOGO_WIDTH_DOTS } from "./escpos";
 import {
   subscribePendingPrintJobs, claimPrintJob, finishPrintJob, expirePrintJob,
   isPrintJobExpired, purgeOldPrintJobs,
@@ -88,7 +88,9 @@ function usePrintStation(bridge, active) {
       if (!won) return;
       setState((s) => ({ ...s, phase: "printing" }));
       try {
-        const bytes = buildReceipt(job.payload, { logo: await loadReceiptLogo() });
+        const bytes = job.type === "kitchen"
+          ? buildKitchenTicket(job.payload)
+          : buildReceipt(job.payload, { logo: await loadReceiptLogo() });
         await bridge.printRaw(bytes);
         await finishPrintJob(job.id, null);
         setState((s) => ({ phase: "idle", lastError: null, printedCount: s.printedCount + 1 }));

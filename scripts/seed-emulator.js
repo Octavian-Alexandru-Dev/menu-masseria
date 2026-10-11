@@ -108,9 +108,12 @@ const DEMO_MENU = {
       name: "Bevande",
       subtitle: "",
       visible: true,
+      // Le bevande non vanno in cucina: non stampate sulla comanda
+      // (kitchenTicket: false, vedi src/kitchenTicket.js). Le altre voci non
+      // hanno il campo = stampate, come i menù salvati prima del flag.
       items: [
-        { id: "item-acqua", name: "Acqua naturale", price: "2,00", tag: "", description: "0,75L", searchTags: "Bibita", visible: true, staffOnly: false },
-        { id: "item-vino-casa", name: "Vino della casa", price: "12,00", tag: "", description: "Rosso o bianco, la caraffa", searchTags: "Bibita, Alcolico", visible: true, staffOnly: false },
+        { id: "item-acqua", name: "Acqua naturale", price: "2,00", tag: "", description: "0,75L", searchTags: "Bibita", visible: true, staffOnly: false, kitchenTicket: false },
+        { id: "item-vino-casa", name: "Vino della casa", price: "12,00", tag: "", description: "Rosso o bianco, la caraffa", searchTags: "Bibita, Alcolico", visible: true, staffOnly: false, kitchenTicket: false },
       ],
     },
   ],

@@ -28,9 +28,13 @@ test.describe("Dashboard statistiche", () => {
     await expect(page.getByTestId("kpi-value-revenue")).toHaveText("€ 51,00", { timeout: 10_000 });
     await expect(page.getByTestId("kpi-value-covers")).toHaveText("5");
     await expect(page.getByTestId("kpi-value-orders")).toHaveText("2");
-    await expect(page.getByText("Orecchiette")).toBeVisible();
-    await expect(page.getByText("Primi")).toBeVisible();
-    await expect(page.getByText("Cameriere di test")).toBeVisible();
+    // Dentro #root: Recharts misura le etichette degli assi copiandole per un
+    // attimo in uno <span> nascosto fuori dall'app (#recharts_measurement_span),
+    // e un getByText su tutta la pagina a volte trovava due elementi.
+    const app = page.locator("#root");
+    await expect(app.getByText("Orecchiette")).toBeVisible();
+    await expect(app.getByText("Primi")).toBeVisible();
+    await expect(app.getByText("Cameriere di test")).toBeVisible();
   });
 
   test("il toggle comande auto-chiuse ricalcola l'incasso senza ricaricare la pagina", async ({ page }) => {
@@ -75,8 +79,8 @@ test.describe("Dashboard statistiche", () => {
     await expect(page.getByText(/su 83% dell'incasso piatti/i)).toBeVisible();
 
     await page.getByRole("button", { name: "Per margine" }).click();
-    await expect(page.getByText("Orecchiette")).toBeVisible();
-    await expect(page.getByText("Caprese")).not.toBeVisible();
+    await expect(page.locator("#root").getByText("Orecchiette")).toBeVisible();
+    await expect(page.locator("#root").getByText("Caprese")).not.toBeVisible();
   });
 
   test("gli assi dei grafici di incasso mostrano euro formattati, non i centesimi grezzi", async ({ page }) => {
