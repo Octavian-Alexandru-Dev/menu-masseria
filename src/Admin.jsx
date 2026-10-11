@@ -240,7 +240,6 @@ function AdminBootstrap({ onImport, onExit, importError }) {
 
 const STAFF_ROLES = [
   { value: "waiter", label: "Cameriere" },
-  { value: "kitchen", label: "Cucina" },
   { value: "admin", label: "Amministratore" },
 ];
 
@@ -302,19 +301,20 @@ function StaffSection({ t }) {
     }
   };
 
-  const roleLabel = (role) => STAFF_ROLES.find((r) => r.value === role)?.label || role;
+  // "kitchen": old role, the kitchen area was removed (printed tickets now).
+  const roleLabel = (role) => STAFF_ROLES.find((r) => r.value === role)?.label || (role === "kitchen" ? "Cucina (ruolo non più usato)" : role);
   const inputStyle = { width: "100%", padding: "9px 11px", border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.smallPlus };
   const labelStyle = { fontSize: TYPE.tiny, letterSpacing: 0.8, textTransform: "uppercase", color: t.inkSoft, display: "block", marginBottom: 4 };
 
   return (
     <div style={{ ...cardStyle(t), marginBottom: 24 }}>
       <div style={{ fontSize: TYPE.small, letterSpacing: 1, textTransform: "uppercase", color: t.secondary, marginBottom: 14, display: "flex", alignItems: "center", gap: 6 }}>
-        <Users size={13} /> Personale — accesso a comande/cucina
+        <Users size={13} /> Personale — accesso all'area riservata
       </div>
       <div style={{ fontSize: TYPE.labelPlus, color: t.inkSoft, marginBottom: 16, lineHeight: 1.4 }}>
         Per aggiungere una persona, crea prima il suo account in Firebase Console
         (Authentication → Aggiungi utente), poi incolla qui il suo UID per
-        assegnargli un ruolo e abilitarlo su /cameriere o /cucina.
+        assegnargli un ruolo (Cameriere: Sala e Prenotazioni; Amministratore: tutto).
       </div>
 
       {auth.currentUser && (

@@ -62,8 +62,8 @@ shows "Windows protected your PC" → *More info* → *Run anyway*. Setup, print
   from the till; every staff device sees it instantly (Firestore realtime
   listeners). The kitchen gets a **printed ticket** at the till with only the
   dishes flagged "In comanda" in the menu (drinks excluded), big bold text,
-  no prices, minimal paper (`kitchenTicket.js`, `escpos.js`). A kitchen
-  screen (`Kitchen.jsx`) also exists.
+  no prices, minimal paper (`kitchenTicket.js`, `escpos.js`). There is no
+  kitchen screen: the kitchen works from the printed tickets.
 - **Receipt printing at the till**: "Stampa" on a receipt, from any staff
   device, queues a print job (`printJobs` in Firestore) that the Windows
   till client prints as ESC/POS on the 80mm thermal printer, with live
@@ -159,7 +159,7 @@ src/
   ClientView.jsx      # public menu (no Firebase Auth import — kept light)
   Admin.jsx            # menu management panel (lazy-loaded, includes Firebase Auth)
   StaffHome.jsx         # staff landing page / dashboard, role-based area picker (straight to TillSala at the till)
-  Waiter.jsx, Kitchen.jsx, Reservations.jsx, Stats.jsx  # staff areas (phone/browser)
+  Waiter.jsx, Reservations.jsx, Stats.jsx  # staff areas (phone/browser)
   OrderHistory.jsx, ReceiptOverlay.jsx, PrintMenu.jsx    # shared staff UI
   TillSala.jsx, TillReservations.jsx, TillHistory.jsx, TillMenu.jsx, TillStats.jsx, TillUi.jsx  # till interface
   sala-shared.jsx       # Sala logic shared by Waiter.jsx and TillSala.jsx (draft, send, kitchen ticket…)

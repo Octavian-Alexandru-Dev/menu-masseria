@@ -1,8 +1,8 @@
-// Firestore helpers for table orders (waiter/kitchen area).
-// See docs/comande-camerieri.md for the full data model.
+// Firestore helpers for table orders (Sala on phone and till, history,
+// statistics). See docs/comande-camerieri.md for the full data model.
 //
-// File loaded ONLY by the waiter/kitchen areas (Waiter.jsx/Kitchen.jsx,
-// both lazy-loaded), never by the public site.
+// File loaded ONLY by the staff areas (lazy-loaded), never by the public
+// site.
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
   orderBy, limit, startAfter, writeBatch,
@@ -119,19 +119,6 @@ export function buildOrderLine({ lineId, menuItemId, name, price, quantity, cate
     sentAt: Timestamp.now(),
     outAt: null,
   };
-}
-
-// The kitchen marks a whole group (a menu category, e.g. all starters for
-// the table) as "sent out" with a single tap (§5 point 3 of the doc).
-// Firestore arrays don't support updating a single element, so we rewrite
-// the entire `items` array with the updated status only on the lines of the
-// chosen category that aren't already out.
-export async function markCategoryOut(orderId, currentItems, categoryId) {
-  const outAt = Timestamp.now();
-  const updated = currentItems.map((line) =>
-    line.categoryId === categoryId && line.status !== "out" ? { ...line, status: "out", outAt } : line
-  );
-  return updateDoc(orderRef(orderId), { items: updated });
 }
 
 // Changes the covers for an already-open table (people arriving/leaving

@@ -10,7 +10,7 @@ import { failPrintJobsByTableLabel } from "./helpers/printJobs";
 const TABLE_NUMBER = 9000 + Math.floor(Math.random() * 500);
 
 // Range distinto da TABLE_NUMBER sopra e da quelli usati in
-// kitchen-view.spec.js/reservations.spec.js, per i test aggiuntivi qui sotto
+// reservations.spec.js, per i test aggiuntivi qui sotto
 // che aprono un proprio tavolo indipendente (i test girano in parallelo,
 // fullyParallel: true).
 function freshTableNumber() {

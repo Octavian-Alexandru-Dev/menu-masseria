@@ -115,7 +115,6 @@ function TableList({ t, menu, orders, kitchenProblemsByOrder = {}, shiftClosedOr
 
       <div style={{ display: "grid", gap: 10 }}>
         {sorted.map((o) => {
-          const readyCount = (o.items || []).filter((l) => l.status === "out").length;
           const total = o.items?.length || 0;
           return (
             <button
@@ -142,11 +141,6 @@ function TableList({ t, menu, orders, kitchenProblemsByOrder = {}, shiftClosedOr
                 <SyncBadge t={t} hasPendingWrites={o._hasPendingWrites} />
                 {kitchenProblemsByOrder[o.id] > 0 && (
                   <div style={{ fontSize: TYPE.tinyPlus, color: t.accent2, fontWeight: 700 }}>⚠ Comanda cucina non stampata</div>
-                )}
-                {total > 0 && (
-                  <div style={{ fontSize: TYPE.tinyPlus, color: t.secondary, marginTop: 4 }}>
-                    {readyCount}/{total} uscite
-                  </div>
                 )}
               </div>
             </button>

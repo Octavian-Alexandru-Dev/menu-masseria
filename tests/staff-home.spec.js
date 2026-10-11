@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { TEST_ADMIN, TEST_WAITER, TEST_NO_ROLE, TEST_INVALID_ROLE } from "./test-env";
+import { TEST_ADMIN, TEST_WAITER, TEST_KITCHEN, TEST_NO_ROLE, TEST_INVALID_ROLE } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
 
 test.describe("Area riservata (StaffHome)", () => {
@@ -24,6 +24,12 @@ test.describe("Area riservata (StaffHome)", () => {
     await expect(page.getByRole("button", { name: /esci/i })).toBeVisible();
   });
 
+  test("un account con il vecchio ruolo cucina vede perché non ha più un'area", async ({ page }) => {
+    await staffLogin(page, TEST_KITCHEN);
+    await expect(page.getByText("L'area Cucina non c'è più")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /^esci$/i })).toBeVisible();
+  });
+
   test("un account con una sola area (cameriere) salta la Dashboard e apre direttamente Sala", async ({ page }) => {
     await staffLogin(page, TEST_WAITER);
     await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
@@ -41,7 +47,8 @@ test.describe("Area riservata (StaffHome)", () => {
     // nome esatto (StaffHome.jsx, Dashboard: opt.label + count).
     await expect(page.getByRole("button", { name: /^gestione menù/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /^sala/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^cucina/i })).toBeVisible();
+    // Niente più area Cucina: la cucina lavora con le comande stampate.
+    await expect(page.getByRole("button", { name: /^cucina/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^prenotazioni/i })).toBeVisible();
 
     await page.getByRole("button", { name: /^sala/i }).click();

@@ -310,9 +310,10 @@ comande, preconto, chiusura.
 - **Un'unica interfaccia, senza Dashboard:** alla cassa si entra subito
   nella Sala. Le sezioni stanno sempre nella barra in alto: **Tavoli ·
   Prenotazioni · Storico** e, per gli account admin, **Menù · Statistiche**.
-  A destra ci sono l'ora, il turno e l'utente. Non c'è la Cucina: in cucina
-  arriva la comanda stampata (§2.1). Un account con ruolo "cucina" alla
-  cassa vede comunque l'area Cucina.
+  A destra ci sono l'ora, il turno e l'utente. L'area Cucina non esiste più
+  (né alla cassa né sui telefoni): in cucina arriva la comanda stampata
+  (§2.1). Un account rimasto con il vecchio ruolo "cucina" vede un
+  messaggio che chiede di cambiargli ruolo.
 - **Tavoli:** griglia che riempie lo schermo, ordinata per numero. Ogni
   riquadro mostra numero, nome, coperti, tempo, totale e lo stato **scritto**
   su un colore fisso (vedi *Stato dei tavoli senza cucina* sotto). A destra
@@ -418,7 +419,7 @@ Principi seguiti (nessuna invenzione da zero):
   schede invece di codici).
 
 Sui telefoni l'interfaccia resta quella di prima (pensata per lo schermo
-piccolo, con gli stati della cucina finché esiste l'area Cucina). Ogni
+piccolo). Ogni
 funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
 
 ## 5. Risoluzione problemi
@@ -521,5 +522,5 @@ funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
 | Cassa: "Gestione completa" — uscendo dal Menù con modifiche non salvate chiede (resta / scarta); nessun avviso del browser alla chiusura del programma | `tests/till-sala.spec.js` |
 | Cassa: Menù — "Tutti/Nessuno in comanda" per categoria | `tests/till-sala.spec.js` |
 | Cassa: Statistiche — periodo a tocco (≥ 48px), numeri, classifica, confronto con il periodo precedente | `tests/till-sala.spec.js` |
-| Cassa: account cucina → area Cucina senza "Esci"; "Gestione completa" senza "Esci" | `tests/till-client.spec.js` |
+| Vecchio ruolo "cucina": nessuna area, messaggio che spiega perché (telefono con "Esci", cassa senza); admin senza area Cucina nella Dashboard | `tests/staff-home.spec.js`, `tests/till-client.spec.js` |
 | Non coperto automaticamente: stampa fisica su POSBANK (anche la leggibilità reale della comanda a doppia/tripla dimensione), ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, apertura durante l'installer (notifica + uscita), notifiche di Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |

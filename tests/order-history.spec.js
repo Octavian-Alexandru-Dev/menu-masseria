@@ -8,7 +8,7 @@ import { seedClosedOrders, deleteOrdersByWaiterName } from "./helpers/seedClosed
 // testare la paginazione in modo deterministico si seminano 25 comande
 // chiuse direttamente su Firestore invece di aprirle/chiuderle una a una
 // dall'interfaccia (troppo lento, e non aggiungerebbe copertura oltre al
-// flusso completo già testato in waiter-order.spec.js/kitchen-view.spec.js).
+// flusso completo già testato in waiter-order.spec.js).
 // Marker univoco per test: i test di questo file partono in parallelo e
 // "DelTest<ms>" è contenuto in "NoDelTest<ms>" se iniziano nello stesso
 // millisecondo (la ricerca della riga per nome li trovava entrambi).

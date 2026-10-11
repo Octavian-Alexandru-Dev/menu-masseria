@@ -69,7 +69,7 @@ structure exists purely to keep its bundle small:
 - `firebase-db.js` (Firestore only) is imported everywhere; `firebase-auth.js`
   (Firebase Auth, a heavier module) is only imported once a user clicks
   "Gestione menù" or lands on a staff route.
-- `StaffHome.jsx`, `Waiter.jsx`, `Kitchen.jsx` and `Reservations.jsx` are
+- `StaffHome.jsx`, `Waiter.jsx` and `Reservations.jsx` are
   `React.lazy()`-loaded from `MenuApp.jsx`, and `StaffHome.jsx` in turn
   lazy-loads each area (`Admin.jsx`, `Stats.jsx` with Recharts, the till's
   `TillSala.jsx`…) only when it's opened — a customer who never opens the
@@ -88,8 +88,6 @@ and `?area=`/`?sezione=` query params directly:
 - `/`, or any other path — the public menu, unless `?area=staff` is set.
 - `/cameriere` or `/waiter` — `Waiter.jsx` directly (bookmarkable, e.g. for
   a dedicated tablet).
-- `/cucina` or `/kitchen` — `Kitchen.jsx` directly (same reasoning, for a
-  fixed kitchen screen).
 - `/prenotazioni` or `/reservations` — `Reservations.jsx` directly.
 - `?area=staff` — `StaffHome.jsx`, which after login shows a dashboard of
   the areas the signed-in account's role grants access to

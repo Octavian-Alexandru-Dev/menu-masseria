@@ -218,10 +218,11 @@ test("con il client 1.4 non c'è nessun 'Esci' nell'interfaccia: il logout si fa
   await expect(nav).toBeVisible({ timeout: 10_000 });
 });
 
-test("alla cassa un account della cucina vede l'area Cucina, senza 'Esci'", async ({ page }) => {
+test("un account con il vecchio ruolo cucina non ha più un'area: un messaggio spiega perché, senza 'Esci' alla cassa", async ({ page }) => {
   await installDesktopBridgeMock(page, { savedLogin: TEST_KITCHEN });
   await page.goto("/?area=staff");
-  await expect(page.getByText("Cucina", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("L'area Cucina non c'è più")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/comande stampate dalla cassa/i)).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Sezioni della sala" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
 });

@@ -1,7 +1,7 @@
-// Pieces shared between the waiter area (Waiter.jsx) and the kitchen area
-// (Kitchen.jsx): login with Firebase Auth + role check in staff/{uid} (see
-// docs/comande-camerieri.md, §3). File loaded only by these two areas (both
-// lazy-loaded in MenuApp.jsx), never by the public site.
+// Pieces shared by the staff areas (StaffHome.jsx, Waiter.jsx,
+// Reservations.jsx): login with Firebase Auth + role check in staff/{uid}
+// (see docs/comande-camerieri.md, §3). Loaded only by those (lazy-loaded in
+// MenuApp.jsx), never by the public site.
 import React, { useState, useEffect } from "react";
 import { Lock, AlertCircle, LogOut } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";

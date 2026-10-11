@@ -3,7 +3,7 @@
 // orders.js) senza dover aprire e chiudere 20+ tavoli dall'interfaccia — che
 // sarebbe troppo lento per un singolo test e comunque non aggiungerebbe
 // copertura oltre a quella già data dal flusso completo testato altrove
-// (waiter-order.spec.js, kitchen-view.spec.js).
+// (waiter-order.spec.js).
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, collection, query, where, getDocs, deleteDoc, Timestamp } from "firebase/firestore";
 import { TEST_WAITER } from "../test-env.js";

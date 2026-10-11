@@ -75,7 +75,7 @@ user can read/write any `staff` doc — see "Trust boundary" below).
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | Display name, shown as "Ciao, {name}" etc. |
-| `role` | string | `"admin"`, `"waiter"`, or `"kitchen"`. Any other value (or a missing doc) is a valid state the UI handles explicitly (`useStaffSession` in `staff-shared.jsx`: `"no-role"` / an unrecognized role → "Accesso non consentito"). |
+| `role` | string | `"admin"` or `"waiter"`. `"kitchen"` is an old role: the kitchen area was removed (the kitchen works from printed tickets), such accounts get a message asking for a role change. Any other value (or a missing doc) is a valid state the UI handles explicitly (`useStaffSession` in `staff-shared.jsx`: `"no-role"` / an unrecognized role → "Accesso non consentito"). |
 
 ## `orders/{orderId}`
 

@@ -3,11 +3,14 @@
 // to go. Reached from the "Area riservata" button at the bottom of the
 // public menu (ClientView) — access only granted after authentication.
 //
-// /cameriere and /cucina remain directly reachable too (useful for a
-// dedicated device, e.g. the fixed kitchen tablet): this page is the common
-// entry point, not the only one.
+// /cameriere and /prenotazioni remain directly reachable too (useful for a
+// dedicated device): this page is the common entry point, not the only one.
+//
+// There is no kitchen area any more: the kitchen works from the tickets
+// printed at the till (kitchenTicket.js). Accounts still holding the old
+// "kitchen" role get an explanation instead of an area.
 import React, { useState, useEffect, Suspense, lazy } from "react";
-import { ShieldCheck, ClipboardList, ChefHat, CalendarDays, BarChart3 } from "lucide-react";
+import { ShieldCheck, ClipboardList, CalendarDays, BarChart3 } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, currentShiftLabel, useUrlState, BackButton } from "./shared";
 import {
   useStaffSession, StaffLoginScreen, StaffMessageScreen, StaffLoadingScreen, staffLogout, logoutHiddenAtTill,
@@ -20,7 +23,6 @@ import { getDesktopBridge } from "./desktop";
 // menu editor or the charts library (Stats.jsx → Recharts).
 const Admin = lazy(() => import("./Admin"));
 const Waiter = lazy(() => import("./Waiter"));
-const Kitchen = lazy(() => import("./Kitchen"));
 const Reservations = lazy(() => import("./Reservations"));
 const Stats = lazy(() => import("./Stats"));
 const TillSala = lazy(() => import("./TillSala"));
@@ -126,7 +128,6 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
 
   const canAdmin = session.status === "ready" && session.role === "admin";
   const canWaiter = session.status === "ready" && (session.role === "waiter" || session.role === "admin");
-  const canKitchen = session.status === "ready" && (session.role === "kitchen" || session.role === "admin");
   // "Core" areas (unchanged from before): on their own they decide whether
   // to jump straight into an area when there's only one, and whether to
   // show the "Change area" bar — a waiter-only or kitchen-only account must
@@ -135,7 +136,6 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   const coreOptions = [
     canAdmin && { key: "admin", label: "Gestione menù", icon: ShieldCheck },
     canWaiter && { key: "waiter", label: "Sala", icon: ClipboardList },
-    canKitchen && { key: "kitchen", label: "Cucina", icon: ChefHat },
   ].filter(Boolean);
   const canReservations = canWaiter; // same minimum eligibility as Sala
   const dashboardOptions = [
@@ -186,7 +186,18 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
     );
   }
 
-  if (!canAdmin && !canWaiter && !canKitchen) {
+  if (session.role === "kitchen") {
+    return (
+      <StaffMessageScreen
+        theme={theme}
+        title="L'area Cucina non c'è più"
+        message="La cucina ora riceve le comande stampate dalla cassa. Chiedi all'amministratore di cambiare il ruolo di questo account (es. Cameriere)."
+        onLogout={staffLogout}
+      />
+    );
+  }
+
+  if (!canAdmin && !canWaiter) {
     return (
       <StaffMessageScreen
         theme={theme}
@@ -200,8 +211,7 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   // At the till (Windows client) every area a waiter or admin needs is a
   // section of one full-screen interface (TillSala.jsx: Tavoli, Prenotazioni,
   // Storico and, for admins, Menù and Statistiche) — no phone-style Dashboard
-  // and "Cambia area" in between. The Cucina area isn't offered there: the
-  // kitchen has no screen, it gets the printed ticket (kitchenTicket.js).
+  // and "Cambia area" in between.
   if (atTill && !menu && !saveError) return <StaffLoadingScreen theme={theme} />;
   if (atTill && menu) {
     const admin = canAdmin
@@ -245,11 +255,9 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
     )
     : chosen === "waiter"
       ? <Waiter menu={menu} />
-      : chosen === "kitchen"
-        ? <Kitchen menu={menu} />
-        : chosen === "reservations"
-          ? <Reservations menu={menu} />
-          : <Stats menu={menu} />;
+      : chosen === "reservations"
+        ? <Reservations menu={menu} />
+        : <Stats menu={menu} />;
   const panel = <Suspense fallback={<StaffLoadingScreen theme={theme} />}>{areaPanel}</Suspense>;
 
   // When more than one core area is available, show a bar to go back to the

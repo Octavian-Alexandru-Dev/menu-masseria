@@ -2,7 +2,7 @@
 
 This project uses Playwright for end-to-end contract tests, run against a **local Firebase emulator** (Auth + Firestore, containerized — see `docker-compose.emulator.yml`), never against the real production project. Tests live in `tests/*.spec.js` and are plain JavaScript (the app itself has no TypeScript).
 
-After implementing or changing a UI feature (`ClientView.jsx`, `Admin.jsx`, `Waiter.jsx`, `Kitchen.jsx`, `Reservations.jsx`, `OrderHistory.jsx`, `Stats.jsx`, `PrintMenu.jsx`, `ReceiptOverlay.jsx`, `PrintStation.jsx`, `StaffHome.jsx`, `shared.jsx`, `staff-shared.jsx`, `sala-shared.jsx`, `MenuApp.jsx`, the till screens `Till*.jsx`, or the till client in `desktop-client/`), verify it yourself before considering the task done:
+After implementing or changing a UI feature (`ClientView.jsx`, `Admin.jsx`, `Waiter.jsx`, `Reservations.jsx`, `OrderHistory.jsx`, `Stats.jsx`, `PrintMenu.jsx`, `ReceiptOverlay.jsx`, `PrintStation.jsx`, `StaffHome.jsx`, `shared.jsx`, `staff-shared.jsx`, `sala-shared.jsx`, `MenuApp.jsx`, the till screens `Till*.jsx`, or the till client in `desktop-client/`), verify it yourself before considering the task done:
 
 ```
 npm run test:e2e       # headless run — self-contained, starts/seeds/tears down the emulator automatically
@@ -18,7 +18,7 @@ The emulator container starts already populated — `Dockerfile.emulator` bakes 
 Test accounts (`TEST_ADMIN`, `TEST_WAITER`, `TEST_KITCHEN`, see `tests/test-env.js` / `scripts/seed-emulator.js`): fixed, non-secret credentials, meaningless outside the ephemeral local emulator.
 
 Notes:
-- `tests/client-view.spec.js` / `tests/admin-login.spec.js` / `tests/kitchen-view.spec.js` / `tests/waiter-order.spec.js` / `tests/reservations.spec.js` cover the public menu, staff login screens, and full authenticated flows (waiter↔kitchen realtime order handling, reservations lifecycle). Assertions favor structure/role/text over hardcoded content.
+- `tests/client-view.spec.js` / `tests/admin-login.spec.js` / `tests/staff-home.spec.js` / `tests/waiter-order.spec.js` / `tests/reservations.spec.js` cover the public menu, staff login screens, and full authenticated flows (orders and kitchen ticket, reservations lifecycle). Assertions favor structure/role/text over hardcoded content.
 - `tests/receipt-printing.spec.js` / `tests/escpos.spec.js` cover receipt and kitchen-ticket printing (print queue, till print station via a mocked `window.mdpDesktop`, ESC/POS output). `tests/till-sala.spec.js` covers the till interface (Tavoli, comanda, Storico, Prenotazioni, Menù, Statistiche) and `tests/till-client.spec.js` the till's menu/banners/login; they run in their own sequential Playwright projects (every till page is a print station). `tests/desktop-client.spec.js` launches the real Electron till client (`desktop-client/`) against a fake TCP printer; it is skipped unless `cd desktop-client && npm install && npx install-electron` has been run. Coverage checklist: `docs/stampa-scontrini.md`.
 - `tests/firestore-cleanup.js` deletes test-created orders/reservations between tests within a run (parallel test isolation); the whole emulator is discarded after the run regardless.
 - When adding a new UI feature, add or extend a spec in `tests/` alongside it.
@@ -27,7 +27,7 @@ Notes:
 
 L'area staff ha **due interfacce** per le stesse funzioni:
 
-- **telefono / browser** (mobile-first): `StaffHome.jsx` (Dashboard), `Waiter.jsx`, `Reservations.jsx`, `OrderHistory.jsx`, `ReceiptOverlay.jsx`, `Admin.jsx`, `Stats.jsx`, `Kitchen.jsx`;
+- **telefono / browser** (mobile-first): `StaffHome.jsx` (Dashboard), `Waiter.jsx`, `Reservations.jsx`, `OrderHistory.jsx`, `ReceiptOverlay.jsx`, `Admin.jsx`, `Stats.jsx` (non c'è più un'area Cucina: la cucina lavora con le comande stampate);
 - **cassa** (client Windows `desktop-client/`, riconosciuta da `getDesktopBridge()` in `src/desktop.js`): `TillSala.jsx` (barra delle sezioni + Tavoli/comanda), `TillReservations.jsx`, `TillHistory.jsx`, `TillMenu.jsx`, `TillStats.jsx`, costruite con i pezzi di `TillUi.jsx`.
 
 | Funzione | Telefono | Cassa | Logica condivisa |
@@ -40,7 +40,7 @@ L'area staff ha **due interfacce** per le stesse funzioni:
 | Gestione menù | `Admin.jsx` | `TillMenu.jsx` | `menuEdit.js`, `menuCosts.js` |
 | Statistiche | `Stats.jsx` | `TillStats.jsx` | `statsData.js` |
 
-> 1. Ogni funzione o interazione nuova dell'area staff (un campo nuovo di un piatto, un'azione sulla comanda, un filtro…) va fatta **in entrambe le interfacce** nello stesso intervento. Se una funzione deve esistere solo da una parte (es. la Cucina non è alla cassa, il PDF del menù resta in "Gestione completa"), dillo esplicitamente nel riepilogo all'utente e scrivilo in `docs/stampa-scontrini.md` §4.1.
+> 1. Ogni funzione o interazione nuova dell'area staff (un campo nuovo di un piatto, un'azione sulla comanda, un filtro…) va fatta **in entrambe le interfacce** nello stesso intervento. Se una funzione deve esistere solo da una parte (es. il PDF del menù resta in "Gestione completa"), dillo esplicitamente nel riepilogo all'utente e scrivilo in `docs/stampa-scontrini.md` §4.1.
 > 2. La logica (dati, regole, calcoli, scritture su Firestore) sta nei moduli condivisi della colonna a destra, mai duplicata nei due componenti: le due interfacce cambiano solo la presentazione. Un campo nuovo del menù passa da `menuEdit.js` ed è modificabile sia in `Admin.jsx` sia in `TillMenu.jsx`; aggiorna anche `scripts/seed-emulator.js` (se serve per i test) e `docs/data-model.md`.
 > 3. Alla cassa segui i principi già applicati in `TillUi.jsx` (dettagli in `docs/stampa-scontrini.md` §4.1): bersagli touch ≥ 48px, etichette di testo sempre visibili, stato mai affidato al solo colore (palette fissa `STATUS`), modifica nella barra laterale che si applica solo con "Salva", tastierino a schermo per i numeri, conferma prima delle azioni irreversibili, nessun "Esci". Usa i componenti di `TillUi.jsx` invece di stili nuovi.
 > 4. Test: almeno un test E2E per il telefono (progetto `chromium`) e uno per la cassa (`tests/till-sala.spec.js`, con `installDesktopBridgeMock`), più la riga nella matrice di copertura di `docs/stampa-scontrini.md` §7.

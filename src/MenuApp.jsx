@@ -24,7 +24,6 @@ import { MenuEditError } from "./menuEdit";
 const StaffHome = lazy(() => import("./StaffHome"));
 const PrintMenu = lazy(() => import("./PrintMenu"));
 const Waiter = lazy(() => import("./Waiter"));
-const Kitchen = lazy(() => import("./Kitchen"));
 const Reservations = lazy(() => import("./Reservations"));
 const PrintStation = lazy(() => import("./PrintStation"));
 
@@ -105,7 +104,6 @@ export default function App() {
   // check (see staff-shared.jsx).
   const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
   const isWaiterPath = pathname.startsWith("/cameriere") || pathname.startsWith("/waiter");
-  const isKitchenPath = pathname.startsWith("/cucina") || pathname.startsWith("/kitchen");
   const isReservationsPath = pathname.startsWith("/prenotazioni") || pathname.startsWith("/reservations");
 
   useEffect(() => {
@@ -341,8 +339,8 @@ export default function App() {
     );
   }
 
-  if (isKitchenPath || isWaiterPath || isReservationsPath) {
-    const StaffArea = isKitchenPath ? Kitchen : isReservationsPath ? Reservations : Waiter;
+  if (isWaiterPath || isReservationsPath) {
+    const StaffArea = isReservationsPath ? Reservations : Waiter;
     return withPrintStation(
       <Suspense
         fallback={

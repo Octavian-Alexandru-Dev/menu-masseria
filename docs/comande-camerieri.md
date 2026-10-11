@@ -3,6 +3,12 @@
 Stato: **bozza approvata, pronta per l'implementazione**
 Ultimo aggiornamento: 2026-09-04
 
+> **Nota (ottobre 2026):** l'area Cucina descritta qui (`Kitchen.jsx`,
+> `/cucina`, "Segna uscita", ruolo `kitchen`) è stata **rimossa**: in cucina
+> non c'è uno schermo, le comande arrivano stampate dalla cassa con i soli
+> piatti "In comanda" (vedi `docs/stampa-scontrini.md` §2.1). Le parti sulla
+> cucina restano qui come storia del progetto.
+
 Questo documento raccoglie tutte le decisioni prese in fase di brainstorming per
 la nuova funzionalità di presa comande digitale riservata al personale di sala
 e cucina. Va aggiornato se, durante l'implementazione, emergono scelte diverse

@@ -1,5 +1,5 @@
 // Blocco di login ripetuto in ogni spec che passa da StaffLoginScreen
-// (staff-shared.jsx): area cameriere/cucina/prenotazioni/StaffHome
+// (staff-shared.jsx): area cameriere/prenotazioni/StaffHome
 // condividono lo stesso form (email/password/"Accedi").
 export async function staffLogin(page, { email, password }) {
   await page.locator('input[type="email"]').fill(email);
