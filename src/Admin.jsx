@@ -2,7 +2,7 @@
 // when someone clicks "Gestione menù" on the public site (deferred
 // loading, see React.lazy in MenuApp.jsx) — so customers just looking at
 // the menu never download Firebase Authentication.
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, Save, Lock, LogOut, Eye, ChevronDown, ChevronUp, RotateCcw, ShieldCheck, AlertCircle, Star, Upload, ImageOff, Instagram, Facebook, ShoppingBag, Languages, Sparkles, Download, Printer, X, Users, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
 import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firestore";
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, DragOverlay, useDroppable } from "@dnd-kit/core";
@@ -13,7 +13,8 @@ import { db } from "./firebase-db";
 import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation, FALLBACK_STYLE, TYPE } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 import { subscribeMenuCosts, saveMenuCosts } from "./menuCosts";
-import { logoutHiddenAtTill } from "./staff-shared";
+import { logoutHiddenAtTill, LastAccountSuggestion } from "./staff-shared";
+import { getLastStaffAccount, rememberStaffAccount, forgetLastStaffAccount } from "./lastStaffAccount";
 import { pruneTranslations, moveTranslationItem, withTranslations } from "./menuEdit";
 import { itemGoesToKitchen, defaultKitchenTicketForCategory } from "./kitchenTicket";
 
@@ -123,6 +124,9 @@ function AdminLogin({ onBack, theme }) {
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // "Rientra come …", same as the staff login (staff-shared.jsx).
+  const [lastAccount, setLastAccount] = useState(getLastStaffAccount);
+  const passRef = useRef(null);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -131,7 +135,8 @@ function AdminLogin({ onBack, theme }) {
     try {
       // onAuthStateChanged in the App component will notice the successful
       // login and automatically switch to the management view.
-      await signInWithEmailAndPassword(auth, email.trim(), pass);
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
+      rememberStaffAccount(cred.user.email);
     } catch (err) {
       const code = err && err.code;
       if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
@@ -165,14 +170,24 @@ function AdminLogin({ onBack, theme }) {
           Accedi per modificare il menù di Masseria della Piana
         </div>
 
+        {lastAccount && (
+          <LastAccountSuggestion
+            t={t} account={lastAccount}
+            onUse={() => { setEmail(lastAccount.email); setError(""); passRef.current?.focus(); }}
+            onForget={() => { forgetLastStaffAccount(); setLastAccount(null); setEmail(""); }}
+          />
+        )}
+
         <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Email</label>
         <input
-          type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus
+          type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus={!lastAccount}
+          autoComplete="username" aria-label="Email"
           style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 16, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg }}
         />
         <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Password</label>
         <input
-          type="password" value={pass} onChange={(e) => setPass(e.target.value)}
+          ref={passRef} type="password" value={pass} onChange={(e) => setPass(e.target.value)}
+          autoComplete="current-password" aria-label="Password"
           style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 8, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg }}
         />
 

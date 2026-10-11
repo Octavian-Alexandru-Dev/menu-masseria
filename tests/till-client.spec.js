@@ -218,6 +218,37 @@ test("con il client 1.4 non c'è nessun 'Esci' nell'interfaccia: il logout si fa
   await expect(nav).toBeVisible({ timeout: 10_000 });
 });
 
+test("alla cassa senza account salvato, dopo l'uscita il login propone 'Rientra come …' con l'ultimo account", async ({ page }) => {
+  await installDesktopBridgeMock(page);
+  await page.goto("/?area=staff");
+  await staffLogin(page, TEST_WAITER);
+  const nav = page.getByRole("navigation", { name: "Sezioni della sala" });
+  await expect(nav).toBeVisible({ timeout: 10_000 });
+
+  // "Esci dall'account" dalle impostazioni del programma.
+  await page.evaluate(() => globalThis.__fireLogoutRequest());
+  const again = page.getByRole("button", { name: `Rientra come Cameriere di test (${TEST_WAITER.email})` });
+  await expect(again).toBeVisible({ timeout: 10_000 });
+  await expect(again).toHaveCSS("min-height", "56px");
+  await again.click();
+  await expect(page.locator('input[type="email"]')).toHaveValue(TEST_WAITER.email);
+  const password = page.locator('input[type="password"]');
+  await expect(password).toBeFocused();
+  await password.fill(TEST_WAITER.password);
+  await page.getByRole("button", { name: /^accedi$/i }).click();
+  await expect(nav).toBeVisible({ timeout: 10_000 });
+});
+
+test("alla cassa con l'account salvato non compare un secondo suggerimento per lo stesso account", async ({ page }) => {
+  await installDesktopBridgeMock(page, { savedLogin: TEST_ADMIN });
+  await page.goto("/?area=staff");
+  const nav = page.getByRole("navigation", { name: "Sezioni della sala" });
+  await expect(nav).toBeVisible({ timeout: 10_000 });
+  await page.evaluate(() => globalThis.__fireLogoutRequest());
+  await expect(page.getByRole("button", { name: `Accedi come ${TEST_ADMIN.email}` })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: /rientra come/i })).toHaveCount(0);
+});
+
 test("un account con il vecchio ruolo cucina non ha più un'area: un messaggio spiega perché, senza 'Esci' alla cassa", async ({ page }) => {
   await installDesktopBridgeMock(page, { savedLogin: TEST_KITCHEN });
   await page.goto("/?area=staff");

@@ -39,6 +39,40 @@ test.describe("Area riservata (StaffHome)", () => {
     await expect(page.getByRole("button", { name: /cambia area/i })).toHaveCount(0);
   });
 
+  test("dopo l'uscita il login propone 'Rientra come …' con l'ultimo account (senza password salvata)", async ({ page }) => {
+    // Primo accesso: nessun suggerimento.
+    await expect(page.getByRole("button", { name: /rientra come/i })).toHaveCount(0);
+    await staffLogin(page, TEST_WAITER);
+    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+
+    // Uscita (anche per sbaglio): sopra i campi c'è l'account appena usato.
+    await page.getByRole("button", { name: /^esci$/i }).click();
+    const again = page.getByRole("button", { name: `Rientra come Cameriere di test (${TEST_WAITER.email})` });
+    await expect(again).toBeVisible({ timeout: 10_000 });
+    const email = page.locator('input[type="email"]');
+    const password = page.locator('input[type="password"]');
+    await expect(email).toHaveValue("");
+    // La password non viene mai conservata.
+    expect(await page.evaluate(() => localStorage.getItem("mdp.lastStaffAccount"))).not.toContain(TEST_WAITER.password);
+
+    // Un tocco: email compilata, si passa alla password.
+    await again.click();
+    await expect(email).toHaveValue(TEST_WAITER.email);
+    await expect(password).toBeFocused();
+    await password.fill(TEST_WAITER.password);
+    await page.getByRole("button", { name: /^accedi$/i }).click();
+    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+
+    // "Non sei tu?" toglie il suggerimento, anche dopo un ricaricamento.
+    await page.getByRole("button", { name: /^esci$/i }).click();
+    await expect(again).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Non sei tu?" }).click();
+    await expect(again).toHaveCount(0);
+    await page.reload();
+    await expect(email).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /rientra come/i })).toHaveCount(0);
+  });
+
   test("un account admin vede la Dashboard con tutte le aree e naviga con il pulsante Indietro del browser", async ({ page }) => {
     await staffLogin(page, TEST_ADMIN);
     await expect(page.getByText(/^ciao,/i)).toBeVisible({ timeout: 10_000 });

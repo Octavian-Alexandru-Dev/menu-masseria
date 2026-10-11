@@ -2,14 +2,15 @@
 // Reservations.jsx): login with Firebase Auth + role check in staff/{uid}
 // (see docs/comande-camerieri.md, §3). Loaded only by those (lazy-loaded in
 // MenuApp.jsx), never by the public site.
-import React, { useState, useEffect } from "react";
-import { Lock, AlertCircle, LogOut } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Lock, AlertCircle, LogOut, UserRound } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase-db";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, FALLBACK_STYLE } from "./shared";
 import { getDesktopBridge } from "./desktop";
 import { confirmAction } from "./confirmDialog";
+import { getLastStaffAccount, rememberStaffAccount, forgetLastStaffAccount } from "./lastStaffAccount";
 
 // Set by a deliberate, confirmed logout at the till: the login screen then
 // waits for a tap on "Accedi come …" instead of signing straight back in
@@ -34,7 +35,10 @@ export function useStaffSession() {
       return;
     }
     return onSnapshot(doc(db, "staff", fbUser.uid), (snap) => {
-      setStaffDoc(snap.exists() ? snap.data() : null);
+      const data = snap.exists() ? snap.data() : null;
+      // Suggested again on the login screen after a logout ("Rientra come …").
+      if (data?.role) rememberStaffAccount(fbUser.email, data.name);
+      setStaffDoc(data);
     });
   }, [fbUser]);
 
@@ -54,6 +58,10 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
   // Till account saved in the Windows client (desktop-client/credentials.js):
   // automatic sign-in, plus a one-tap button after a deliberate logout.
   const [savedLogin, setSavedLogin] = useState(null);
+  // Last account that signed in here (lastStaffAccount.js): "Rientra come …"
+  // fills in its email and moves to the password.
+  const [lastAccount, setLastAccount] = useState(getLastStaffAccount);
+  const passRef = useRef(null);
 
   const signIn = async (emailValue, passValue, failurePrefix = "") => {
     setError("");
@@ -80,6 +88,19 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
     e.preventDefault();
     signIn(email, pass);
   };
+
+  const useLastAccount = () => {
+    setEmail(lastAccount.email);
+    setError("");
+    passRef.current?.focus();
+  };
+  const forgetLastAccount = () => {
+    forgetLastStaffAccount();
+    setLastAccount(null);
+    setEmail("");
+  };
+  // The till's saved account already has its own one-tap button.
+  const showLastAccount = lastAccount && lastAccount.email !== savedLogin?.email;
 
   const signInSaved = () => signIn(savedLogin.email, savedLogin.password, "Accesso con l'account della cassa non riuscito (controlla le credenziali in Impostazioni): ");
 
@@ -130,14 +151,20 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
           </>
         )}
 
+        {showLastAccount && (
+          <LastAccountSuggestion t={t} account={lastAccount} onUse={useLastAccount} onForget={forgetLastAccount} />
+        )}
+
         <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Email</label>
         <input
-          type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus
+          type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus={!showLastAccount}
+          autoComplete="username" aria-label="Email"
           style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 16, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg }}
         />
         <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Password</label>
         <input
-          type="password" value={pass} onChange={(e) => setPass(e.target.value)}
+          ref={passRef} type="password" value={pass} onChange={(e) => setPass(e.target.value)}
+          autoComplete="current-password" aria-label="Password"
           style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 8, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg }}
         />
 
@@ -155,6 +182,42 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
           <Lock size={14} /> {busy ? "Accesso…" : "Accedi"}
         </button>
       </form>
+    </div>
+  );
+}
+
+// "Rientra come …" above the email/password fields (StaffLoginScreen and
+// Gestione menù's login in Admin.jsx): the last account that signed in on
+// this device. A tap fills in its email and moves to the password; "Non sei
+// tu?" removes the suggestion (a shared phone or laptop).
+export function LastAccountSuggestion({ t, account, onUse, onForget }) {
+  const who = account.name && account.name !== account.email ? account.name : account.email;
+  return (
+    <div role="group" aria-label="Ultimo account usato" style={{ marginBottom: 18 }}>
+      <button type="button" onClick={onUse} autoFocus className="mdp-btn" aria-label={`Rientra come ${who} (${account.email})`} style={{
+        width: "100%", minHeight: 56, padding: "10px 14px", background: t.bgAlt, color: t.ink,
+        border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+      }}>
+        <UserRound size={22} color={t.primary} aria-hidden="true" style={{ flexShrink: 0 }} />
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: TYPE.bodyLg, fontWeight: 600, color: t.primary }}>Rientra come {who}</span>
+          {who !== account.email && (
+            <span style={{ display: "block", fontSize: TYPE.smallPlus, color: t.inkSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {account.email}
+            </span>
+          )}
+        </span>
+      </button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+        <span style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft }}>oppure inserisci un altro account:</span>
+        <button type="button" onClick={onForget} className="mdp-btn" style={{
+          minHeight: 44, padding: "0 4px", background: "none", border: "none",
+          color: t.inkSoft, fontSize: TYPE.smallPlus, textDecoration: "underline", cursor: "pointer",
+        }}>
+          Non sei tu?
+        </button>
+      </div>
     </div>
   );
 }
