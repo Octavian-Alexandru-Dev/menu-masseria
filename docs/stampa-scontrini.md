@@ -277,12 +277,15 @@ conferma.
 **"Rientra come …" (telefono e cassa).** Dopo un'uscita, voluta o per
 sbaglio, la schermata di accesso mostra sopra email e password l'ultimo
 account entrato da quel dispositivo ("Rientra come Mario", con l'email
-sotto). Un tocco compila l'email e passa alla password: la password non è
-mai salvata (solo email e nome, in `localStorage`, `src/lastStaffAccount.js`),
-quindi va scritta (o la propone il gestore password del browser). "Non sei
-tu?" toglie il suggerimento (telefono o portatile condiviso). Alla cassa,
-se l'ultimo account è quello salvato nel programma resta solo "Accedi come
-…", che entra direttamente.
+sotto): un tocco e si rientra, senza riscrivere la password. Email e nome
+stanno in `localStorage`; la password è cifrata (AES-GCM) in IndexedDB con
+una chiave creata sul dispositivo e non esportabile (`src/lastStaffAccount.js`):
+una copia della memoria del browser non la rivela, solo questa pagina su
+questo dispositivo può usarla. Se nel frattempo la password è cambiata, il
+tocco compila l'email e chiede la password nuova. "Non sei tu?" toglie
+suggerimento e password (telefono o portatile condiviso). Alla cassa, se
+l'ultimo account è quello salvato nel programma resta solo "Accedi come …",
+che usa le credenziali del programma.
 
 Impostazioni:
 
@@ -499,7 +502,7 @@ funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
 | Accesso automatico con credenziali salvate; credenziali sbagliate → errore comprensibile | `tests/till-client.spec.js` |
 | "Esci" alla cassa: conferma, annulla, nessun rientro automatico dopo uscita voluta, rientro con un tocco | `tests/till-client.spec.js` |
 | "Esci" nel browser normale: esce subito senza conferma | `tests/till-client.spec.js` |
-| "Rientra come …" dopo l'uscita: ultimo account sopra i campi, email compilata e password da scrivere (mai salvata), "Non sei tu?" lo toglie; alla cassa anche senza account salvato, nessun doppione con "Accedi come …" | `tests/staff-home.spec.js`, `tests/till-client.spec.js` |
+| "Rientra come …" dopo l'uscita: ultimo account sopra i campi, rientro con un tocco (password mai in chiaro in `localStorage`), password cambiata → email compilata e password da riscrivere, "Non sei tu?" lo toglie; alla cassa anche senza account salvato e senza rientro automatico, nessun doppione con "Accedi come …" | `tests/staff-home.spec.js`, `tests/till-client.spec.js` |
 | Seconda apertura del programma: esce subito, la finestra già aperta resta visibile, riga nel log | `tests/desktop-client.spec.js` |
 | Aggiorna ora (programma): avviso con conto alla rovescia prima di chiudere | `tests/till-client.spec.js` |
 | Client Electron vero: API 1.1.0/1.2.0 (stato schermo intero, nessuna credenziale, stato aggiornamenti "dev"), errore tastiera fuori da Windows | `tests/desktop-client.spec.js` |

@@ -8,13 +8,12 @@ import { collection, doc, setDoc, deleteDoc, onSnapshot } from "firebase/firesto
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, DragOverlay, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
+import { auth, signOut, onAuthStateChanged } from "./firebase-auth";
 import { db } from "./firebase-db";
 import { THEMES, ital, uid, GlobalStyle, Logo, LANGUAGES, generateMissingTranslations, countMissingTranslations, applyTranslation, FALLBACK_STYLE, TYPE } from "./shared";
 import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 import { subscribeMenuCosts, saveMenuCosts } from "./menuCosts";
-import { logoutHiddenAtTill, LastAccountSuggestion } from "./staff-shared";
-import { getLastStaffAccount, rememberStaffAccount, forgetLastStaffAccount } from "./lastStaffAccount";
+import { logoutHiddenAtTill, LastAccountSuggestion, useLastStaffAccount, staffSignIn, signInErrorMessage } from "./staff-shared";
 import { pruneTranslations, moveTranslationItem, withTranslations } from "./menuEdit";
 import { itemGoesToKitchen, defaultKitchenTicketForCategory } from "./kitchenTicket";
 
@@ -124,33 +123,31 @@ function AdminLogin({ onBack, theme }) {
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  // "Rientra come …", same as the staff login (staff-shared.jsx).
-  const [lastAccount, setLastAccount] = useState(getLastStaffAccount);
   const passRef = useRef(null);
 
-  const submit = async (e) => {
-    e.preventDefault();
+  // onAuthStateChanged in the App component will notice the successful
+  // login and automatically switch to the management view.
+  const signIn = async (emailValue, passValue) => {
     setError("");
     setBusy(true);
     try {
-      // onAuthStateChanged in the App component will notice the successful
-      // login and automatically switch to the management view.
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
-      rememberStaffAccount(cred.user.email);
+      await staffSignIn(emailValue, passValue);
+      return null;
     } catch (err) {
-      const code = err && err.code;
-      if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-        setError("Email o password non corretti.");
-      } else if (code === "auth/invalid-email") {
-        setError("Indirizzo email non valido.");
-      } else if (code === "auth/too-many-requests") {
-        setError("Troppi tentativi. Riprova tra qualche minuto.");
-      } else {
-        setError("Accesso non riuscito. Riprova.");
-      }
+      const code = (err && err.code) || "unknown";
+      setError(signInErrorMessage(code));
+      return code;
     } finally {
       setBusy(false);
     }
+  };
+  // "Rientra come …", same as the staff login (staff-shared.jsx).
+  const last = useLastStaffAccount({ signIn, setEmail, setError, passRef });
+  const lastAccount = last.account;
+
+  const submit = (e) => {
+    e.preventDefault();
+    signIn(email, pass);
   };
 
   return (
@@ -171,11 +168,7 @@ function AdminLogin({ onBack, theme }) {
         </div>
 
         {lastAccount && (
-          <LastAccountSuggestion
-            t={t} account={lastAccount}
-            onUse={() => { setEmail(lastAccount.email); setError(""); passRef.current?.focus(); }}
-            onForget={() => { forgetLastStaffAccount(); setLastAccount(null); setEmail(""); }}
-          />
+          <LastAccountSuggestion t={t} account={lastAccount} busy={busy} onUse={last.use} onForget={last.forget} />
         )}
 
         <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Email</label>

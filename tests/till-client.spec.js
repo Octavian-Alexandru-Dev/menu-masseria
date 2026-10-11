@@ -218,7 +218,7 @@ test("con il client 1.4 non c'è nessun 'Esci' nell'interfaccia: il logout si fa
   await expect(nav).toBeVisible({ timeout: 10_000 });
 });
 
-test("alla cassa senza account salvato, dopo l'uscita il login propone 'Rientra come …' con l'ultimo account", async ({ page }) => {
+test("alla cassa senza account salvato, dopo l'uscita 'Rientra come …' fa rientrare con un tocco l'ultimo account", async ({ page }) => {
   await installDesktopBridgeMock(page);
   await page.goto("/?area=staff");
   await staffLogin(page, TEST_WAITER);
@@ -230,12 +230,9 @@ test("alla cassa senza account salvato, dopo l'uscita il login propone 'Rientra 
   const again = page.getByRole("button", { name: `Rientra come Cameriere di test (${TEST_WAITER.email})` });
   await expect(again).toBeVisible({ timeout: 10_000 });
   await expect(again).toHaveCSS("min-height", "56px");
+  await page.waitForTimeout(1000);
+  await expect(nav).toHaveCount(0); // nessun rientro automatico: serve il tocco
   await again.click();
-  await expect(page.locator('input[type="email"]')).toHaveValue(TEST_WAITER.email);
-  const password = page.locator('input[type="password"]');
-  await expect(password).toBeFocused();
-  await password.fill(TEST_WAITER.password);
-  await page.getByRole("button", { name: /^accedi$/i }).click();
   await expect(nav).toBeVisible({ timeout: 10_000 });
 });
 

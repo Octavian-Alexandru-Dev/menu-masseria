@@ -10,7 +10,7 @@ import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from ".
 import { THEMES, ital, GlobalStyle, Logo, TYPE, FALLBACK_STYLE } from "./shared";
 import { getDesktopBridge } from "./desktop";
 import { confirmAction } from "./confirmDialog";
-import { getLastStaffAccount, rememberStaffAccount, forgetLastStaffAccount } from "./lastStaffAccount";
+import { getLastStaffAccount, rememberStaffAccount, forgetLastStaffAccount, rememberStaffPassword, loadStaffPassword, forgetStaffPassword } from "./lastStaffAccount";
 
 // Set by a deliberate, confirmed logout at the till: the login screen then
 // waits for a tap on "Accedi come …" instead of signing straight back in
@@ -49,6 +49,56 @@ export function useStaffSession() {
   return { status: "ready", user: fbUser, role: staffDoc.role, name: staffDoc.name || fbUser.email };
 }
 
+const WRONG_CREDENTIALS = new Set(["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"]);
+
+export function signInErrorMessage(code) {
+  if (WRONG_CREDENTIALS.has(code)) return "Email o password non corretti.";
+  if (code === "auth/invalid-email") return "Indirizzo email non valido.";
+  if (code === "auth/too-many-requests") return "Troppi tentativi. Riprova tra qualche minuto.";
+  return "Accesso non riuscito. Riprova.";
+}
+
+// Sign-in used by both login screens (StaffLoginScreen, Admin.jsx's
+// AdminLogin). Returns null on success, the Firebase error code otherwise
+// (the message is already shown). remember: keep the account (and the
+// password, encrypted — lastStaffAccount.js) for "Rientra come …".
+export async function staffSignIn(email, password, { remember = true } = {}) {
+  const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+  if (remember) {
+    rememberStaffAccount(cred.user.email);
+    await rememberStaffPassword(cred.user.email, password);
+  }
+  return cred;
+}
+
+// "Rientra come …" on a login screen: the last account that signed in on
+// this device. use() signs straight back in with the remembered password;
+// without one (never stored, or it changed since) it fills in the email and
+// moves to the password field.
+export function useLastStaffAccount({ signIn, setEmail, setError, passRef }) {
+  const [account, setAccount] = useState(getLastStaffAccount);
+  const use = async () => {
+    const password = await loadStaffPassword(account.email);
+    if (password) {
+      const code = await signIn(account.email, password);
+      if (!code) return;
+      if (!WRONG_CREDENTIALS.has(code)) return; // e.g. offline: the error is shown, tap again later
+      await forgetStaffPassword();
+      setError("La password di questo account è cambiata: inseriscila di nuovo.");
+    } else {
+      setError("");
+    }
+    setEmail(account.email);
+    passRef.current?.focus();
+  };
+  const forget = async () => {
+    await forgetLastStaffAccount();
+    setAccount(null);
+    setEmail("");
+  };
+  return { account, use, forget };
+}
+
 export function StaffLoginScreen({ title, subtitle, theme }) {
   const t = THEMES[theme] || THEMES.minimal;
   const [email, setEmail] = useState("");
@@ -58,51 +108,37 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
   // Till account saved in the Windows client (desktop-client/credentials.js):
   // automatic sign-in, plus a one-tap button after a deliberate logout.
   const [savedLogin, setSavedLogin] = useState(null);
-  // Last account that signed in here (lastStaffAccount.js): "Rientra come …"
-  // fills in its email and moves to the password.
-  const [lastAccount, setLastAccount] = useState(getLastStaffAccount);
   const passRef = useRef(null);
 
-  const signIn = async (emailValue, passValue, failurePrefix = "") => {
+  // remember: false for the till's saved account, already kept (encrypted)
+  // by the client itself.
+  const signIn = async (emailValue, passValue, failurePrefix = "", remember = true) => {
     setError("");
     setBusy(true);
     try {
-      await signInWithEmailAndPassword(auth, emailValue.trim(), passValue);
+      await staffSignIn(emailValue, passValue, { remember });
+      return null;
     } catch (err) {
-      const code = err && err.code;
-      if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-        setError(failurePrefix + "Email o password non corretti.");
-      } else if (code === "auth/invalid-email") {
-        setError(failurePrefix + "Indirizzo email non valido.");
-      } else if (code === "auth/too-many-requests") {
-        setError(failurePrefix + "Troppi tentativi. Riprova tra qualche minuto.");
-      } else {
-        setError(failurePrefix + "Accesso non riuscito. Riprova.");
-      }
+      const code = (err && err.code) || "unknown";
+      setError(failurePrefix + signInErrorMessage(code));
+      return code;
     } finally {
       setBusy(false);
     }
   };
+  // Last account that signed in here: "Rientra come …".
+  const last = useLastStaffAccount({ signIn, setEmail, setError, passRef });
+  const lastAccount = last.account;
 
   const submit = (e) => {
     e.preventDefault();
     signIn(email, pass);
   };
 
-  const useLastAccount = () => {
-    setEmail(lastAccount.email);
-    setError("");
-    passRef.current?.focus();
-  };
-  const forgetLastAccount = () => {
-    forgetLastStaffAccount();
-    setLastAccount(null);
-    setEmail("");
-  };
   // The till's saved account already has its own one-tap button.
   const showLastAccount = lastAccount && lastAccount.email !== savedLogin?.email;
 
-  const signInSaved = () => signIn(savedLogin.email, savedLogin.password, "Accesso con l'account della cassa non riuscito (controlla le credenziali in Impostazioni): ");
+  const signInSaved = () => signIn(savedLogin.email, savedLogin.password, "Accesso con l'account della cassa non riuscito (controlla le credenziali in Impostazioni): ", false);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -112,7 +148,7 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
       if (cancelled || !login?.email || !login?.password) return;
       setSavedLogin(login);
       if (!manualLogoutAtTill) {
-        signIn(login.email, login.password, "Accesso automatico non riuscito (controlla le credenziali in Impostazioni): ");
+        signIn(login.email, login.password, "Accesso automatico non riuscito (controlla le credenziali in Impostazioni): ", false);
       }
     }).catch((err) => console.error("[login] Credenziali della cassa non disponibili:", err));
     return () => { cancelled = true; };
@@ -152,7 +188,7 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
         )}
 
         {showLastAccount && (
-          <LastAccountSuggestion t={t} account={lastAccount} onUse={useLastAccount} onForget={forgetLastAccount} />
+          <LastAccountSuggestion t={t} account={lastAccount} busy={busy} onUse={last.use} onForget={last.forget} />
         )}
 
         <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Email</label>
@@ -190,18 +226,18 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
 // Gestione menù's login in Admin.jsx): the last account that signed in on
 // this device. A tap fills in its email and moves to the password; "Non sei
 // tu?" removes the suggestion (a shared phone or laptop).
-export function LastAccountSuggestion({ t, account, onUse, onForget }) {
+export function LastAccountSuggestion({ t, account, busy, onUse, onForget }) {
   const who = account.name && account.name !== account.email ? account.name : account.email;
   return (
     <div role="group" aria-label="Ultimo account usato" style={{ marginBottom: 18 }}>
-      <button type="button" onClick={onUse} autoFocus className="mdp-btn" aria-label={`Rientra come ${who} (${account.email})`} style={{
+      <button type="button" onClick={onUse} disabled={busy} autoFocus className="mdp-btn" aria-label={`Rientra come ${who} (${account.email})`} style={{
         width: "100%", minHeight: 56, padding: "10px 14px", background: t.bgAlt, color: t.ink,
         border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer",
         display: "flex", alignItems: "center", gap: 12, textAlign: "left",
       }}>
         <UserRound size={22} color={t.primary} aria-hidden="true" style={{ flexShrink: 0 }} />
         <span style={{ minWidth: 0 }}>
-          <span style={{ display: "block", fontSize: TYPE.bodyLg, fontWeight: 600, color: t.primary }}>Rientra come {who}</span>
+          <span style={{ display: "block", fontSize: TYPE.bodyLg, fontWeight: 600, color: t.primary }}>{busy ? "Accesso…" : `Rientra come ${who}`}</span>
           {who !== account.email && (
             <span style={{ display: "block", fontSize: TYPE.smallPlus, color: t.inkSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {account.email}
@@ -211,7 +247,7 @@ export function LastAccountSuggestion({ t, account, onUse, onForget }) {
       </button>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
         <span style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft }}>oppure inserisci un altro account:</span>
-        <button type="button" onClick={onForget} className="mdp-btn" style={{
+        <button type="button" onClick={onForget} disabled={busy} className="mdp-btn" style={{
           minHeight: 44, padding: "0 4px", background: "none", border: "none",
           color: t.inkSoft, fontSize: TYPE.smallPlus, textDecoration: "underline", cursor: "pointer",
         }}>

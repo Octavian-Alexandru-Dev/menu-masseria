@@ -39,31 +39,59 @@ test.describe("Area riservata (StaffHome)", () => {
     await expect(page.getByRole("button", { name: /cambia area/i })).toHaveCount(0);
   });
 
-  test("dopo l'uscita il login propone 'Rientra come …' con l'ultimo account (senza password salvata)", async ({ page }) => {
+  test("dopo l'uscita 'Rientra come …' fa rientrare con un tocco l'ultimo account, senza riscrivere la password", async ({ page }) => {
     // Primo accesso: nessun suggerimento.
     await expect(page.getByRole("button", { name: /rientra come/i })).toHaveCount(0);
     await staffLogin(page, TEST_WAITER);
-    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+    const signedIn = page.getByRole("button", { name: /nuovo tavolo/i });
+    await expect(signedIn).toBeVisible({ timeout: 10_000 });
 
     // Uscita (anche per sbaglio): sopra i campi c'è l'account appena usato.
     await page.getByRole("button", { name: /^esci$/i }).click();
     const again = page.getByRole("button", { name: `Rientra come Cameriere di test (${TEST_WAITER.email})` });
     await expect(again).toBeVisible({ timeout: 10_000 });
-    const email = page.locator('input[type="email"]');
-    const password = page.locator('input[type="password"]');
-    await expect(email).toHaveValue("");
-    // La password non viene mai conservata.
+    // La password non è mai in chiaro nella memoria del browser.
     expect(await page.evaluate(() => localStorage.getItem("mdp.lastStaffAccount"))).not.toContain(TEST_WAITER.password);
 
-    // Un tocco: email compilata, si passa alla password.
+    // Un tocco e si è dentro, senza scrivere nulla.
     await again.click();
+    await expect(signedIn).toBeVisible({ timeout: 10_000 });
+
+    // Password cambiata nel frattempo: si chiede di riscriverla, email già compilata.
+    await page.getByRole("button", { name: /^esci$/i }).click();
+    await expect(again).toBeVisible({ timeout: 10_000 });
+    await page.evaluate(() => new Promise((resolve, reject) => {
+      const open = globalThis.indexedDB.open("mdp-login", 1);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const get = db.transaction("credentials").objectStore("credentials").get("last");
+        get.onsuccess = async () => {
+          const record = get.result;
+          const iv = crypto.getRandomValues(new Uint8Array(12));
+          const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, record.key, new TextEncoder().encode("vecchia-password"));
+          const put = db.transaction("credentials", "readwrite").objectStore("credentials").put({ ...record, iv, data }, "last");
+          put.onsuccess = () => resolve();
+          put.onerror = () => reject(put.error);
+        };
+      };
+    }));
+    await again.click();
+    await expect(page.getByText(/la password di questo account è cambiata/i)).toBeVisible({ timeout: 10_000 });
+    const email = page.locator('input[type="email"]');
+    const password = page.locator('input[type="password"]');
     await expect(email).toHaveValue(TEST_WAITER.email);
     await expect(password).toBeFocused();
     await password.fill(TEST_WAITER.password);
     await page.getByRole("button", { name: /^accedi$/i }).click();
-    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+    await expect(signedIn).toBeVisible({ timeout: 10_000 });
 
-    // "Non sei tu?" toglie il suggerimento, anche dopo un ricaricamento.
+    // Riscritta la password, il tocco torna a bastare.
+    await page.getByRole("button", { name: /^esci$/i }).click();
+    await again.click();
+    await expect(signedIn).toBeVisible({ timeout: 10_000 });
+
+    // "Non sei tu?" toglie il suggerimento (e la password), anche dopo un ricaricamento.
     await page.getByRole("button", { name: /^esci$/i }).click();
     await expect(again).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: "Non sei tu?" }).click();
