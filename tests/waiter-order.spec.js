@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { TEST_WAITER } from "./test-env";
 import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
 import { staffLogin } from "./helpers/staffLogin";
+import { failPrintJobsByTableLabel } from "./helpers/printJobs";
 
 // Numero di tavolo "sentinella" molto alto e randomizzato ad ogni run, per
 // non essere mai confuso con un tavolo reale e per non collidere con un
@@ -111,6 +112,51 @@ test.describe("Area cameriere", () => {
       await expect(openButton).toBeDisabled();
       await page.locator('input[type="number"]').first().fill(String(freshTableNumber()));
       await expect(openButton).toBeEnabled();
+    });
+
+    test("una comanda cucina non stampata è segnalata sul tavolo e si ristampa anche mentre si aggiungono piatti", async ({ page }) => {
+      const tableNumber = await openFreshTable(page);
+      openedTableNumbers.push(tableNumber);
+      await page.getByRole("button", { name: /orecchiette/i }).click();
+      await page.getByRole("button", { name: /invia comanda/i }).click();
+      await expect(page.getByRole("status", { name: "Stampa comanda cucina" })).toHaveText(/in attesa/i, { timeout: 10_000 });
+      await expect.poll(() => failPrintJobsByTableLabel(`Tavolo ${tableNumber}`, "Carta esaurita"), { timeout: 10_000 }).toBe(1);
+
+      const problems = page.getByRole("group", { name: "Comande cucina non stampate" });
+      await expect(problems).toContainText(/carta esaurita/i, { timeout: 10_000 });
+      await page.getByRole("button", { name: "Tavoli", exact: true }).click();
+      const row = page.getByRole("button", { name: new RegExp(`Tavolo ${tableNumber}\\b`) });
+      await expect(row).toContainText("Comanda cucina non stampata", { timeout: 10_000 });
+
+      // Riaperto il tavolo, la segnalazione resta anche con nuovi piatti nella bozza.
+      await row.click();
+      await page.getByRole("button", { name: /bruschetta/i }).click();
+      await expect(page.getByRole("button", { name: /invia comanda \(1\)/i })).toBeVisible();
+      await expect(problems).toContainText(/comanda delle \d\d:\d\d \(1 piatto\)/i);
+      await problems.getByRole("button", { name: "Ristampa" }).click();
+      await expect(problems).toHaveCount(0, { timeout: 10_000 });
+      await expect(page.getByRole("button", { name: /invia comanda \(1\)/i })).toBeVisible();
+    });
+
+    test("i comandi usati a ogni tavolo sono grandi almeno 44px", async ({ page }) => {
+      const tableNumber = await openFreshTable(page);
+      openedTableNumbers.push(tableNumber);
+      await page.getByRole("button", { name: /bruschetta/i }).click();
+      const targets = [
+        page.getByRole("button", { name: "Aumenta adulti" }),
+        page.getByRole("button", { name: "Diminuisci bambini" }),
+        page.getByRole("button", { name: /orecchiette/i }),
+        page.getByRole("button", { name: "Aumenta quantità di Bruschetta" }),
+        page.getByRole("button", { name: "Diminuisci quantità di Bruschetta" }),
+        page.getByRole("textbox", { name: "Nota per Bruschetta" }),
+        page.getByRole("button", { name: "Rimuovi Bruschetta dalla comanda" }),
+        page.getByRole("button", { name: /invia comanda/i }),
+      ];
+      for (const target of targets) {
+        const box = await target.boundingBox();
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.width).toBeGreaterThanOrEqual(44);
+      }
     });
 
     test("la ricerca piatti filtra 'Aggiungi piatti' e mostra lo stato senza risultati", async ({ page }) => {

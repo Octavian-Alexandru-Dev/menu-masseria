@@ -13,12 +13,12 @@
 // print station, never by the public menu.
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
-  runTransaction, serverTimestamp, Timestamp,
+  runTransaction, serverTimestamp, Timestamp, writeBatch, arrayUnion,
 } from "firebase/firestore";
 import { db } from "./firebase-db";
 import { auth } from "./firebase-auth";
 import { parsePriceToCents, tableIdentity } from "./shared";
-import { itemsTotalCents, copertoTotalCents } from "./orders";
+import { itemsTotalCents, copertoTotalCents, orderRef } from "./orders";
 import { buildKitchenTicketPayload } from "./kitchenTicket";
 
 export const PRINT_JOBS_COLLECTION = "printJobs";
@@ -88,27 +88,84 @@ export async function enqueueReceiptPrint(order, menu) {
   return ref.id;
 }
 
-// Kitchen ticket for the lines just sent with "Invia comanda" (see
-// kitchenTicket.js): only dishes flagged "In comanda" are printed. `order` is
-// the order before these lines were added. Resolves to the job id, or null
-// when nothing in the batch goes to the kitchen (no job is created).
-export async function enqueueKitchenTicket(order, lines, menu, senderName) {
+// "Invia comanda": the lines are added to the order and their kitchen ticket
+// (see kitchenTicket.js — only dishes flagged "In comanda") is queued in ONE
+// batch, so they can't come apart: with the persistent offline cache a send
+// still unconfirmed when the page reloads is replayed whole, ticket included.
+// `order` is the order before these lines. Resolves once the server has
+// confirmed, to the ticket's job id or null when nothing in the batch goes to
+// the kitchen; onJobId gets the same value right away, before the server
+// answers. The ticket's status is then read per order
+// (subscribeOrderKitchenJobs), not kept by the screen that sent it.
+export async function sendOrderLinesWithKitchenTicket(order, lines, menu, senderName, onJobId) {
+  const batch = writeBatch(db);
+  batch.update(orderRef(order.id), { items: arrayUnion(...lines) });
   const payload = buildKitchenTicketPayload(order, lines, menu, { senderName });
-  if (!payload) return null;
-  const user = auth.currentUser;
-  const ref = await addDoc(printJobsRef(), {
-    type: "kitchen",
-    orderId: order.id,
-    payload,
-    status: "pending",
-    createdAt: serverTimestamp(),
-    requestedBy: { uid: user?.uid || null, email: user?.email || null },
-    claimedBy: null,
-    claimedAt: null,
-    finishedAt: null,
-    error: null,
-  });
-  return ref.id;
+  let jobId = null;
+  if (payload) {
+    const user = auth.currentUser;
+    const ref = doc(printJobsRef());
+    jobId = ref.id;
+    batch.set(ref, {
+      type: "kitchen",
+      orderId: order.id,
+      payload,
+      status: "pending",
+      createdAt: serverTimestamp(),
+      requestedBy: { uid: user?.uid || null, email: user?.email || null },
+      claimedBy: null,
+      claimedAt: null,
+      finishedAt: null,
+      error: null,
+    });
+  }
+  onJobId?.(jobId);
+  await batch.commit();
+  return jobId;
+}
+
+function kitchenJobsFrom(snap) {
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data({ serverTimestamps: "estimate" }) }))
+    .filter((j) => j.type === "kitchen");
+}
+
+// Every kitchen ticket of one order, oldest first (the order screen shows the
+// last one's status and any that didn't print, with "Ristampa").
+export function subscribeOrderKitchenJobs(orderId, onChange, onError) {
+  const q = query(printJobsRef(), where("orderId", "==", orderId));
+  return onSnapshot(q, (snap) => {
+    onChange(kitchenJobsFrom(snap).sort((a, b) => jobCreatedMs(a) - jobCreatedMs(b)));
+  }, onError);
+}
+
+// Kitchen tickets that may not have reached the kitchen (error, expired, or
+// still "printing" — stuck if old, see kitchenJobProblem): the table lists
+// flag their tables.
+export function subscribeUnfinishedKitchenJobs(onChange, onError) {
+  const q = query(printJobsRef(), where("status", "in", ["error", "expired", "printing"]));
+  return onSnapshot(q, (snap) => onChange(kitchenJobsFrom(snap)), onError);
+}
+
+// "Ignora": the ticket isn't needed any more (e.g. the kitchen was told
+// another way) — it stops being flagged.
+export async function dismissPrintJob(jobId) {
+  return updateDoc(printJobRef(jobId), { status: "dismissed", finishedAt: serverTimestamp() });
+}
+
+export function jobCreatedMs(job) {
+  return job.createdAt?.toMillis ? job.createdAt.toMillis() : Date.now();
+}
+
+// A job "printing" for this long was claimed by a till that then stopped
+// (closed or crashed mid-print).
+export const PRINTING_STUCK_MS = 30_000;
+
+// Why a kitchen ticket may not have reached the kitchen, or null.
+export function kitchenJobProblem(job, nowMs = Date.now()) {
+  if (job.status === "error" || job.status === "expired") return job.status;
+  if (job.status === "printing" && nowMs - (job.claimedAt?.toMillis ? job.claimedAt.toMillis() : jobCreatedMs(job)) > PRINTING_STUCK_MS) return "stuck";
+  return null;
 }
 
 export function subscribePrintJob(jobId, onChange, onError) {

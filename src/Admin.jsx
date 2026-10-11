@@ -911,6 +911,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
               {Object.entries(THEMES).map(([key, th]) => (
                 <button
                   key={key}
+                  aria-pressed={menu.theme === key}
                   onClick={() => updateField("theme", key)}
                   className="mdp-btn"
                   style={{
@@ -1076,6 +1077,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
             return (
               <button
                 key={l.code}
+                aria-pressed={lang === l.code}
                 onClick={() => changeLang(l.code)}
                 className="mdp-btn"
                 style={{
@@ -1507,6 +1509,7 @@ function AdminPanel({ menu, setMenu, onSave, saving, savedAt, saveError, onLogou
                   <button
                     key={cat.id}
                     type="button"
+                    aria-pressed={included}
                     onClick={() => togglePdfCat(cat.id)}
                     className="mdp-btn"
                     style={{
@@ -1697,13 +1700,16 @@ function PdfOptionsGroup({ title, t, children }) {
 // size): the same pill style already used for the language selector.
 function PdfPillGroup({ t, label, options, value, onChange }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, color: t.inkSoft }}>
+    // A group, not a <label>: a tap on the label text must not pick the
+    // first option.
+    <div role="group" aria-label={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: TYPE.smallPlus, color: t.inkSoft }}>
       {label}:
       <span style={{ display: "flex", gap: 4 }}>
         {options.map((opt) => (
           <button
             key={opt.value}
             type="button"
+            aria-pressed={value === opt.value}
             onClick={() => onChange(opt.value)}
             className="mdp-btn"
             style={{
@@ -1717,7 +1723,7 @@ function PdfPillGroup({ t, label, options, value, onChange }) {
           </button>
         ))}
       </span>
-    </label>
+    </div>
   );
 }
 
@@ -1779,7 +1785,7 @@ function cardStyle(t) {
 /* ============================== ADMIN (login + pannello) ============================== */
 // Single exported component: manages its own auth state (login/logout) and
 // shows the login form or the management panel depending on the case.
-export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo }) {
+export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo, onDiscard }) {
   const [authed, setAuthed] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [bootstrapError, setBootstrapError] = useState("");
@@ -1817,7 +1823,7 @@ export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveErro
     return (
       <AdminBootstrap
         importError={bootstrapError}
-        onExit={() => { signOut(auth); onExit(); }}
+        onExit={() => { signOut(auth); onDiscard?.(); onExit(); }}
         onImport={(file) => {
           setBootstrapError("");
           parseMenuJsonFile(file).then(setMenu).catch((err) => setBootstrapError(err.message || "File non valido."));
@@ -1834,7 +1840,7 @@ export default function Admin({ menu, setMenu, onSave, saving, savedAt, saveErro
       saving={saving}
       savedAt={savedAt}
       saveError={saveError}
-      onLogout={() => { signOut(auth); onExit(); }}
+      onLogout={() => { signOut(auth); onDiscard?.(); onExit(); }}
       onPreview={onExit}
       onUndo={onUndo}
       canUndo={canUndo}

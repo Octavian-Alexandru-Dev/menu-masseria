@@ -24,6 +24,20 @@ test("switching language keeps the page usable", async ({ page }) => {
   await expect(page.getByRole("navigation")).toBeVisible();
 });
 
+test("selected language and current category are exposed to screen readers, not only by color", async ({ page }) => {
+  const languages = page.getByRole("group", { name: "Lingua / Language" });
+  await languages.getByRole("button", { name: "IT", exact: true }).click();
+  await expect(languages.getByRole("button", { name: "IT", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await languages.getByRole("button", { name: "EN", exact: true }).click();
+  await expect(languages.getByRole("button", { name: "EN", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(languages.getByRole("button", { name: "IT", exact: true })).toHaveAttribute("aria-pressed", "false");
+  // Exactly one category is marked as the current one (scroll spy).
+  const current = page.getByRole("navigation").locator('[aria-current="true"]');
+  await expect(current).toHaveCount(1);
+  await page.getByRole("navigation").getByRole("button").nth(1).click();
+  await expect(current).toHaveCount(1);
+});
+
 test("footer link opens the staff login screen", async ({ page }) => {
   await page.getByRole("button", { name: /area riservata|staff area/i }).click();
   await expect(page.getByText(/area riservata|staff area/i).first()).toBeVisible();

@@ -69,11 +69,27 @@ export default function App() {
   // the till (open all day) and the waiters' phones see a price or a dish
   // changed from another device without reloading.
   const dirtyRef = useRef(false);
+  // Last menu received from the server: "Scarta modifiche" goes back to it.
+  const lastServerMenuRef = useRef(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const markDirty = useCallback((value) => {
     dirtyRef.current = value;
     setHasUnsavedChanges(value);
   }, []);
+
+  // Unsaved Admin edits: the browser asks before the tab is closed or
+  // reloaded. Not at the till: in the Windows client a cancelled unload
+  // would silently stop the program from closing or installing an update
+  // (and there "Gestione completa" already asks before leaving).
+  useEffect(() => {
+    if (!hasUnsavedChanges || getDesktopBridge()) return;
+    const warn = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasUnsavedChanges]);
 
   const menuDocRef = doc(db, ...MENU_DOC_PATH);
 
@@ -125,12 +141,13 @@ export default function App() {
           if (snap.exists()) {
             const loaded = snap.data();
             if (loaded && loaded.theme === "cirò") loaded.theme = "ciro";
-            // If you're in the restricted area (admin/waiter/kitchen), do NOT
-            // overwrite any edits in progress in the editor with an update
-            // coming from the server or the cache.
+            lastServerMenuRef.current = loaded;
+            // Unsaved Admin edits are never overwritten by an update coming
+            // from the server or the cache — also while looking at them in
+            // the public menu ("Anteprima").
             setMenuState((prev) => {
               if (!prev) return loaded;
-              if (viewRef.current === "staff" && dirtyRef.current) return prev;
+              if (dirtyRef.current) return prev;
               return loaded;
             });
             setLoadNotice(null);
@@ -199,6 +216,14 @@ export default function App() {
     setView("client");
   };
 
+  // Drops the unsaved Admin edits: back to the menu as saved on the server.
+  const handleDiscard = useCallback(() => {
+    if (lastServerMenuRef.current) setMenuState(lastServerMenuRef.current);
+    setUndoStack([]);
+    setSaveError(null);
+    markDirty(false);
+  }, [markDirty]);
+
   const handleUndo = () => {
     if (undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
@@ -217,7 +242,7 @@ export default function App() {
     if (!auth.currentUser) throw new Error("Sessione scaduta: accedi di nuovo e riprova.");
     let timeoutId;
     const timeout = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error("Nessuna risposta dal server: controlla la connessione e riprova.")), SAVE_TIMEOUT_MS);
+      timeoutId = setTimeout(() => reject(new Error("Nessuna risposta dal server: la modifica potrebbe essere salvata lo stesso. Controlla la connessione e guarda il menù prima di riprovare.")), SAVE_TIMEOUT_MS);
     });
     try {
       await Promise.race([
@@ -287,6 +312,7 @@ export default function App() {
       }
       markDirty(false);
       setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
+      return true;
     } catch (e) {
       console.error("[menu] Salvataggio fallito:", e);
       const msg = e && e.message ? e.message : "";
@@ -295,6 +321,7 @@ export default function App() {
       } else {
         setSaveError(msg ? `Salvataggio non riuscito: ${msg}` : "Salvataggio non riuscito. Riprova.");
       }
+      return false;
     } finally {
       setSaving(false);
     }
@@ -352,6 +379,7 @@ export default function App() {
           onUndo={handleUndo}
           canUndo={undoStack.length > 0}
           onPatch={handlePatch}
+          onDiscard={handleDiscard}
           hasUnsavedChanges={hasUnsavedChanges}
         />
       </Suspense>

@@ -119,13 +119,20 @@ Print queue for the thermal printer at the till — see
   `kitchenTicket.js`): `{ tableLabel, tableNumber, tableName, covers,
   timeLabel, waiterName, tableNotes, addition, groups: [{ categoryName,
   lines: [{ quantity, name, notes }] }] }` — no prices; `addition` = the
-  table already had dishes for the kitchen.
+  table already had dishes for the kitchen. Written in the same batch as the
+  order lines it prints (`sendOrderLinesWithKitchenTicket`), so the two
+  can't come apart.
 
 Both carry `orderId`. `status`: `pending` →
 `printing` (claimed by a till client in a transaction, `claimedBy`) →
 `printed` | `error` (`error` holds a readable message); `pending` jobs older
 than 10 minutes become `expired` instead of printing. A retry puts the same
-document back to `pending`. Jobs older than 7 days are deleted lazily by
+document back to `pending` (with a fresh `createdAt`). A kitchen ticket that
+didn't print can be set to `dismissed` ("Ignora": the kitchen already has
+those dishes). Kitchen tickets are looked up by `orderId` (each order screen
+lists its unprinted ones) and by `status` (the table lists flag tables with
+an `error` / `expired` / stuck `printing` ticket). The till prints queued
+jobs in `createdAt` order. Jobs older than 7 days are deleted lazily by
 the till client at startup — no TTL policy or scheduled job.
 
 ## Trust boundary (`firestore.rules`)

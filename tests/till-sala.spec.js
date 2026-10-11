@@ -3,7 +3,7 @@ import { TEST_WAITER, TEST_ADMIN } from "./test-env";
 import { deleteTestOrderByTableNumber, deleteTestReservationByName } from "./firestore-cleanup";
 import { installDesktopBridgeMock, printedTexts } from "./helpers/desktopBridge";
 import { deletePrintJobsByTableLabel } from "./helpers/printJobs";
-import { getMenu, findMenuItemByName, addMenuItemRemotely, removeMenuItemsByNamePrefix } from "./helpers/menuDoc";
+import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix } from "./helpers/menuDoc";
 
 // Sala della cassa (TillSala.jsx): l'interfaccia a tutto schermo in stile
 // cassa POS mostrata solo dentro il client Windows (window.mdpDesktop,
@@ -39,8 +39,8 @@ function freshTableNumber() {
   return 7000 + Math.floor(Math.random() * 900);
 }
 
-async function openTill(page) {
-  await installDesktopBridgeMock(page, { savedLogin: TEST_WAITER });
+async function openTill(page, bridgeOptions = {}) {
+  await installDesktopBridgeMock(page, { savedLogin: TEST_WAITER, ...bridgeOptions });
   await page.goto("/cameriere");
   await expect(page.getByRole("button", { name: "Nuovo tavolo" })).toBeVisible({ timeout: 10_000 });
 }
@@ -356,6 +356,59 @@ test("'Invia comanda' stampa per la cucina solo i piatti 'In comanda', in grande
   expect(tickets[1]).not.toContain("Bruschetta");
 });
 
+test("una comanda cucina non stampata resta segnalata sul tavolo e si ristampa riaprendolo, anche dopo altri invii", async ({ page }) => {
+  // Stampante senza carta: la comanda va in errore.
+  await openTill(page, { failWith: "Carta esaurita" });
+  const tableNumber = await openTableWithKeypad(page, { adults: 2 });
+  await page.getByRole("tab", { name: "Primi" }).click();
+  await page.getByRole("button", { name: /^Aggiungi Orecchiette/ }).click();
+  await page.getByRole("button", { name: "Invia comanda (1)" }).click();
+  const problems = page.getByRole("group", { name: "Comande cucina non stampate" });
+  await expect(problems).toContainText(/carta esaurita/i, { timeout: 15_000 });
+
+  // Si torna ai tavoli: il tavolo dice che la comanda non è arrivata in cucina.
+  await page.getByRole("button", { name: "Tavoli", exact: true }).click();
+  const tile = page.getByRole("button", { name: new RegExp(`Tavolo ${tableNumber}\\b.*Comanda cucina non stampata`) });
+  await expect(tile).toBeVisible({ timeout: 10_000 });
+
+  // Riaprendo il tavolo la comanda fallita c'è ancora, anche dopo un nuovo invio.
+  await tile.click();
+  await expect(problems).toContainText(/1 piatto/);
+  await page.getByRole("tab", { name: "Antipasti" }).click();
+  await page.getByRole("button", { name: /^Aggiungi Bruschetta/ }).click();
+  await page.getByRole("button", { name: "Invia comanda (1)" }).click();
+  await expect(problems.getByRole("button", { name: "Ristampa comanda cucina" })).toHaveCount(2, { timeout: 15_000 });
+
+  // Carta rimessa: si ristampano entrambe, in cucina arrivano tutti i piatti.
+  await page.evaluate(() => { globalThis.__printFail = null; });
+  await problems.getByRole("button", { name: "Ristampa comanda cucina" }).first().click();
+  await expect(problems.getByRole("button", { name: "Ristampa comanda cucina" })).toHaveCount(1, { timeout: 15_000 });
+  await problems.getByRole("button", { name: "Ristampa comanda cucina" }).click();
+  await expect(problems).toHaveCount(0, { timeout: 15_000 });
+  // La segnalazione sparisce appena la comanda torna in coda: si aspetta la carta.
+  const printedForTable = async () => (await printedTexts(page)).filter((txt) => txt.includes(`TAVOLO ${tableNumber}\n`)).join("\n");
+  await expect.poll(printedForTable, { timeout: 15_000 }).toContain("Orecchiette");
+  await expect.poll(printedForTable, { timeout: 15_000 }).toContain("Bruschetta");
+  await page.getByRole("button", { name: "Tavoli", exact: true }).click();
+  await expect(page.getByRole("button", { name: new RegExp(`Tavolo ${tableNumber}\\b.*Comanda inviata`) })).toBeVisible();
+});
+
+test("'Ignora' toglie la segnalazione di una comanda cucina non stampata, dopo conferma", async ({ page }) => {
+  await openTill(page, { failWith: "Stampante non raggiungibile" });
+  await openTableWithKeypad(page, { adults: 1 });
+  await page.getByRole("tab", { name: "Primi" }).click();
+  await page.getByRole("button", { name: /^Aggiungi Orecchiette/ }).click();
+  await page.getByRole("button", { name: "Invia comanda (1)" }).click();
+  const problems = page.getByRole("group", { name: "Comande cucina non stampate" });
+  await problems.getByRole("button", { name: "Ignora" }).click({ timeout: 15_000 });
+  const confirm = page.getByRole("alertdialog", { name: "Ignorare questa comanda?" });
+  await confirm.getByRole("button", { name: "Annulla" }).click();
+  await expect(problems).toBeVisible();
+  await problems.getByRole("button", { name: "Ignora" }).click();
+  await confirm.getByRole("button", { name: "Ignora comanda" }).click();
+  await expect(problems).toHaveCount(0, { timeout: 10_000 });
+});
+
 async function openTillAsAdmin(page) {
   await installDesktopBridgeMock(page, { savedLogin: TEST_ADMIN });
   await page.goto("/?area=staff");
@@ -380,8 +433,21 @@ test("alla cassa l'admin gestisce il menù: piatto nuovo con prezzo dal tastieri
   for (const k of ["3", "5", "0"]) await editor.getByRole("button", { name: `Cifra ${k}` }).click();
   await editor.getByRole("button", { name: "Usa € 3,50" }).click();
   await expect(editor.getByTestId("till-dish-price")).toHaveText("€ 3,50");
-  // Come le altre bevande: non va in comanda.
-  await expect(editor.getByRole("switch", { name: "In comanda" })).toHaveAttribute("aria-checked", "false");
+  // Come le altre bevande: non va in comanda. Il valore segue la categoria
+  // scelta nell'editor finché non si tocca l'interruttore.
+  const kitchenSwitch = editor.getByRole("switch", { name: "In comanda" });
+  await expect(kitchenSwitch).toHaveAttribute("aria-checked", "false");
+  const categories = editor.getByRole("group", { name: "Categoria del piatto" });
+  await categories.getByRole("button", { name: "Antipasti" }).click();
+  await expect(kitchenSwitch).toHaveAttribute("aria-checked", "true");
+  await categories.getByRole("button", { name: "Bevande" }).click();
+  await expect(kitchenSwitch).toHaveAttribute("aria-checked", "false");
+  // Il costo interno si scrive col tastierino; con un tastierino aperto non si salva.
+  await editor.getByRole("button", { name: "Cambia costo" }).click();
+  await expect(editor.getByRole("button", { name: "Aggiungi piatto" })).toBeDisabled();
+  for (const k of ["1", "2", "0"]) await editor.getByRole("button", { name: `Cifra ${k}` }).click();
+  await editor.getByRole("button", { name: "Usa € 1,20" }).click();
+  await expect(editor.getByTestId("till-dish-cost")).toHaveText("€ 1,20");
   await editor.getByRole("button", { name: "Aggiungi piatto" }).click();
 
   const tile = page.getByRole("button", { name: `Modifica ${name}` });
@@ -391,6 +457,13 @@ test("alla cassa l'admin gestisce il menù: piatto nuovo con prezzo dal tastieri
 
   // Modifica: non disponibile e in comanda, salvato solo con "Salva".
   const edit = page.getByRole("region", { name: "Modifica piatto" });
+  await expect(edit.getByTestId("till-dish-cost")).toHaveText("€ 1,20", { timeout: 10_000 });
+  // Il tastierino parte dal prezzo attuale, ma la prima cifra ne inizia uno nuovo.
+  await edit.getByRole("button", { name: "Cambia prezzo" }).click();
+  await expect(edit.getByRole("textbox", { name: "Nuovo prezzo" })).toHaveText("€ 3,50");
+  for (const k of ["4", "0", "0"]) await edit.getByRole("button", { name: `Cifra ${k}` }).click();
+  await edit.getByRole("button", { name: "Usa € 4,00" }).click();
+  await expect(edit.getByTestId("till-dish-price")).toHaveText("€ 4,00");
   await edit.getByRole("switch", { name: "Disponibile" }).click();
   await edit.getByRole("switch", { name: "In comanda" }).click();
   await expect(tile).toContainText("Non in comanda");
@@ -402,6 +475,7 @@ test("alla cassa l'admin gestisce il menù: piatto nuovo con prezzo dal tastieri
   expect(saved.categoryId).toBe("cat-bevande");
   expect(saved.item.visible).toBe(false);
   expect(saved.item.kitchenTicket).toBe(true);
+  expect(saved.item.price).toBe("4,00");
 
   // Eliminazione con conferma.
   await edit.getByRole("button", { name: "Elimina piatto" }).click();
@@ -430,6 +504,53 @@ test("il menù della cassa segue le modifiche fatte da un altro dispositivo e sa
   await expect(page.getByRole("button", { name: `Modifica ${localName}` })).toBeVisible({ timeout: 10_000 });
   await expect.poll(async () => Boolean(findMenuItemByName(await getMenu(), localName)), { timeout: 10_000 }).toBe(true);
   expect(findMenuItemByName(await getMenu(), remoteName)).not.toBeNull();
+
+  // Pannello aperto sul piatto remoto; intanto un telefono ne cambia la
+  // descrizione e lo nasconde. Salvare il prezzo dalla cassa non le annulla.
+  await page.getByRole("button", { name: `Modifica ${remoteName}` }).click();
+  const edit = page.getByRole("region", { name: "Modifica piatto" });
+  const remoteId = findMenuItemByName(await getMenu(), remoteName).item.id;
+  await updateMenuItemRemotely(remoteId, { description: "Cambiata dal telefono", visible: false });
+  await expect(page.getByRole("button", { name: `Modifica ${remoteName}` })).toContainText("Nascosto", { timeout: 10_000 });
+  await edit.getByRole("button", { name: "Cambia prezzo" }).click();
+  for (const k of ["5", "0", "0"]) await edit.getByRole("button", { name: `Cifra ${k}` }).click();
+  await edit.getByRole("button", { name: "Usa € 5,00" }).click();
+  await edit.getByRole("button", { name: "Salva" }).click();
+  await expect(edit.getByRole("status")).toHaveText("Salvato.", { timeout: 10_000 });
+  const after = findMenuItemByName(await getMenu(), remoteName).item;
+  expect(after.price).toBe("5,00");
+  expect(after.description).toBe("Cambiata dal telefono");
+  expect(after.visible).toBe(false);
+});
+
+test("alla cassa le modifiche non salvate di 'Gestione completa' non restano nel menù: uscendo dal Menù si scartano", async ({ page }) => {
+  const nav = await openTillAsAdmin(page);
+  await nav.getByRole("button", { name: /^menù$/i }).click();
+  await page.getByRole("button", { name: "Gestione completa" }).click();
+  const location = page.getByLabel("Località");
+  await expect(location).toBeVisible({ timeout: 10_000 });
+  const original = await location.inputValue();
+  await location.fill("Modifica non salvata dalla cassa");
+
+  await nav.getByRole("button", { name: /^tavoli/i }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Modifiche al menù non salvate" });
+  await dialog.getByRole("button", { name: "Resta nel Menù" }).click();
+  await expect(location).toHaveValue("Modifica non salvata dalla cassa");
+
+  await nav.getByRole("button", { name: /^tavoli/i }).click();
+  await dialog.getByRole("button", { name: "Scarta modifiche" }).click();
+  await expect(page.getByRole("button", { name: "Nuovo tavolo" })).toBeVisible();
+  await nav.getByRole("button", { name: /^menù$/i }).click();
+  await page.getByRole("button", { name: "Gestione completa" }).click();
+  await expect(page.getByLabel("Località")).toHaveValue(original, { timeout: 10_000 });
+
+  // Alla cassa nessun avviso del browser alla chiusura (bloccherebbe il
+  // programma e gli aggiornamenti): le uscite sono già protette qui sopra.
+  await page.getByLabel("Località").fill("Altra modifica non salvata");
+  const dialogs = [];
+  page.on("dialog", (d) => { dialogs.push(d.type()); d.accept(); });
+  await page.close({ runBeforeUnload: true });
+  expect(dialogs).toEqual([]);
 });
 
 test("alla cassa la categoria manda in comanda tutti i suoi piatti o nessuno, con un tocco", async ({ page }) => {

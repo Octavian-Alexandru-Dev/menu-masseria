@@ -55,3 +55,11 @@ test("spostamenti, 'In comanda' per categoria e più modifiche insieme", () => {
   const both = combineEdits(menuEdits.updateItem("x", { name: "Bruschetta al pomodoro" }), menuEdits.moveItemToCategory("x", "b"))(menu);
   expect(both.categories[1].items.map((i) => i.name)).toEqual(["Acqua", "Bruschetta al pomodoro"]);
 });
+
+test("aggiungere un piatto o una categoria già presenti non li duplica (riprova dopo un timeout)", () => {
+  const menu = baseMenu();
+  const once = menuEdits.addItem("a", { id: "n", name: "Nuovo" })(menu);
+  expect(menuEdits.addItem("a", { id: "n", name: "Nuovo" })(once)).toBe(once);
+  const withCat = menuEdits.addCategory({ id: "c", name: "Dolci", items: [] })(menu);
+  expect(menuEdits.addCategory({ id: "c", name: "Dolci", items: [] })(withCat)).toBe(withCat);
+});

@@ -47,6 +47,11 @@ rileggere per intero.
   categorie da includere. Stile allineato al tema del menù digitale
   (colori, font, logo, fregio decorativo). `src/PrintMenu.jsx`,
   `src/Admin.jsx` (card "Esportazione e backup" → "Versione stampabile").
+- **Avviso "modifiche non salvate"** nella Gestione menù da telefono/browser:
+  il browser chiede conferma prima di chiudere o ricaricare la scheda
+  (`beforeunload` in `src/MenuApp.jsx`, non attivo alla cassa, dove le
+  uscite da "Gestione completa" chiedono già se salvare o scartare).
+  L'autosave locale della voce 1 resta da fare.
 - **SEO e discoverability.** `meta description`, Open Graph e Twitter Card,
   dato strutturato JSON-LD `schema.org/Restaurant` (indirizzo, link social)
   in `index.html`; `robots.txt` e `sitemap.xml` in `public/`. URL di
@@ -57,7 +62,7 @@ rileggere per intero.
 
 ---
 
-## 1. 🔲 Autosave locale e avviso "modifiche non salvate"
+## 1. 🔲 Autosave locale (l'avviso "modifiche non salvate" è già fatto)
 
 **File coinvolti:** `src/MenuApp.jsx` (`setMenu`, stato `menu` in `App`),
 `src/Admin.jsx` (`AdminPanel`).
@@ -81,9 +86,8 @@ smettere di fidarsi dello strumento.
   contro la perdita di lavoro nel browser. Al riavvio dell'Admin, se c'è una
   bozza più recente del documento salvato, proporre "riprendi la bozza non
   salvata?".
-- **Avviso "hai modifiche non salvate"** prima di chiudere/uscire
-  (`beforeunload`, o intercettare l'uscita dal pannello) — a basso sforzo e
-  ad alto valore, va quasi sempre insieme all'autosave locale.
+- ~~Avviso "hai modifiche non salvate" prima di chiudere~~: fatto (vedi
+  "Già implementato").
 
 ---
 
@@ -128,19 +132,28 @@ decisioni sopra cambiano parecchio la complessità finale.
 
 ## Altri punti emersi dall'analisi (backlog secondario, priorità minore)
 
-- **Concorrenza in scrittura**: `handleSave` in `src/MenuApp.jsx` fa
-  `setDoc` con last-write-wins, senza controllo di versione — se due persone
-  salvano quasi contemporaneamente, l'ultima sovrascrive l'altra in
-  silenzio. Rischio basso (il menù cambia poco) ma la mitigazione (campo
-  `updatedAt` controllato prima di scrivere) è economica.
+- **Concorrenza in scrittura**: alla cassa ogni modifica al menù è già una
+  transazione che tocca solo i campi cambiati (`handlePatch` in
+  `src/MenuApp.jsx`, `src/menuEdit.js`). Resta il salvataggio dell'editor
+  completo (`handleSave`, telefono e "Gestione completa"): `setDoc` con
+  last-write-wins, senza controllo di versione — se due persone salvano
+  quasi contemporaneamente, l'ultima sovrascrive l'altra in silenzio.
+  Rischio basso (il menù cambia poco) ma la mitigazione (campo `updatedAt`
+  controllato prima di scrivere) è economica.
 - **Sicurezza account admin**: un solo account email/password (Firebase
   Auth), nessuna 2FA. Se la password trapela, chiunque può riscrivere il
   menù pubblico. Da valutare se vale la pena per il contesto d'uso.
-- **Accessibilità**: i bottoni di categoria e i toggle in `src/ClientView.jsx`
-  / `src/Admin.jsx` comunicano lo stato solo via colore, non via ARIA
-  (`aria-selected`, `aria-pressed`) — non letto dagli screen reader. I
-  contrasti dei temi (specialmente "Notte di Cirò", scuro) andrebbero
-  verificati con uno strumento automatico (es. axe).
+- **Accessibilità**: fatto `aria-pressed` su lingue (menù pubblico e Admin),
+  temi e opzioni PDF, `aria-current` sulla categoria corrente del menù
+  pubblico, comandi del tavolo su telefono ≥ 44px. Restano: intestazioni
+  delle categorie in Admin (un `<div>` cliccabile, non raggiungibile da
+  tastiera, senza `aria-expanded`), celle del calendario prenotazioni
+  (`aria-pressed`/`aria-current="date"`, "da confermare" solo a colori),
+  pulsanti piccoli in Admin (spostamenti, interruttore on/off) e campi di
+  testo sotto i 16px (su iPhone la pagina zooma). Non usare `aria-selected`
+  sui `<button>` (vale solo per tab/option/gridcell). I contrasti dei temi
+  (specialmente "Notte di Cirò", scuro) andrebbero verificati con uno
+  strumento automatico (es. axe).
 - **Igiene `.env.example`**: se mai finiscono lì credenziali reali invece
   dei placeholder vuoti in fase di commit, va ripulito prima di qualsiasi
   commit (`git restore --staged .env.example` + rimettere i placeholder).

@@ -108,7 +108,11 @@ export const menuEdits = {
     translations: { ...(menu.translations || {}), [lang]: translation },
   }),
 
-  addCategory: (category) => (menu) => ({ ...menu, categories: [...menu.categories, category] }),
+  // Adding is idempotent (same id = already there): retrying after a timeout
+  // whose transaction committed anyway must not create a copy.
+  addCategory: (category) => (menu) => (
+    menu.categories.some((c) => c.id === category.id) ? menu : { ...menu, categories: [...menu.categories, category] }
+  ),
 
   updateCategory: (catId, fields) => (menu) => {
     requireCategory(menu, catId);
@@ -141,6 +145,7 @@ export const menuEdits = {
   },
 
   addItem: (catId, item) => (menu) => {
+    if (menu.categories.some((c) => c.items.some((it) => it.id === item.id))) return menu;
     requireCategory(menu, catId);
     return mapCategory(menu, catId, (c) => ({ ...c, items: [...c.items, item] }));
   },

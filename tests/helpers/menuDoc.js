@@ -30,6 +30,15 @@ export async function addMenuItemRemotely(categoryId, item) {
   });
 }
 
+export async function updateMenuItemRemotely(itemId, fields) {
+  await ensureSignedIn();
+  await runTransaction(db, async (tx) => {
+    const menu = (await tx.get(menuRef())).data();
+    menu.categories = menu.categories.map((c) => ({ ...c, items: c.items.map((it) => (it.id === itemId ? { ...it, ...fields } : it)) }));
+    tx.set(menuRef(), menu);
+  });
+}
+
 export function findMenuItemByName(menu, name) {
   for (const c of menu.categories) {
     const item = c.items.find((it) => it.name === name);

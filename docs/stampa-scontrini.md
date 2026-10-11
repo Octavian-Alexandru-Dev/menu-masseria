@@ -111,11 +111,32 @@ con **solo i piatti appena inviati che hanno "In comanda" acceso** nel menù
 - **Pensata per essere letta da lontano e con poca carta:** tutto in
   grassetto, nessun logo, nessun prezzo, nessuna riga vuota né testo finale,
   taglio subito dopo l'ultimo piatto.
+- **Righe e comanda insieme:** i piatti inviati e il loro biglietto sono
+  scritti in un'unica operazione (`sendOrderLinesWithKitchenTicket` in
+  `src/printJobs.js`): con la rete lenta, anche se la pagina si ricarica a
+  metà invio, non può succedere che i piatti arrivino sul tavolo senza il
+  biglietto. I piatti toccati mentre l'invio è in corso finiscono in una
+  nuova bozza, non si perdono.
 - **Stato visibile a chi invia:** sotto "Invia comanda" compare "Comanda
-  cucina: Stampato alla cassa" (o in attesa / errore, come per il
-  preconto). In caso di errore c'è **Ristampa comanda cucina** (alla
-  cassa) o **Ristampa** (telefono). Se nessun piatto va in cucina, non
-  viene stampato nulla e non compare nessuno stato.
+  cucina: Stampato alla cassa" (o in attesa, come per il preconto) per il
+  biglietto dell'ultimo invio. Se nessun piatto va in cucina, non viene
+  stampato nulla e non compare nessuno stato.
+- **Una comanda non stampata non si perde:** lo stato è letto dalla coda di
+  stampa per ogni tavolo (`useOrderKitchenTickets` in
+  `src/usePrintJob.js`), non dallo schermo che l'ha inviata. Se la stampa
+  fallisce (carta finita, stampante spenta), scade o si interrompe:
+  - il tavolo lo dice nell'elenco dei tavoli, su telefono e cassa
+    ("Comanda cucina non stampata", in rosso alla cassa);
+  - aprendo il tavolo, da qualunque dispositivo e anche dopo altri invii,
+    ogni comanda non stampata ha **Ristampa comanda cucina** (cassa) /
+    **Ristampa** (telefono) e **Ignora** (con conferma, se la cucina ha
+    già quei piatti);
+  - si vede anche mentre si stanno aggiungendo altri piatti.
+- **Ordine di stampa:** se la cassa era spenta e trova più richieste in
+  coda, le stampa nell'ordine in cui sono state fatte (mai un'AGGIUNTA
+  prima della comanda di cui fa parte).
+- **Emoji nelle note** (dalla tastiera del telefono): stampate come "?",
+  la stampante non le ha.
 - **Limite noto:** le modifiche dopo l'invio (quantità cambiata, riga
   rimossa) non stampano un biglietto di variazione. Va detto a voce in
   cucina, oppure si può aggiungere in futuro.
@@ -335,9 +356,13 @@ comande, preconto, chiusura.
   A sinistra le categorie (schede) e i piatti a riquadri; ogni riquadro dice
   prezzo e, scritto, *Non in comanda*, *Nascosto* o *Fuori menù*.
   - **Piatto nella barra laterale**: nome, prezzo dal tastierino (in
-    centesimi) o "Su richiesta", interruttori grandi *In comanda* /
-    *Disponibile* / *Fuori menù*, descrizione, etichetta, costo interno, tag
-    di ricerca, foto, categoria. Nulla cambia finché non si preme **Salva**.
+    centesimi; parte dal prezzo attuale e la prima cifra ne inizia uno
+    nuovo) o "Su richiesta", interruttori grandi *In comanda* /
+    *Disponibile* / *Fuori menù*, descrizione, etichetta, costo interno (dal
+    tastierino), tag di ricerca, foto, categoria. Nulla cambia finché non si
+    preme **Salva** (bloccato finché un tastierino è aperto: si conferma con
+    «Usa»). In un piatto nuovo *In comanda* segue la categoria scelta, finché
+    non lo si tocca a mano.
     *Sposta prima/dopo* ed *Elimina* (con conferma) agiscono subito.
   - **Nessun piatto selezionato**: la barra mostra la categoria (nome,
     sottotitolo, visibilità, *Tutti/Nessuno in comanda*, posizione,
@@ -346,8 +371,14 @@ comande, preconto, chiusura.
     **traduzioni automatiche** dei testi mancanti per lingua.
   - **Gestione completa**: apre l'editor classico per ciò che alla cassa
     serve di rado (traduzioni testo per testo, PDF, backup JSON, link,
-    personale). Uscendo con modifiche non salvate chiede di salvarle.
-  - **Ogni "Salva" modifica solo quel piatto o quella categoria,** dentro una
+    personale). Uscendo con modifiche non salvate chiede di salvarle (se il
+    salvataggio fallisce si resta lì, con l'errore); passando a un'altra
+    sezione chiede se scartarle. Non restano mai nella copia del menù della
+    cassa, che altrimenti smetterebbe di seguire le modifiche dagli altri
+    dispositivi.
+  - **Ogni "Salva" modifica solo i campi cambiati di quel piatto o di quella
+    categoria** (non quelli rimasti com'erano all'apertura del pannello),
+    dentro una
     transazione sul menù com'è sul server in quel momento: la cassa resta
     aperta tutto il giorno e non riscrive mai la sua copia intera,
     cancellando ciò che è stato cambiato nel frattempo da un telefono. Le
@@ -396,7 +427,7 @@ funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
 |---|---|
 | Sul telefono resta "La cassa non ha ancora preso la stampa" | Il client della cassa è acceso? È stato fatto il login (pallino non grigio)? La cassa è connessa a internet? |
 | "La stampante non risponde" / "Indirizzo non raggiungibile" | Stampante accesa, cavo di rete collegato? Poi **Verifica stato**. Se l'IP è cambiato: **Cerca stampanti in rete → Usa questa → Salva**. |
-| "Carta esaurita" | Sostituisci il rotolo, poi **Riprova stampa** dal preconto (o **Ristampa comanda cucina** sotto "Invia comanda"). |
+| "Carta esaurita" | Sostituisci il rotolo, poi **Riprova stampa** dal preconto. Per le comande cucina: i tavoli con "Comanda cucina non stampata" → apri il tavolo → **Ristampa comanda cucina**. |
 | Una bibita esce sulla comanda della cucina (o un piatto non esce) | Cassa → Menù → tocca il piatto → **In comanda** → Salva. Per tutte le bevande insieme: scheda Bevande → **Nessuno in comanda**. |
 | Alla cassa non ci sono Menù e Statistiche | Servono a un account **admin**: cambia `role` dell'account della cassa (§3.3). |
 | Caratteri strani al posto di accenti o € | La stampante non è in CP858: segnalalo, il layout si corregge in `src/escpos.js` con un semplice deploy. |
@@ -476,10 +507,18 @@ funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
 | Piatto nuovo: "In comanda" ereditato dalla categoria | `tests/escpos.spec.js`, `tests/till-sala.spec.js` |
 | Cassa: "Invia comanda" stampa la comanda (senza bevande), stato "Comanda cucina", nessuna stampa con sole bevande, AGGIUNTA al secondo invio | `tests/till-sala.spec.js` |
 | Telefono: dopo "Invia comanda" lo stato della comanda cucina è visibile (in attesa con cassa spenta) | `tests/waiter-order.spec.js` |
+| Comanda cucina non stampata (errore): tavolo segnalato nell'elenco, ristampa riaprendo il tavolo anche dopo altri invii e mentre si aggiungono piatti, "Ignora" con conferma | `tests/till-sala.spec.js`, `tests/waiter-order.spec.js` |
+| Emoji nelle note stampate come "?", andare a capo sui caratteri stampati | `tests/escpos.spec.js` |
+| Aggiungere un piatto/una categoria due volte (riprova dopo timeout) non crea copie | `tests/menu-edit.spec.js` |
+| Telefono: comandi del tavolo (coperti, piatti, quantità, nota, rimuovi, Invia comanda) ≥ 44px | `tests/waiter-order.spec.js` |
+| Menù pubblico: lingua scelta (`aria-pressed`) e categoria corrente (`aria-current`) leggibili dagli screen reader | `tests/client-view.spec.js` |
+| Gestione menù da telefono: avviso del browser prima di chiudere con modifiche non salvate | `tests/admin.spec.js` |
 | Gestione menù da telefono: interruttore "In comanda" | `tests/admin.spec.js` |
 | Cassa (admin): niente Dashboard, sezioni Menù e Statistiche nella barra; un cameriere non le vede | `tests/till-sala.spec.js`, `tests/till-client.spec.js` |
 | Cassa: Menù — piatto nuovo con prezzo dal tastierino, modifica (disponibile, in comanda) solo con "Salva", eliminazione con conferma, salvataggio verificato sul server | `tests/till-sala.spec.js` |
-| Cassa: Menù — le modifiche da un altro dispositivo compaiono da sole e un salvataggio dalla cassa non le cancella | `tests/till-sala.spec.js` |
+| Cassa: Menù — le modifiche da un altro dispositivo compaiono da sole e un salvataggio dalla cassa non le cancella (salva solo i campi cambiati, anche con il pannello già aperto) | `tests/till-sala.spec.js` |
+| Cassa: Menù — "In comanda" del piatto nuovo segue la categoria scelta; tastierino che riparte dalla prima cifra; costo interno da tastierino; niente "Salva" con un tastierino aperto | `tests/till-sala.spec.js` |
+| Cassa: "Gestione completa" — uscendo dal Menù con modifiche non salvate chiede (resta / scarta); nessun avviso del browser alla chiusura del programma | `tests/till-sala.spec.js` |
 | Cassa: Menù — "Tutti/Nessuno in comanda" per categoria | `tests/till-sala.spec.js` |
 | Cassa: Statistiche — periodo a tocco (≥ 48px), numeri, classifica, confronto con il periodo precedente | `tests/till-sala.spec.js` |
 | Cassa: account cucina → area Cucina senza "Esci"; "Gestione completa" senza "Esci" | `tests/till-client.spec.js` |

@@ -85,46 +85,84 @@ function DishAdminTile({ t, item, selected, onSelect }) {
 
 /* ------------------------------- dish editor ------------------------------- */
 
+// Values as the panel shows them, to tell what the user actually changed.
+function dishFormValues(item, cost, categoryId) {
+  return {
+    name: (item.name || "").trim(), price: item.price || "0,00", kitchenTicket: itemGoesToKitchen(item),
+    visible: item.visible !== false, staffOnly: item.staffOnly === true, description: (item.description || "").trim(),
+    tag: (item.tag || "").trim(), searchTags: (item.searchTags || "").trim(), image: item.image || "",
+    cost: cost || "", categoryId,
+  };
+}
+
 function DishEditor({ t, menu, item, categoryId, isNew, cost, onPatch, onClose, onSaved }) {
-  const [name, setName] = useState(item.name || "");
-  const [price, setPrice] = useState(item.price || "0,00");
+  // What the panel opened with: "Salva" writes only the fields changed since
+  // then, so it never puts back what another device changed meanwhile.
+  const [opened, setOpened] = useState(() => dishFormValues(item, cost, categoryId));
+  const [name, setName] = useState(opened.name);
+  const [price, setPrice] = useState(opened.price);
   const [keypadOpen, setKeypadOpen] = useState(false);
-  const [kitchenTicket, setKitchenTicket] = useState(itemGoesToKitchen(item));
-  const [visible, setVisible] = useState(item.visible !== false);
-  const [staffOnly, setStaffOnly] = useState(item.staffOnly === true);
-  const [description, setDescription] = useState(item.description || "");
-  const [tag, setTag] = useState(item.tag || "");
-  const [searchTags, setSearchTags] = useState(item.searchTags || "");
-  const [costValue, setCostValue] = useState(cost || "");
-  const [image, setImage] = useState(item.image || "");
+  const [kitchenTicket, setKitchenTicket] = useState(opened.kitchenTicket);
+  const [kitchenTouched, setKitchenTouched] = useState(false);
+  const [visible, setVisible] = useState(opened.visible);
+  const [staffOnly, setStaffOnly] = useState(opened.staffOnly);
+  const [description, setDescription] = useState(opened.description);
+  const [tag, setTag] = useState(opened.tag);
+  const [searchTags, setSearchTags] = useState(opened.searchTags);
+  const [costValue, setCostValue] = useState(opened.cost);
+  const [costKeypadOpen, setCostKeypadOpen] = useState(false);
+  const [image, setImage] = useState(opened.image);
   const [targetCatId, setTargetCatId] = useState(categoryId);
   const [uploading, setUploading] = useState(false);
   const saver = useSaver(onPatch);
   const input = tillInputStyle(t);
 
+  // A new dish takes "In comanda" from the category it goes into, until the
+  // switch is touched by hand.
+  const chooseCategory = (cat) => {
+    setTargetCatId(cat.id);
+    if (isNew && !kitchenTouched) setKitchenTicket(defaultKitchenTicketForCategory(cat));
+  };
+
   const save = async () => {
     if (!name.trim()) { saver.setNotice({ tone: "error", text: "Scrivi il nome del piatto." }); return; }
-    const fields = {
+    const current = {
       name: name.trim(), price, kitchenTicket, visible, staffOnly,
       description: description.trim(), tag: tag.trim(), searchTags: searchTags.trim(), image,
     };
+    const costChanged = costValue !== opened.cost;
     let edit;
     if (isNew) {
-      edit = menuEdits.addItem(targetCatId, { id: item.id, ...fields });
+      edit = menuEdits.addItem(targetCatId, { id: item.id, ...current });
     } else {
-      edit = combineEdits(
-        menuEdits.updateItem(item.id, fields),
-        targetCatId !== categoryId ? menuEdits.moveItemToCategory(item.id, targetCatId) : null,
-      );
+      const changed = Object.fromEntries(Object.entries(current).filter(([key, value]) => value !== opened[key]));
+      const moved = targetCatId !== opened.categoryId;
+      if (Object.keys(changed).length === 0 && !moved) {
+        if (!costChanged) { saver.setNotice({ tone: "info", text: "Nessuna modifica da salvare." }); return; }
+      } else {
+        edit = combineEdits(
+          Object.keys(changed).length > 0 ? menuEdits.updateItem(item.id, changed) : null,
+          moved ? menuEdits.moveItemToCategory(item.id, targetCatId) : null,
+        );
+      }
     }
-    const ok = await saver.run(edit, isNew ? null : "Salvato.");
-    if (!ok) return;
-    if (costValue.trim() !== (cost || "")) {
-      saveMenuCost(item.id, costValue.trim()).catch((err) => {
+    if (edit) {
+      const ok = await saver.run(edit, isNew ? null : "Salvato.");
+      if (!ok) return;
+    }
+    if (costChanged) {
+      try {
+        await saveMenuCost(item.id, costValue);
+        if (!edit) saver.setNotice({ tone: "ok", text: "Salvato." });
+      } catch (err) {
         console.error("[till] Salvataggio costo fallito:", err);
-        saver.setNotice({ tone: "error", text: "Piatto salvato, ma il costo interno no: riprova." });
-      });
+        saver.setNotice({ tone: "error", text: edit ? "Piatto salvato, ma il costo interno no: riprova." : "Costo interno non salvato: riprova." });
+        setOpened({ ...current, cost: opened.cost, categoryId: targetCatId });
+        if (edit) onSaved(item.id, targetCatId);
+        return;
+      }
     }
+    setOpened({ ...current, cost: costValue, categoryId: targetCatId });
     onSaved(item.id, targetCatId);
   };
 
@@ -170,7 +208,10 @@ function DishEditor({ t, menu, item, categoryId, isNew, cost, onPatch, onClose, 
       footer={(
         <>
           <Notice notice={saver.notice} />
-          <TillButton t={t} variant="primary" size={60} icon={isNew ? Plus : Check} disabled={saver.busy || uploading} onClick={save}>
+          {(keypadOpen || costKeypadOpen) && (
+            <div style={{ fontSize: 15, color: t.inkSoft, textAlign: "center" }}>Conferma l'importo con «Usa» (o «Annulla») prima di salvare.</div>
+          )}
+          <TillButton t={t} variant="primary" size={60} icon={isNew ? Plus : Check} disabled={saver.busy || uploading || keypadOpen || costKeypadOpen} onClick={save}>
             {saver.busy ? "Salvataggio…" : isNew ? "Aggiungi piatto" : "Salva"}
           </TillButton>
         </>
@@ -203,7 +244,7 @@ function DishEditor({ t, menu, item, categoryId, isNew, cost, onPatch, onClose, 
         </div>
 
         <div style={{ display: "grid", gap: 10 }}>
-          <SwitchRow t={t} label="In comanda" checked={kitchenTicket} onChange={setKitchenTicket}
+          <SwitchRow t={t} label="In comanda" checked={kitchenTicket} onChange={(v) => { setKitchenTicket(v); setKitchenTouched(true); }}
             description="Stampato per la cucina quando si invia la comanda. Spegnilo per bibite e piatti che non passano dalla cucina." />
           <SwitchRow t={t} label="Disponibile" checked={visible} onChange={setVisible}
             description="Spento: non compare nel menù dei clienti né tra i piatti da ordinare (es. piatto finito)." />
@@ -215,13 +256,25 @@ function DishEditor({ t, menu, item, categoryId, isNew, cost, onPatch, onClose, 
           <textarea aria-label="Descrizione" rows={3} value={description} onChange={(e) => setDescription(e.target.value)}
             style={{ ...input, minHeight: 96, padding: "12px 14px", resize: "vertical", lineHeight: 1.4 }} />
         </Field>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field t={t} label="Etichetta">
-            <input aria-label="Etichetta" value={tag} onChange={(e) => setTag(e.target.value)} style={input} placeholder="es. ROSSO" />
-          </Field>
-          <Field t={t} label="Costo interno">
-            <input aria-label="Costo interno" inputMode="decimal" value={costValue} onChange={(e) => setCostValue(e.target.value)} style={input} placeholder="0,00" />
-          </Field>
+        <Field t={t} label="Etichetta">
+          <input aria-label="Etichetta" value={tag} onChange={(e) => setTag(e.target.value)} style={input} placeholder="es. ROSSO" />
+        </Field>
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+            <SectionTitle t={t}>Costo interno</SectionTitle>
+            <span data-testid="till-dish-cost" style={{ fontSize: 20, fontWeight: 700 }}>{costValue ? `€ ${costValue}` : "non indicato"}</span>
+          </div>
+          {costKeypadOpen ? (
+            <PriceKeypad t={t} label="Costo interno" initialCents={parsePriceToCents(costValue)}
+              onCancel={() => setCostKeypadOpen(false)}
+              onUse={(cents) => { setCostValue(cents > 0 ? formatCentsAsPrice(cents) : ""); setCostKeypadOpen(false); }} />
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <TillButton t={t} icon={Keyboard} size={TOUCH} onClick={() => setCostKeypadOpen(true)}>Cambia costo</TillButton>
+              <TillButton t={t} size={TOUCH} disabled={!costValue} onClick={() => setCostValue("")}>Nessun costo</TillButton>
+            </div>
+          )}
+          <div style={{ fontSize: 13, color: t.inkSoft, marginTop: 6 }}>Solo per le statistiche (margine), mai mostrato ai clienti.</div>
         </div>
         <Field t={t} label="Tag di ricerca" hint="Separati da virgola, mai mostrati ai clienti (es. Bibita, Alcolico).">
           <input aria-label="Tag di ricerca" value={searchTags} onChange={(e) => setSearchTags(e.target.value)} style={input} />
@@ -254,7 +307,7 @@ function DishEditor({ t, menu, item, categoryId, isNew, cost, onPatch, onClose, 
             {menu.categories.map((c) => {
               const active = c.id === targetCatId;
               return (
-                <button key={c.id} type="button" aria-pressed={active} onClick={() => setTargetCatId(c.id)} className="mdp-btn" style={{
+                <button key={c.id} type="button" aria-pressed={active} onClick={() => chooseCategory(c)} className="mdp-btn" style={{
                   minHeight: TOUCH, padding: "0 14px", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
                   border: `1.5px solid ${active ? t.primary : t.line}`, background: active ? t.primary : t.card, color: active ? t.bg : t.ink,
                 }}>{c.name || "Senza nome"}</button>
@@ -282,9 +335,14 @@ function DishEditor({ t, menu, item, categoryId, isNew, cost, onPatch, onClose, 
 /* ----------------------------- category panel ----------------------------- */
 
 function CategoryPanel({ t, menu, category, isNew, onPatch, onCreated, onDeleted }) {
-  const [name, setName] = useState(category?.name || "");
-  const [subtitle, setSubtitle] = useState(category?.subtitle || "");
-  const [visible, setVisible] = useState(category ? category.visible !== false : true);
+  // As in DishEditor: "Salva" writes only what changed since the panel opened.
+  const [opened, setOpened] = useState(() => ({
+    name: category?.name || "", subtitle: category?.subtitle || "", visible: category ? category.visible !== false : true,
+  }));
+  const [name, setName] = useState(opened.name);
+  const [subtitle, setSubtitle] = useState(opened.subtitle);
+  const [visible, setVisible] = useState(opened.visible);
+  const [newId] = useState(() => `cat-${uid()}`); // one id per new category: a retry can't make two
   const saver = useSaver(onPatch);
   const input = tillInputStyle(t);
 
@@ -296,15 +354,15 @@ function CategoryPanel({ t, menu, category, isNew, onPatch, onCreated, onDeleted
     );
   }
 
-  const dirty = isNew || name !== (category.name || "") || subtitle !== (category.subtitle || "") || visible !== (category.visible !== false);
+  const fields = { name: name.trim(), subtitle: subtitle.trim(), visible };
+  const changed = Object.fromEntries(Object.entries(fields).filter(([key, value]) => value !== opened[key]));
+  const dirty = isNew || Object.keys(changed).length > 0;
   const save = async () => {
     if (!name.trim()) { saver.setNotice({ tone: "error", text: "Scrivi il nome della categoria." }); return; }
-    const fields = { name: name.trim(), subtitle: subtitle.trim(), visible };
     if (isNew) {
-      const id = `cat-${uid()}`;
-      if (await saver.run(menuEdits.addCategory({ id, ...fields, items: [] }))) onCreated(id);
-    } else {
-      await saver.run(menuEdits.updateCategory(category.id, fields), "Salvato.");
+      if (await saver.run(menuEdits.addCategory({ id: newId, ...fields, items: [] }))) onCreated(newId);
+    } else if (await saver.run(menuEdits.updateCategory(category.id, changed), "Salvato.")) {
+      setOpened(fields);
     }
   };
 
@@ -416,17 +474,29 @@ function PriceSetting({ t, label, value, onChange }) {
 }
 
 function SettingsPanel({ t, menu, onPatch, onClose }) {
-  const [adults, setAdults] = useState(menu.coperto?.adults || "0,00");
-  const [children, setChildren] = useState(menu.coperto?.children || "0,00");
-  const [searchEnabled, setSearchEnabled] = useState(menu.searchEnabled !== false);
+  const [opened, setOpened] = useState(() => ({
+    adults: menu.coperto?.adults || "0,00", children: menu.coperto?.children || "0,00", searchEnabled: menu.searchEnabled !== false,
+  }));
+  const [adults, setAdults] = useState(opened.adults);
+  const [children, setChildren] = useState(opened.children);
+  const [searchEnabled, setSearchEnabled] = useState(opened.searchEnabled);
   const saver = useSaver(onPatch);
   const [translating, setTranslating] = useState(null); // lang code in progress
   const [translateNotice, setTranslateNotice] = useState(null);
 
-  const save = () => saver.run(menuEdits.updateFields({
-    coperto: { ...(menu.coperto || {}), adults, children },
-    searchEnabled,
-  }), "Salvato.");
+  // Only what changed since the panel opened, applied to the server's menu.
+  const save = async () => {
+    const coperto = {
+      ...(adults !== opened.adults ? { adults } : null),
+      ...(children !== opened.children ? { children } : null),
+    };
+    const edit = (current) => ({
+      ...current,
+      ...(Object.keys(coperto).length > 0 ? { coperto: { ...(current.coperto || {}), ...coperto } } : null),
+      ...(searchEnabled !== opened.searchEnabled ? { searchEnabled } : null),
+    });
+    if (await saver.run(edit, "Salvato.")) setOpened({ adults, children, searchEnabled });
+  };
 
   const translate = async (lang) => {
     setTranslating(lang);
@@ -513,7 +583,8 @@ function FullEditor({ t, menu, admin, onBack }) {
         cancelLabel: "Resta qui",
       });
       if (!save) return;
-      await admin.onSave();
+      // A failed save keeps you here, with its error shown in the editor.
+      if (!(await admin.onSave())) return;
     }
     onBack();
   };
@@ -527,7 +598,7 @@ function FullEditor({ t, menu, admin, onBack }) {
         <Suspense fallback={<div style={{ padding: 40, color: t.inkSoft, fontSize: 18, fontFamily: FONT }}>Caricamento…</div>}>
           <Admin
             menu={menu} setMenu={admin.setMenu} onSave={admin.onSave} saving={admin.saving} savedAt={admin.savedAt}
-            saveError={admin.saveError} onExit={onBack} onUndo={admin.onUndo} canUndo={admin.canUndo}
+            saveError={admin.saveError} onExit={back} onUndo={admin.onUndo} canUndo={admin.canUndo} onDiscard={admin.onDiscard}
           />
         </Suspense>
       </div>

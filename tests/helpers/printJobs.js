@@ -2,7 +2,7 @@
 // sull'emulatore: semina richieste "vecchie" per il test di scadenza, legge
 // lo stato di una richiesta e pulisce quelle create dai test.
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, getDoc, collection, query, where, getDocs, deleteDoc, Timestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, deleteDoc, Timestamp } from "firebase/firestore";
 import { TEST_WAITER } from "../test-env.js";
 import { auth, db } from "./emulatorApp.js";
 
@@ -53,4 +53,13 @@ export async function describePrintJobsByTableLabel(tableLabel) {
     const ms = (ts) => (ts?.toMillis ? ts.toMillis() : null);
     return { id: d.id, type: j.type, status: j.status, claimedBy: j.claimedBy, error: j.error, createdAt: ms(j.createdAt), claimedAt: ms(j.claimedAt), finishedAt: ms(j.finishedAt) };
   });
+}
+
+// Come se la cassa avesse provato a stampare e la stampante avesse dato
+// errore (nei test del telefono nessuna cassa è accesa).
+export async function failPrintJobsByTableLabel(tableLabel, error) {
+  await ensureSignedIn();
+  const snap = await getDocs(query(collection(db, "printJobs"), where("payload.tableLabel", "==", tableLabel)));
+  await Promise.all(snap.docs.map((d) => updateDoc(d.ref, { status: "error", error, claimedBy: "Cassa di test" })));
+  return snap.size;
 }

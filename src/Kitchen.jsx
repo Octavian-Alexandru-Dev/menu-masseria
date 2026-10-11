@@ -82,7 +82,7 @@ function TableCard({ t, order, onMarkOut }) {
                     onClick={() => onMarkOut(order, categoryId)}
                     className="mdp-btn"
                     style={{
-                      padding: "5px 12px", fontSize: TYPE.tinyPlus, borderRadius: 20, cursor: "pointer",
+                      minHeight: 48, padding: "0 18px", fontSize: TYPE.smallPlus, fontWeight: 600, borderRadius: 24, cursor: "pointer",
                       background: t.primary, color: t.bg, border: "none",
                     }}
                   >

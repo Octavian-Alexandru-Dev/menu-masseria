@@ -190,13 +190,20 @@ export function Segmented({ t, label, options, value, onChange }) {
 
 // A price entered from the on-screen keypad, in cents like a cash register
 // ("6", "5", "0" → 6,50): no keyboard needed, no decimal separator to find.
+// Opens showing the current amount; the first digit typed starts a new one
+// (like a calculator), instead of being appended to it.
 export function PriceKeypad({ t, label = "Nuovo prezzo", initialCents = 0, onUse, onCancel }) {
   const [digits, setDigits] = React.useState(initialCents ? String(initialCents) : "");
+  const [fresh, setFresh] = React.useState(Boolean(initialCents));
   const cents = parseInt(digits || "0", 10);
   const press = (k) => {
+    setFresh(false);
     if (k === "C") setDigits("");
     else if (k === "⌫") setDigits((d) => d.slice(0, -1));
-    else setDigits((d) => (d.length >= 6 ? d : `${d}${k}`.replace(/^0+/, "")));
+    else setDigits((d) => {
+      const base = fresh ? "" : d;
+      return base.length >= 6 ? base : `${base}${k}`.replace(/^0+/, "");
+    });
   };
   const euro = `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, "0")}`;
   return (

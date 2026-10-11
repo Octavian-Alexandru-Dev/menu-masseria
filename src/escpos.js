@@ -34,14 +34,22 @@ const CP858_MAP = new Map([...CP858_HIGH].map((ch, i) => [ch, 0x80 + i]));
 // from a phone keyboard or a document) and have no CP858 slot.
 const REPLACEMENTS = { "‘": "'", "’": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "...", "×": "x" };
 
+// Text as it will be printed: typographic replacements applied, emoji
+// (not printable in CP858 — e.g. picked from a phone keyboard in a note) as
+// "?" so their bytes can't turn into stray characters, variation selectors
+// and joiners dropped. wrapText measures this, so the columns are right.
+export function printableText(str) {
+  let out = "";
+  for (const raw of String(str ?? "")) {
+    if (raw === "\uFE0F" || raw === "\u200D") continue;
+    out += REPLACEMENTS[raw] ?? (raw.length > 1 ? "?" : raw);
+  }
+  return out;
+}
+
 export function encodeText(str) {
   const out = [];
-  for (const raw of String(str ?? "")) {
-    const ch = REPLACEMENTS[raw] ?? raw;
-    if (ch.length > 1) {
-      for (const c of ch) out.push(c.charCodeAt(0));
-      continue;
-    }
+  for (const ch of printableText(str)) {
     const code = ch.charCodeAt(0);
     if (code === 0x0a || (code >= 0x20 && code < 0x7f)) {
       out.push(code);
@@ -62,7 +70,7 @@ export function encodeText(str) {
 export function wrapText(text, width) {
   const lines = [];
   let current = "";
-  for (let word of String(text ?? "").split(/\s+/).filter(Boolean)) {
+  for (let word of printableText(text).split(/\s+/).filter(Boolean)) {
     while (word.length > width) {
       if (current) { lines.push(current); current = ""; }
       lines.push(word.slice(0, width));

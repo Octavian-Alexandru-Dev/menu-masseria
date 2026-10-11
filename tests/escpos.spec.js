@@ -16,6 +16,14 @@ test("codifica accenti italiani ed euro in CP858", () => {
   expect(String.fromCharCode(...encodeText("ő"))).toBe("o");
 });
 
+test("le emoji nelle note diventano '?' invece di caratteri a caso, e l'andare a capo conta ciò che si stampa", () => {
+  // Prima un'emoji finiva come "<", "=" o ">" (byte alto della coppia surrogata).
+  expect(String.fromCharCode(...encodeText("no 🥜 per favore 🌶️"))).toBe("no ? per favore ?");
+  for (const l of wrapText("senza cipolla… né aglio… grazie mille…", 21)) {
+    expect(encodeText(l).length).toBeLessThanOrEqual(21);
+  }
+});
+
 test("nessuna riga supera la larghezza della carta", () => {
   for (const l of wrapText("Controlla il tuo conto e se trovi un errore, dillo a uno di noi.", RECEIPT_COLUMNS)) {
     expect(l.length).toBeLessThanOrEqual(RECEIPT_COLUMNS);

@@ -63,14 +63,14 @@ function ReservationCalendar({ t, visibleMonth, onChangeMonth, selectedDate, onS
   return (
     <div style={{ background: t.card, border: `1px solid ${t.line}`, borderRadius: 12, padding: "14px 16px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <button aria-label="Mese precedente" onClick={() => onChangeMonth(addMonths(visibleMonth, -1))} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 6, width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: t.ink }}>
-          <ChevronLeft size={16} />
+        <button aria-label="Mese precedente" onClick={() => onChangeMonth(addMonths(visibleMonth, -1))} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 8, width: 44, height: 44, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: t.ink }}>
+          <ChevronLeft size={20} />
         </button>
         <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink, textTransform: "capitalize" }}>
           {MONTH_LABEL.format(visibleMonth)}
         </div>
-        <button aria-label="Mese successivo" onClick={() => onChangeMonth(addMonths(visibleMonth, 1))} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 6, width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: t.ink }}>
-          <ChevronRight size={16} />
+        <button aria-label="Mese successivo" onClick={() => onChangeMonth(addMonths(visibleMonth, 1))} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 8, width: 44, height: 44, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: t.ink }}>
+          <ChevronRight size={20} />
         </button>
       </div>
 
@@ -160,10 +160,10 @@ function OverviewBar({ t, dayReservations }) {
 }
 
 function ReservationRow({ t, r, isToday, busy, onOpen, onConfirm, onReject, onAvvia }) {
-  const btnStyle = { padding: "6px 10px", borderRadius: 6, border: `1px solid ${t.line}`, background: "none", cursor: "pointer", fontSize: TYPE.tinyPlus, display: "flex", alignItems: "center", gap: 4 };
+  const btnStyle = { minHeight: 44, padding: "0 12px", borderRadius: 8, border: `1px solid ${t.line}`, background: "none", cursor: "pointer", fontSize: TYPE.smallPlus, display: "flex", alignItems: "center", gap: 4 };
   return (
     <div style={{ border: `1px solid ${t.line}`, borderRadius: 10, padding: "10px 12px", background: t.card }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <button onClick={() => onOpen(r)} className="mdp-btn" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", flex: 1 }}>
           <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink }}>
             {r.name || "Senza nome"}{r.time ? ` · ${r.time}` : ""}
@@ -175,7 +175,7 @@ function ReservationRow({ t, r, isToday, busy, onOpen, onConfirm, onReject, onAv
           </div>
           {r.notes && <div style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft, marginTop: 2, fontStyle: "italic" }}>{r.notes}</div>}
         </button>
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
           {r.status === "pending" && (
             <>
               <button aria-label={`Conferma prenotazione di ${r.name || "senza nome"}`} disabled={busy} onClick={() => onConfirm(r)} className="mdp-btn" style={{ ...btnStyle, borderColor: t.secondary, color: t.secondary }}>

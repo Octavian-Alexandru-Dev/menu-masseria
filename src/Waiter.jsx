@@ -4,7 +4,7 @@
 // Phone layout. Inside the Windows till client the same area is shown with
 // the full-screen POS layout of TillSala.jsx instead; data and rules are
 // shared through sala-shared.jsx.
-import React, { useState, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import { Plus, Minus, X, LogOut, Clock, Utensils, History, Users, Receipt, CalendarDays, Play, Search } from "lucide-react";
 import { THEMES, ital, GlobalStyle, Logo, TYPE, formatCentsAsPrice, tableIdentity, currentShiftLabel, BackButton } from "./shared";
 import { orderTotalCents, copertoTotalCents, updateCovers } from "./orders";
@@ -73,7 +73,7 @@ function AvviaReservationModal({ t, reservation, onCancel, onConfirm, busy }) {
           style={{ width: "100%", padding: "10px 12px", border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg, marginBottom: 20 }}
         />
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onCancel} className="mdp-btn" style={{ flex: 1, padding: "10px 0", background: "none", border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer" }}>Annulla</button>
+          <button onClick={onCancel} className="mdp-btn" style={{ flex: 1, minHeight: 44, padding: "10px 0", background: "none", border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer" }}>Annulla</button>
           <button
             disabled={!tableNumber || busy}
             onClick={() => onConfirm(parseInt(tableNumber, 10))}
@@ -88,7 +88,7 @@ function AvviaReservationModal({ t, reservation, onCancel, onConfirm, busy }) {
   );
 }
 
-function TableList({ t, menu, orders, shiftClosedOrders, expandedClosedId, onToggleClosed, onOpenNew, onOpenOrder, todaysReservations, onAvviaReservation }) {
+function TableList({ t, menu, orders, kitchenProblemsByOrder = {}, shiftClosedOrders, expandedClosedId, onToggleClosed, onOpenNew, onOpenOrder, todaysReservations, onAvviaReservation }) {
   const [printingOrder, setPrintingOrder] = useState(null);
   const sorted = [...orders].sort((a, b) => (a.openedAt?.toMillis?.() || 0) - (b.openedAt?.toMillis?.() || 0));
   return (
@@ -140,6 +140,9 @@ function TableList({ t, menu, orders, shiftClosedOrders, expandedClosedId, onTog
               </div>
               <div style={{ textAlign: "right" }}>
                 <SyncBadge t={t} hasPendingWrites={o._hasPendingWrites} />
+                {kitchenProblemsByOrder[o.id] > 0 && (
+                  <div style={{ fontSize: TYPE.tinyPlus, color: t.accent2, fontWeight: 700 }}>⚠ Comanda cucina non stampata</div>
+                )}
                 {total > 0 && (
                   <div style={{ fontSize: TYPE.tinyPlus, color: t.secondary, marginTop: 4 }}>
                     {readyCount}/{total} uscite
@@ -250,25 +253,63 @@ function CoversEditor({ t, order }) {
       setBusy(false);
     }
   };
-  const stepperStyle = { background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 20, height: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+  // 44px: tapped at every table, often in a hurry (WCAG/Apple target size).
+  const stepperStyle = { background: "none", border: `1px solid ${t.line}`, borderRadius: 8, width: 44, height: 44, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: t.ink };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: TYPE.tinyPlus, color: t.inkSoft, marginTop: 4 }}>
+    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 18, rowGap: 8, fontSize: TYPE.smallPlus, color: t.inkSoft, marginTop: 6 }}>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <Users size={12} /> Adulti
-        <button aria-label="Diminuisci adulti" disabled={busy} onClick={() => change("adults", -1)} className="mdp-btn" style={stepperStyle}><Minus size={10} /></button>
-        <span style={{ minWidth: 12, textAlign: "center", color: t.ink }}>{order.covers?.adults || 0}</span>
-        <button aria-label="Aumenta adulti" disabled={busy} onClick={() => change("adults", 1)} className="mdp-btn" style={stepperStyle}><Plus size={10} /></button>
+        <button aria-label="Diminuisci adulti" disabled={busy} onClick={() => change("adults", -1)} className="mdp-btn" style={stepperStyle}><Minus size={16} /></button>
+        <span style={{ minWidth: 20, textAlign: "center", color: t.ink, fontSize: TYPE.bodyPlus }}>{order.covers?.adults || 0}</span>
+        <button aria-label="Aumenta adulti" disabled={busy} onClick={() => change("adults", 1)} className="mdp-btn" style={stepperStyle}><Plus size={16} /></button>
       </span>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
         Bambini
-        <button aria-label="Diminuisci bambini" disabled={busy} onClick={() => change("children", -1)} className="mdp-btn" style={stepperStyle}><Minus size={10} /></button>
-        <span style={{ minWidth: 12, textAlign: "center", color: t.ink }}>{order.covers?.children || 0}</span>
-        <button aria-label="Aumenta bambini" disabled={busy} onClick={() => change("children", 1)} className="mdp-btn" style={stepperStyle}><Plus size={10} /></button>
+        <button aria-label="Diminuisci bambini" disabled={busy} onClick={() => change("children", -1)} className="mdp-btn" style={stepperStyle}><Minus size={16} /></button>
+        <span style={{ minWidth: 20, textAlign: "center", color: t.ink, fontSize: TYPE.bodyPlus }}>{order.covers?.children || 0}</span>
+        <button aria-label="Aumenta bambini" disabled={busy} onClick={() => change("children", 1)} className="mdp-btn" style={stepperStyle}><Plus size={16} /></button>
       </span>
       {(order.coperto?.adults || order.coperto?.children) && (
         <span style={{ color: t.inkSoft }}>
           (coperto € {order.coperto.adults}/€ {order.coperto.children})
         </span>
+      )}
+    </div>
+  );
+}
+
+// Kitchen tickets of the table (useOrderKitchenTickets): the last one's print
+// status and, for any that may not have reached the kitchen, "Ristampa" and
+// "Ignora". Shown above both footers, so also while a new draft is open.
+function KitchenTicketStatus({ t, kitchenTicket }) {
+  const { status, problems, busy } = kitchenTicket;
+  if (!status && problems.length === 0) return null;
+  const smallBtn = {
+    minHeight: 44, padding: "0 14px", background: "none", border: `1px solid ${t.line}`, color: t.ink,
+    borderRadius: 8, fontSize: TYPE.smallPlus, cursor: "pointer", whiteSpace: "nowrap",
+  };
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto 10px", display: "grid", gap: 8 }}>
+      {problems.length > 0 && (
+        <div role="group" aria-label="Comande cucina non stampate" style={{ display: "grid", gap: 8 }}>
+          {problems.map((p) => (
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 180px", fontSize: TYPE.smallPlus, fontWeight: 600, color: t.accent2 }}>
+                ⚠ {p.title}: {p.status.text}
+              </div>
+              <button onClick={p.retry} disabled={busy} className="mdp-btn" style={smallBtn}>Ristampa</button>
+              <button onClick={p.dismiss} disabled={busy} className="mdp-btn" style={{ ...smallBtn, color: t.inkSoft }}>Ignora</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {status && (
+        <div role="status" aria-label="Stampa comanda cucina" style={{
+          fontSize: TYPE.tinyPlus, fontWeight: 600,
+          color: status.tone === "error" ? t.accent2 : status.tone === "ok" ? t.secondary : t.inkSoft,
+        }}>
+          Comanda cucina: {status.text}
+        </div>
       )}
     </div>
   );
@@ -287,10 +328,28 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
     if (await closeTable()) onBack();
   };
 
+  // The bottom bar (draft, kitchen tickets, totals) grows with its content:
+  // the page leaves that much room, so the last dishes (and "Fuori menù")
+  // can always be scrolled out from under it.
+  const footerRef = useRef(null);
+  const [footerHeight, setFooterHeight] = useState(140);
+  const draftOpen = draft.length > 0 || sending; // which of the two bars is shown
+  useEffect(() => {
+    const el = footerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setFooterHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [draftOpen]);
+
+  const draftBtn = {
+    background: "none", border: `1px solid ${t.line}`, borderRadius: 8, width: 44, height: 44, flexShrink: 0,
+    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: t.ink,
+  };
   const statusColor = (status) => lineStatusColor(t, status);
   const statusLabel = lineStatusLabel;
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "16px 16px 140px" }}>
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: `16px 16px ${footerHeight + 24}px` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <BackButton t={t} onClick={onBack} label="Tavoli" />
         <SyncBadge t={t} hasPendingWrites={order._hasPendingWrites} />
@@ -408,7 +467,7 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
             {cat.items.map((item) => (
               <button key={item.id} onClick={() => addToDraft(item, cat.id, cat.name)} className="mdp-btn" style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left",
-                padding: "8px 12px", borderRadius: 6, border: `1px solid ${t.line}`, background: t.bg, cursor: "pointer",
+                minHeight: 44, padding: "8px 12px", borderRadius: 6, border: `1px solid ${t.line}`, background: t.bg, cursor: "pointer",
               }}>
                 <span style={{ fontSize: TYPE.smallPlus }}>{item.name}</span>
                 <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -430,7 +489,7 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
             {filteredOffMenuItems.map((item) => (
               <button key={item.id} onClick={() => addToDraft(item, item._categoryId, item._categoryName)} className="mdp-btn" style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left",
-                padding: "8px 12px", borderRadius: 6, border: `1px dashed ${t.accent2}`, background: t.bg, cursor: "pointer",
+                minHeight: 44, padding: "8px 12px", borderRadius: 6, border: `1px dashed ${t.accent2}`, background: t.bg, cursor: "pointer",
               }}>
                 <span style={{ fontSize: TYPE.smallPlus }}>{item.name}</span>
                 <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -443,63 +502,52 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
         </div>
       )}
 
-      {draft.length > 0 && (
-        <div style={{
+      {draftOpen && (
+        <div ref={footerRef} style={{
           position: "fixed", left: 0, right: 0, bottom: 0, background: t.card, borderTop: `1px solid ${t.line}`,
           padding: "12px 16px", boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
         }}>
+          <KitchenTicketStatus t={t} kitchenTicket={kitchenTicket} />
           <div style={{ maxWidth: 640, margin: "0 auto" }}>
-            <div style={{ maxHeight: 160, overflowY: "auto", marginBottom: 10 }}>
+            <div style={{ maxHeight: "min(36vh, 260px)", overflowY: "auto", marginBottom: 10 }}>
               {draft.map((l) => (
-                <div key={l.lineId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-                  <span style={{ flex: 1, fontSize: TYPE.smallPlus }}>{l.name} <span style={{ color: t.inkSoft, fontSize: TYPE.tinyPlus }}>· {l.categoryName}</span></span>
-                  <button aria-label={`Diminuisci quantità di ${l.name}`} onClick={() => changeQty(l.lineId, -1)} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 22, height: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Minus size={11} /></button>
-                  <span style={{ fontSize: TYPE.smallPlus, minWidth: 14, textAlign: "center" }}>{l.quantity}</span>
-                  <button aria-label={`Aumenta quantità di ${l.name}`} onClick={() => changeQty(l.lineId, 1)} className="mdp-btn" style={{ background: "none", border: `1px solid ${t.line}`, borderRadius: 4, width: 22, height: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Plus size={11} /></button>
-                  <input
-                    placeholder="nota"
-                    value={l.notes}
-                    onChange={(e) => setDraftNote(l.lineId, e.target.value)}
-                    style={{ width: 70, fontSize: TYPE.tinyPlus, padding: "3px 6px", border: `1px solid ${t.line}`, borderRadius: 4, background: t.bg, color: t.ink }}
-                  />
-                  <button aria-label={`Rimuovi ${l.name} dalla comanda`} onClick={() => removeDraftLine(l.lineId)} className="mdp-btn" style={{ background: "none", border: "none", cursor: "pointer", color: t.accent2 }}><X size={14} /></button>
+                <div key={l.lineId} style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "4px 0", borderBottom: `1px solid ${t.line}` }}>
+                  <span style={{ flex: "1 1 140px", fontSize: TYPE.smallPlus }}>{l.name} <span style={{ color: t.inkSoft, fontSize: TYPE.tinyPlus }}>· {l.categoryName}</span></span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button aria-label={`Diminuisci quantità di ${l.name}`} onClick={() => changeQty(l.lineId, -1)} className="mdp-btn" style={draftBtn}><Minus size={16} /></button>
+                    <span style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, minWidth: 20, textAlign: "center" }}>{l.quantity}</span>
+                    <button aria-label={`Aumenta quantità di ${l.name}`} onClick={() => changeQty(l.lineId, 1)} className="mdp-btn" style={draftBtn}><Plus size={16} /></button>
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, flex: "1 1 160px" }}>
+                    <input
+                      placeholder="nota"
+                      aria-label={`Nota per ${l.name}`}
+                      value={l.notes}
+                      onChange={(e) => setDraftNote(l.lineId, e.target.value)}
+                      style={{ flex: 1, minWidth: 0, minHeight: 44, fontSize: 16, padding: "0 10px", border: `1px solid ${t.line}`, borderRadius: 8, background: t.bg, color: t.ink, boxSizing: "border-box" }}
+                    />
+                    <button aria-label={`Rimuovi ${l.name} dalla comanda`} onClick={() => removeDraftLine(l.lineId)} className="mdp-btn" style={{ ...draftBtn, border: "none", color: t.accent2 }}><X size={18} /></button>
+                  </span>
                 </div>
               ))}
             </div>
             {sendError && <div style={{ color: t.accent2, fontSize: TYPE.tinyPlus, marginBottom: 8 }}>{sendError}</div>}
             <button onClick={send} disabled={sending} className="mdp-btn" style={{
-              width: "100%", padding: "12px 0", background: t.primary, color: t.bg, border: "none", borderRadius: 8,
+              width: "100%", minHeight: 48, padding: "12px 0", background: t.primary, color: t.bg, border: "none", borderRadius: 8,
               fontSize: TYPE.bodyPlus, fontWeight: 600, cursor: sending ? "default" : "pointer", opacity: sending ? 0.7 : 1,
             }}>
-              {sending ? "Invio…" : `Invia comanda (${draftCount})`}
+              {sending && draft.length === 0 ? "Invio…" : `Invia comanda (${draftCount})`}
             </button>
           </div>
         </div>
       )}
 
-      {draft.length === 0 && (
-        <div style={{
+      {!draftOpen && (
+        <div ref={footerRef} style={{
           position: "fixed", left: 0, right: 0, bottom: 0, background: t.card, borderTop: `1px solid ${t.line}`,
           padding: "12px 16px",
         }}>
-          {kitchenTicket.status && (
-            <div style={{ maxWidth: 640, margin: "0 auto 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <div role="status" aria-label="Stampa comanda cucina" style={{
-                fontSize: TYPE.tinyPlus, fontWeight: 600,
-                color: kitchenTicket.status.tone === "error" ? t.accent2 : kitchenTicket.status.tone === "ok" ? t.secondary : t.inkSoft,
-              }}>
-                Comanda cucina: {kitchenTicket.status.text}
-              </div>
-              {kitchenTicket.failed && (
-                <button onClick={kitchenTicket.retry} disabled={kitchenTicket.busy} className="mdp-btn" style={{
-                  minHeight: 40, padding: "0 12px", background: "none", border: `1px solid ${t.line}`, color: t.ink,
-                  borderRadius: 8, fontSize: TYPE.tinyPlus, cursor: "pointer", whiteSpace: "nowrap",
-                }}>
-                  Ristampa
-                </button>
-              )}
-            </div>
-          )}
+          <KitchenTicketStatus t={t} kitchenTicket={kitchenTicket} />
           <div style={{ maxWidth: 640, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <div>
               <div style={{ fontSize: TYPE.bodyPlus, fontWeight: 600, color: t.ink }}>Totale € {formatCentsAsPrice(totalCents)}</div>
@@ -511,14 +559,14 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setShowReceipt(true)} className="mdp-btn" style={{
-                padding: "10px 12px", background: "none", border: `1px solid ${t.line}`, color: t.ink,
+                minHeight: 44, padding: "10px 12px", background: "none", border: `1px solid ${t.line}`, color: t.ink,
                 borderRadius: 8, fontSize: TYPE.smallPlus, cursor: "pointer",
                 display: "flex", alignItems: "center", gap: 6,
               }}>
                 <Receipt size={14} /> Preconto
               </button>
               <button onClick={() => setConfirmClose(true)} className="mdp-btn" style={{
-                padding: "10px 16px", background: "none", border: `1px solid ${t.accent2}`, color: t.accent2,
+                minHeight: 44, padding: "10px 16px", background: "none", border: `1px solid ${t.accent2}`, color: t.accent2,
                 borderRadius: 8, fontSize: TYPE.smallPlus, cursor: "pointer",
               }}>
                 Chiudi tavolo
@@ -543,8 +591,8 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
               Nessun preconto verrà stampato: questa azione archivia solo la comanda.
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setConfirmClose(false)} className="mdp-btn" style={{ flex: 1, padding: "10px 0", background: "none", border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer" }}>Annulla</button>
-              <button onClick={doClose} disabled={closing} className="mdp-btn" style={{ flex: 1, padding: "10px 0", background: t.accent2, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>
+              <button onClick={() => setConfirmClose(false)} className="mdp-btn" style={{ flex: 1, minHeight: 44, padding: "10px 0", background: "none", border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer" }}>Annulla</button>
+              <button onClick={doClose} disabled={closing} className="mdp-btn" style={{ flex: 1, minHeight: 44, padding: "10px 0", background: t.accent2, color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>
                 {closing ? "Chiusura…" : "Conferma chiusura"}
               </button>
             </div>
@@ -561,7 +609,7 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
 
 function WaiterPanel({ menu, session }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
-  const { orders, ordersReady, shiftClosedOrders, todaysReservations, menuCosts, createTable: openTable, startFromReservation } = useSalaData({ menu, session });
+  const { orders, ordersReady, shiftClosedOrders, todaysReservations, menuCosts, kitchenProblemsByOrder, createTable: openTable, startFromReservation } = useSalaData({ menu, session });
   const [expandedClosedId, setExpandedClosedId] = useState(null);
   const [view, setView] = useState({ mode: "list" }); // list | new | detail | history | reservations
   const [creating, setCreating] = useState(false);
@@ -630,6 +678,7 @@ function WaiterPanel({ menu, session }) {
           t={t}
           menu={menu}
           orders={orders}
+          kitchenProblemsByOrder={kitchenProblemsByOrder}
           shiftClosedOrders={shiftClosedOrders}
           expandedClosedId={expandedClosedId}
           onToggleClosed={(id) => setExpandedClosedId((cur) => (cur === id ? null : id))}

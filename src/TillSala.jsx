@@ -125,16 +125,18 @@ function TopBar({ t, session, tab, onTab, openCount, withAdmin }) {
 /* ---------------------------------- floor ---------------------------------- */
 
 // Status of an open table, written + fixed colour (never colour alone).
-function tableStatus(order) {
+// A kitchen ticket that may not have printed comes first: it needs action.
+function tableStatus(order, kitchenProblems = 0) {
+  if (kitchenProblems > 0) return { label: "Comanda cucina non stampata", color: STATUS.danger };
   if (order.receipt?.confirmedAt) return { label: "Preconto confermato", color: STATUS.info };
   if (order.receipt?.printedAt) return { label: "Preconto stampato", color: STATUS.info };
   if ((order.items || []).length === 0) return { label: "Da ordinare", color: STATUS.idle };
   return { label: "Comanda inviata", color: STATUS.ok };
 }
 
-function TableTile({ t, order, onOpen }) {
+function TableTile({ t, order, kitchenProblems, onOpen }) {
   const id = tableIdentity(order);
-  const status = tableStatus(order);
+  const status = tableStatus(order, kitchenProblems);
   const covers = (order.covers?.adults || 0) + (order.covers?.children || 0);
   return (
     <button
@@ -168,7 +170,7 @@ function TableTile({ t, order, onOpen }) {
   );
 }
 
-function FloorView({ t, orders, todaysReservations, onNew, onOpen, onAvvia }) {
+function FloorView({ t, orders, kitchenProblemsByOrder, todaysReservations, onNew, onOpen, onAvvia }) {
   const sorted = [...orders].sort((a, b) => (a.tableNumber || 0) - (b.tableNumber || 0));
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
@@ -181,7 +183,7 @@ function FloorView({ t, orders, todaysReservations, onNew, onOpen, onAvvia }) {
           }}>
             <Plus size={40} strokeWidth={2.5} /> Nuovo tavolo
           </button>
-          {sorted.map((o) => <TableTile key={o.id} t={t} order={o} onOpen={() => onOpen(o.id)} />)}
+          {sorted.map((o) => <TableTile key={o.id} t={t} order={o} kitchenProblems={kitchenProblemsByOrder[o.id] || 0} onOpen={() => onOpen(o.id)} />)}
         </div>
       </div>
 
@@ -629,8 +631,18 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
             {d.sending ? "Invio…" : `Invia comanda (${d.draftCount})`}
           </TillButton>
           <PrintStatusLine status={d.kitchenTicket.status} label="Stampa comanda cucina" prefix="Comanda cucina" />
-          {d.kitchenTicket.failed && (
-            <TillButton t={t} icon={Printer} disabled={d.kitchenTicket.busy} onClick={d.kitchenTicket.retry}>Ristampa comanda cucina</TillButton>
+          {d.kitchenTicket.problems.length > 0 && (
+            <div role="group" aria-label="Comande cucina non stampate" style={{ display: "grid", gap: 10, padding: 12, borderRadius: 12, border: `2px solid ${STATUS.danger}` }}>
+              {d.kitchenTicket.problems.map((p) => (
+                <div key={p.id} style={{ display: "grid", gap: 8 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: STATUS.danger, lineHeight: 1.35 }}>⚠ {p.title}: {p.status.text}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 8 }}>
+                    <TillButton t={t} icon={Printer} disabled={d.kitchenTicket.busy} onClick={p.retry} style={{ padding: "0 8px", whiteSpace: "nowrap" }}>Ristampa comanda cucina</TillButton>
+                    <TillButton t={t} variant="ghost" disabled={d.kitchenTicket.busy} onClick={p.dismiss}>Ignora</TillButton>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <TillButton t={t} icon={Printer} disabled={printer.busy} onClick={printReceipt} style={{ padding: "0 8px", whiteSpace: "nowrap" }}>{printer.failed ? "Riprova stampa" : "Stampa preconto"}</TillButton>
@@ -774,7 +786,23 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
     if (newId) goToOrder(newId);
   };
 
-  const goTab = (key) => { setTab(key); setOpenOrderId(null); };
+  const goTab = async (key) => {
+    // Unsaved edits from "Gestione completa" (Menù) don't stay behind in the
+    // till's menu: leaving the section saves nothing, so it asks first.
+    if (tab === "menu" && key !== "menu" && admin?.hasUnsavedChanges) {
+      const discard = await confirmAction({
+        title: "Modifiche al menù non salvate",
+        message: "Le modifiche fatte in Gestione completa non sono salvate. Uscendo dal Menù vengono scartate.",
+        confirmLabel: "Scarta modifiche",
+        cancelLabel: "Resta nel Menù",
+        danger: true,
+      });
+      if (!discard) return;
+      admin.onDiscard();
+    }
+    setTab(key);
+    setOpenOrderId(null);
+  };
   const loading = <div style={{ padding: 40, color: t.inkSoft, fontSize: 18, fontFamily: FONT }}>Caricamento…</div>;
 
   return (
@@ -825,7 +853,7 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
 
       {tab === "floor" && sala.ordersReady && !openOrderId && (
         <FloorView
-          t={t} orders={sala.orders} todaysReservations={sala.todaysReservations}
+          t={t} orders={sala.orders} kitchenProblemsByOrder={sala.kitchenProblemsByOrder} todaysReservations={sala.todaysReservations}
           onNew={() => setDialog({})} onOpen={setOpenOrderId} onAvvia={onAvvia}
         />
       )}

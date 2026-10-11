@@ -103,8 +103,12 @@ function usePrintStation(bridge, active) {
     };
 
     // One job at a time, in arrival order: the printer is a single device.
+    // The query comes back in document-id (random) order: after the till
+    // was off, a table's "AGGIUNTA" must not print before its first ticket.
+    const createdMs = (job) => job.createdAt?.toMillis?.() ?? 0;
     const unsubscribe = subscribePendingPrintJobs((jobs) => {
-      for (const job of jobs) {
+      const byArrival = [...jobs].sort((a, b) => createdMs(a) - createdMs(b) || a.id.localeCompare(b.id));
+      for (const job of byArrival) {
         if (inFlight.current.has(job.id)) continue;
         inFlight.current.add(job.id);
         queue.current = queue.current

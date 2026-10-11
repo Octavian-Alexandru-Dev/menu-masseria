@@ -8,13 +8,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { CheckCircle2, Clock } from "lucide-react";
 import { uid, TYPE, parsePriceToCents, currentShiftStart, itemMatchesSearch } from "./shared";
 import {
-  subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, sendOrderLines, buildOrderLine, closeOrder,
+  subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, buildOrderLine, closeOrder,
   autoCloseStaleOrders, orderTotalCents,
 } from "./orders";
 import { subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup } from "./reservationsData";
 import { subscribeMenuCosts } from "./menuCosts";
-import { enqueueKitchenTicket } from "./printJobs";
-import { usePrintJob } from "./usePrintJob";
+import { sendOrderLinesWithKitchenTicket, subscribeUnfinishedKitchenJobs, kitchenJobProblem } from "./printJobs";
+import { useOrderKitchenTickets } from "./usePrintJob";
 
 export function formatTime(ts) {
   return ts?.toDate ? ts.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
@@ -121,6 +121,26 @@ export function useSalaData({ menu, session }) {
     runDailyExpiredReservationsCleanup();
   }, []);
 
+  // Kitchen tickets that may not have reached the kitchen, counted per order:
+  // the table lists flag those tables, so a ticket that failed after its
+  // sender left the table isn't forgotten (reprint from the table itself).
+  const [unfinishedKitchenJobs, setUnfinishedKitchenJobs] = useState([]);
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => subscribeUnfinishedKitchenJobs(
+    setUnfinishedKitchenJobs,
+    (err) => console.error("[waiter] Errore lettura comande cucina:", err),
+  ), []);
+  const anyPrinting = unfinishedKitchenJobs.some((j) => j.status === "printing");
+  useEffect(() => {
+    if (!anyPrinting) return;
+    const id = setInterval(() => setClock(Date.now()), 10_000);
+    return () => clearInterval(id);
+  }, [anyPrinting]);
+  const kitchenProblemsByOrder = {};
+  for (const job of unfinishedKitchenJobs) {
+    if (kitchenJobProblem(job, clock)) kitchenProblemsByOrder[job.orderId] = (kitchenProblemsByOrder[job.orderId] || 0) + 1;
+  }
+
   // Confirmed reservations for today: they show up as soon as the shift
   // starts, so the waiter can "start" them without retyping table/covers.
   useEffect(() => {
@@ -162,7 +182,7 @@ export function useSalaData({ menu, session }) {
     }
   };
 
-  return { orders, ordersReady, shiftClosedOrders, todaysReservations, menuCosts, createTable, startFromReservation };
+  return { orders, ordersReady, shiftClosedOrders, todaysReservations, menuCosts, kitchenProblemsByOrder, createTable, startFromReservation };
 }
 
 // One table's order screen: the menu to pick from (with search and tag
@@ -179,7 +199,7 @@ export function useOrderDraft({ menu, menuCosts, order, senderName }) {
   const normalItems = categories
     .map((c) => ({ ...c, items: c.items.filter((i) => i.visible !== false && !i.staffOnly) }))
     .filter((c) => c.items.length > 0);
-  const offMenuItems = categories.flatMap((c) => c.items.filter((i) => i.staffOnly).map((i) => ({ ...i, _categoryId: c.id, _categoryName: c.name })));
+  const offMenuItems = categories.flatMap((c) => c.items.filter((i) => i.staffOnly && i.visible !== false).map((i) => ({ ...i, _categoryId: c.id, _categoryName: c.name })));
 
   // Dish search: filters live as the waiter types, in whatever language an
   // entry has been translated into — useful when a foreign customer asks for
@@ -230,30 +250,32 @@ export function useOrderDraft({ menu, menuCosts, order, senderName }) {
   // Whole-line edit from the till's line editor (quantity, price, note).
   const updateDraftLine = (lineId, patch) => setDraft((d) => d.map((l) => (l.lineId === lineId ? { ...l, ...patch } : l)));
 
-  // Kitchen ticket of the last send: its print status is shown next to
-  // "Invia comanda"; retryKitchenTicket reprints it after a printer error.
-  const kitchenPrinter = usePrintJob(enqueueKitchenTicket);
-  const lastKitchenArgs = useRef(null);
-  const retryKitchenTicket = () => {
-    if (lastKitchenArgs.current) kitchenPrinter.print(...lastKitchenArgs.current);
-  };
+  // Kitchen tickets of this table (status, and "Ristampa" for any that
+  // didn't print), read from the print queue: see useOrderKitchenTickets.
+  const kitchenTicket = useOrderKitchenTickets(order.id);
 
+  // The lines leave the draft as soon as the send starts: dishes tapped
+  // meanwhile start a new draft instead of being wiped when the send
+  // completes; if it fails, the lines come back in front of them.
+  const sendingRef = useRef(false);
   const send = async () => {
-    if (draft.length === 0) return;
+    if (draft.length === 0 || sendingRef.current) return;
+    sendingRef.current = true;
+    const sent = draft;
+    setDraft([]);
     setSending(true);
     setSendError("");
     try {
-      const lines = draft.map((l) => buildOrderLine(l));
-      await sendOrderLines(order.id, lines);
-      setDraft([]);
       // `order` is still the snapshot from before these lines: the ticket
       // says "AGGIUNTA" if the table already had dishes for the kitchen.
-      lastKitchenArgs.current = [order, lines, menu, senderName];
-      kitchenPrinter.printNew(...lastKitchenArgs.current);
+      await sendOrderLinesWithKitchenTicket(order, sent.map((l) => buildOrderLine(l)), menu, senderName, kitchenTicket.track);
     } catch (err) {
       console.error("[waiter] Invio comanda fallito:", err);
+      kitchenTicket.track(undefined);
+      setDraft((d) => [...sent, ...d]);
       setSendError("Invio non riuscito. Verifica la connessione e riprova.");
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -287,7 +309,7 @@ export function useOrderDraft({ menu, menuCosts, order, senderName }) {
   return {
     draft, draftCount, addToDraft, changeQty, removeDraftLine, setDraftNote, updateDraftLine,
     send, sending, sendError, closeTable, closing,
-    kitchenTicket: { status: kitchenPrinter.status, failed: kitchenPrinter.failed, busy: kitchenPrinter.busy, retry: retryKitchenTicket },
+    kitchenTicket,
     normalItems, offMenuItems, searchEnabled, itemSearch, setItemSearch, isItemSearching,
     filteredNormalItems, filteredOffMenuItems, searchTagChips, toggleSearchTag,
     sentByCategory, totalCents,

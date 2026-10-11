@@ -104,9 +104,9 @@ export default function ReceiptOverlay({ t, menu, order, onClose, readOnly = fal
                   onClick={() => doRemove(l.lineId)}
                   disabled={removingId === l.lineId}
                   className="mdp-btn mdp-receipt-noprint"
-                  style={{ background: "none", border: "none", cursor: "pointer", color: t.accent2, padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: t.accent2, padding: 0, width: 44, height: 44, margin: "-12px -12px -12px 0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                 >
-                  <X size={13} />
+                  <X size={18} />
                 </button>
               )}
             </div>

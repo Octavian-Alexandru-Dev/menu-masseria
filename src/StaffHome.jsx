@@ -14,13 +14,15 @@ import {
 } from "./staff-shared";
 import { subscribeOpenOrders } from "./orders";
 import { subscribePendingReservations } from "./reservationsData";
-import Admin from "./Admin";
-import Waiter from "./Waiter";
-import Kitchen from "./Kitchen";
-import Reservations from "./Reservations";
-import Stats from "./Stats";
 import { getDesktopBridge } from "./desktop";
 
+// Each area is loaded only when opened: a waiter's phone never downloads the
+// menu editor or the charts library (Stats.jsx → Recharts).
+const Admin = lazy(() => import("./Admin"));
+const Waiter = lazy(() => import("./Waiter"));
+const Kitchen = lazy(() => import("./Kitchen"));
+const Reservations = lazy(() => import("./Reservations"));
+const Stats = lazy(() => import("./Stats"));
 const TillSala = lazy(() => import("./TillSala"));
 
 // Dashboard choice (?sezione) → section of the till's top bar.
@@ -69,8 +71,10 @@ function Dashboard({ t, session, options, onChoose, openTablesCount, pendingRese
                 border: `1px solid ${t.line}`, background: t.card,
               }}
             >
+              {/* Visual only: the count is also in the card's text (and would
+                  otherwise start its accessible name). */}
               {badge > 0 && (
-                <span style={{
+                <span aria-hidden="true" style={{
                   position: "absolute", top: 10, right: 10, minWidth: 18, height: 18, borderRadius: 9,
                   background: t.accent2, color: "#fff", fontSize: TYPE.tiny, fontWeight: 700,
                   display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px",
@@ -109,7 +113,7 @@ function BackToAreasBar({ t, onBack }) {
   );
 }
 
-export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo, onPatch, hasUnsavedChanges }) {
+export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, saveError, onExit, onUndo, canUndo, onPatch, onDiscard, hasUnsavedChanges }) {
   const session = useStaffSession();
   // Section chosen in the Dashboard (admin/waiter/kitchen/reservations),
   // synced with ?sezione in the URL — so here too the browser's Back button
@@ -201,7 +205,7 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
   if (atTill && !menu && !saveError) return <StaffLoadingScreen theme={theme} />;
   if (atTill && menu) {
     const admin = canAdmin
-      ? { setMenu, onSave, saving, savedAt, saveError, onUndo, canUndo, onPatch, hasUnsavedChanges }
+      ? { setMenu, onSave, saving, savedAt, saveError, onUndo, canUndo, onPatch, onDiscard, hasUnsavedChanges }
       : null;
     return (
       <Suspense fallback={<StaffLoadingScreen theme={theme} />}>
@@ -224,7 +228,7 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
     );
   }
 
-  const panel = chosen === "admin"
+  const areaPanel = chosen === "admin"
     ? (
       <Admin
         menu={menu}
@@ -236,6 +240,7 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
         onExit={onExit}
         onUndo={onUndo}
         canUndo={canUndo}
+        onDiscard={onDiscard}
       />
     )
     : chosen === "waiter"
@@ -245,6 +250,7 @@ export default function StaffHome({ menu, setMenu, onSave, saving, savedAt, save
         : chosen === "reservations"
           ? <Reservations menu={menu} />
           : <Stats menu={menu} />;
+  const panel = <Suspense fallback={<StaffLoadingScreen theme={theme} />}>{areaPanel}</Suspense>;
 
   // When more than one core area is available, show a bar to go back to the
   // choice screen (unchanged from before: a waiter-only or kitchen-only

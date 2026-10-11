@@ -253,10 +253,11 @@ export default function ClientView({ menu, onGoStaff }) {
       <GlobalStyle t={t} />
 
       {/* Language selector */}
-      <div style={{ display: "flex", justifyContent: "center", gap: 6, paddingTop: 16, flexWrap: "wrap" }}>
+      <div role="group" aria-label="Lingua / Language" style={{ display: "flex", justifyContent: "center", gap: 6, paddingTop: 16, flexWrap: "wrap" }}>
         {LANGUAGES.map((l) => (
           <button
             key={l.code}
+            aria-pressed={lang === l.code}
             onClick={() => setLang(l.code)}
             className="mdp-btn"
             style={{
@@ -342,6 +343,7 @@ export default function ClientView({ menu, onGoStaff }) {
               <button
                 key={c.id}
                 ref={(el) => (tabRefs.current[c.id] = el)}
+                aria-current={active === c.id ? "true" : undefined}
                 onClick={() => scrollTo(c.id)}
                 className="mdp-tab"
                 style={{

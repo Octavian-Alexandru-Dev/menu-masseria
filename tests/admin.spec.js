@@ -109,6 +109,16 @@ test.describe("Admin — editor menù (solo in memoria, mai salvato su Firestore
     expect(exported.categories).toHaveLength(2);
   });
 
+  test("con modifiche non salvate il browser chiede conferma prima di chiudere la pagina", async ({ page }) => {
+    await openAdmin(page);
+    await page.getByLabel("Località").fill("Modifica non salvata dal test");
+    const dialogPromise = page.waitForEvent("dialog");
+    await page.close({ runBeforeUnload: true });
+    const dialog = await dialogPromise;
+    expect(dialog.type()).toBe("beforeunload");
+    await dialog.accept();
+  });
+
   test("modifica i campi di una voce esistente", async ({ page }) => {
     await openAdmin(page);
     const fixture = makeFixtureMenu("edititem" + Date.now());
