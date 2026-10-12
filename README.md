@@ -36,6 +36,35 @@ taking, kitchen, reservations, admin) require staff credentials and aren't
 publicly accessible — to try them without access to the real project, see
 [Try it locally](#try-it-locally-no-real-credentials-needed) below.
 
+## What the till looks like
+
+<details>
+<summary>Show the till client in action (4 GIFs)</summary>
+
+Recorded against the local emulator with demo data (`npm run demo:gifs`,
+see [`demo/README.md`](demo/README.md)); the orange circles mark each tap.
+
+**Tables and order:** floor grid, new table from the on-screen keypad, dish
+tiles by category, a note on a line from the side panel, send to the kitchen.
+
+![Till: tables grid, keypad, dish tiles, sending the order](docs/demo/cassa-comanda.gif)
+
+**Bill:** a 20% discount on one line, the pre-bill printed at the till,
+closing the table, the history with reprint.
+
+![Till: discount, printed pre-bill, closing, history](docs/demo/cassa-conto.gif)
+
+**Reservations:** times picked with a tap, saved already confirmed, then a
+reservation started straight into its table.
+
+![Till: reservations calendar, new reservation, starting a table](docs/demo/cassa-prenotazioni.gif)
+
+**Admin at the till:** statistics with period comparison, menu management.
+
+![Till: statistics and menu management](docs/demo/cassa-statistiche-menu.gif)
+
+</details>
+
 ## Windows till client — download
 
 **[⬇ Download Masseria-Cassa-Setup.exe](https://github.com/Octavian-Alexandru-Dev/menu-masseria/releases/latest/download/Masseria-Cassa-Setup.exe)**
