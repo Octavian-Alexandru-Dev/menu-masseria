@@ -1,15 +1,16 @@
-// Storico for the till (inside TillSala.jsx): closed orders on the left,
-// grouped by day, the selected one in the side panel with its lines and
-// "Ristampa preconto" — same layout as the Sala (list + side panel), in
-// place of the phone's OrderHistory.jsx.
+// Storico: closed orders grouped by day, the selected one shown as its
+// receipt (OrderUi.jsx > ReceiptPanel) with "Ristampa preconto" and, for
+// admins, delete. The same screen at the till (list + side panel, inside
+// TillSala.jsx) and on phones (PhoneApp.jsx: one column, the receipt as a
+// full-screen page).
 import React, { useState, useEffect, useCallback } from "react";
-import { Printer, Trash2 } from "lucide-react";
-import { formatCentsAsPrice, parsePriceToCents, tableIdentity } from "./shared";
-import { loadClosedOrdersPage, deleteOrder, orderTotalCents, copertoTotalCents } from "./orders";
+import { Trash2 } from "lucide-react";
+import { formatCentsAsPrice, tableIdentity } from "./shared";
+import { loadClosedOrdersPage, deleteOrder, deleteAllClosedOrders, orderTotalCents } from "./orders";
 import { confirmAction } from "./confirmDialog";
 import { formatTime } from "./sala-shared";
-import { usePrintJob } from "./usePrintJob";
-import { FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, SidePanel, SectionTitle, PrintStatusLine } from "./TillUi";
+import { ReceiptPanel } from "./OrderUi";
+import { FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, SidePanel, SectionTitle, Notice, useCompactLayout } from "./TillUi";
 
 const DAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
 
@@ -23,81 +24,38 @@ function dayLabel(ts) {
   return DAY_LABEL.format(d);
 }
 
-function OrderDetail({ t, menu, order, isAdmin, onDeleted }) {
-  const printer = usePrintJob();
+// One closed order in a list (Storico, and "Chiusi nel turno" on the phone's
+// Tavoli): tap → its receipt.
+export function ClosedOrderRow({ t, order, selected, onSelect }) {
   const id = tableIdentity(order);
-  const coperto = copertoTotalCents(order);
-
-  const remove = async () => {
-    const confirmed = await confirmAction({
-      title: `Eliminare ${id.primary} dallo storico?`,
-      message: "La comanda sparisce dallo storico e dalle statistiche. L'operazione non si può annullare.",
-      confirmLabel: "Elimina",
-      danger: true,
-    });
-    if (!confirmed) return;
-    try {
-      await deleteOrder(order.id);
-      onDeleted();
-    } catch (err) {
-      console.error("[till] Eliminazione comanda fallita:", err);
-    }
-  };
-
   return (
-    <SidePanel
-      t={t}
-      label="Dettaglio comanda"
-      header={(
-        <>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{id.primary}{id.secondary && <span style={{ fontSize: 16, fontWeight: 500, color: t.inkSoft }}> · {id.secondary}</span>}</div>
-          <div style={{ fontSize: 14, color: t.inkSoft, marginTop: 2 }}>
-            {dayLabel(order.closedAt)} · {formatTime(order.openedAt) || "—"}–{formatTime(order.closedAt) || "—"} · {order.waiterName || "—"}
-            {order.status === "auto_closed" ? " · chiusura automatica" : ""}
-          </div>
-        </>
-      )}
-      footer={(
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 18, fontWeight: 600 }}>Totale</span>
-            <span style={{ fontSize: 28, fontWeight: 800 }}>€ {formatCentsAsPrice(orderTotalCents(order))}</span>
-          </div>
-          <TillButton t={t} variant="primary" size={60} icon={Printer} disabled={printer.busy} onClick={() => printer.print(order, menu)}>
-            {printer.failed ? "Riprova stampa" : "Ristampa preconto"}
-          </TillButton>
-          <PrintStatusLine status={printer.status} />
-          {isAdmin && <TillButton t={t} variant="danger" icon={Trash2} onClick={remove}>Elimina dallo storico</TillButton>}
-        </>
-      )}
-    >
-      {(order.items || []).length === 0 && <div style={{ color: t.inkSoft, fontSize: 16, padding: "12px 0" }}>Nessun piatto.</div>}
-      {(order.items || []).map((l) => (
-        <div key={l.lineId} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "10px 0", borderBottom: `1px solid ${t.line}`, fontSize: 16 }}>
-          <span>
-            <strong>{l.quantity}×</strong> {l.name}
-            {l.priceNote && <span style={{ color: STATUS.info, fontWeight: 600 }}> · {l.priceNote}</span>}
-            {l.notes && <span style={{ color: t.inkSoft }}> ({l.notes})</span>}
-          </span>
-          <span style={{ whiteSpace: "nowrap", fontWeight: 600 }}>€ {formatCentsAsPrice(parsePriceToCents(l.price) * l.quantity)}</span>
-        </div>
-      ))}
-      {coperto > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", fontSize: 16, color: t.inkSoft }}>
-          <span>Coperto ({order.covers?.adults || 0} adulti, {order.covers?.children || 0} bambini)</span>
-          <span>€ {formatCentsAsPrice(coperto)}</span>
-        </div>
-      )}
-    </SidePanel>
+    <button type="button" onClick={onSelect} aria-pressed={selected} className="mdp-btn"
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, minHeight: 64, padding: "8px 16px",
+        borderRadius: 14, border: `1.5px solid ${selected ? t.primary : t.line}`, background: selected ? `${t.primary}12` : t.card,
+        color: t.ink, textAlign: "left", cursor: "pointer", fontFamily: FONT, width: "100%",
+      }}>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 17, fontWeight: 700 }}>{id.primary}{id.secondary ? ` · ${id.secondary}` : ""}</span>
+        <span style={{ fontSize: 14, color: t.inkSoft }}>
+          {formatTime(order.openedAt) || "—"}–{formatTime(order.closedAt) || "—"} · {order.waiterName || "—"}
+          {order.status === "auto_closed" && <span style={{ color: STATUS.waiting, fontWeight: 600 }}> · chiusura automatica</span>}
+        </span>
+      </span>
+      <span style={{ fontSize: 18, fontWeight: 700, whiteSpace: "nowrap" }}>€ {formatCentsAsPrice(orderTotalCents(order))}</span>
+    </button>
   );
 }
 
 export default function TillHistory({ t, menu, isAdmin }) {
+  const compact = useCompactLayout();
   const [orders, setOrders] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [clearing, setClearing] = useState(false);
 
   const loadPage = useCallback(async (after, replace) => {
     setLoading(true);
@@ -107,7 +65,8 @@ export default function TillHistory({ t, menu, isAdmin }) {
       setCursor(page.lastClosedAt);
       setHasMore(page.hasMore);
     } catch (err) {
-      console.error("[till] Lettura storico fallita:", err);
+      console.error("[storico] Lettura storico fallita:", err);
+      setNotice({ tone: "error", text: "Impossibile caricare lo storico. Riprova." });
     } finally {
       setLoading(false);
     }
@@ -124,51 +83,98 @@ export default function TillHistory({ t, menu, isAdmin }) {
     else groups.push({ label, orders: [o] });
   }
 
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `minmax(0, 1fr) ${SIDE_PANEL_WIDTH}`, fontFamily: FONT, color: t.ink }}>
-      <section aria-label="Comande chiuse" style={{ minHeight: 0, overflowY: "auto", padding: "18px 20px 96px" }}>
-        <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Storico comande</div>
-        {!loading && orders.length === 0 && <div style={{ color: t.inkSoft, fontSize: 17 }}>Nessuna comanda chiusa.</div>}
-        {groups.map((g) => (
-          <div key={g.label} style={{ marginBottom: 18 }}>
-            <SectionTitle t={t} style={{ marginBottom: 8, textTransform: "capitalize" }}>{g.label}</SectionTitle>
-            <div style={{ display: "grid", gap: 8 }}>
-              {g.orders.map((o) => {
-                const id = tableIdentity(o);
-                const active = o.id === selectedId;
-                return (
-                  <button key={o.id} type="button" onClick={() => setSelectedId(o.id)} aria-pressed={active} className="mdp-btn" style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, minHeight: 64, padding: "0 18px",
-                    borderRadius: 14, border: `1.5px solid ${active ? t.primary : t.line}`, background: active ? `${t.primary}12` : t.card,
-                    color: t.ink, textAlign: "left", cursor: "pointer", fontFamily: FONT,
-                  }}>
-                    <span>
-                      <span style={{ display: "block", fontSize: 18, fontWeight: 700 }}>{id.primary}{id.secondary ? ` · ${id.secondary}` : ""}</span>
-                      <span style={{ fontSize: 14, color: t.inkSoft }}>{formatTime(o.openedAt) || "—"}–{formatTime(o.closedAt) || "—"} · {o.waiterName || "—"}</span>
-                    </span>
-                    <span style={{ fontSize: 19, fontWeight: 700, whiteSpace: "nowrap" }}>€ {formatCentsAsPrice(orderTotalCents(o))}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        {hasMore && (
-          <TillButton t={t} disabled={loading} onClick={() => loadPage(cursor, false)} style={{ width: "100%" }}>
-            {loading ? "Caricamento…" : "Carica altre"}
+  const remove = async (order) => {
+    const id = tableIdentity(order);
+    const confirmed = await confirmAction({
+      title: `Eliminare ${id.primary} dallo storico?`,
+      message: "La comanda sparisce dallo storico e dalle statistiche. L'operazione non si può annullare.",
+      confirmLabel: "Elimina comanda",
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteOrder(order.id);
+      setOrders((cur) => cur.filter((o) => o.id !== order.id));
+      setSelectedId(null);
+    } catch (err) {
+      console.error("[storico] Eliminazione comanda fallita:", err);
+      setNotice({ tone: "error", text: "Eliminazione non riuscita. Riprova." });
+    }
+  };
+
+  const clearAll = async () => {
+    const confirmed = await confirmAction({
+      title: "Svuotare tutto lo storico?",
+      message: "Vengono eliminate tutte le comande chiuse, anche dalle statistiche. L'operazione non si può annullare.",
+      confirmLabel: "Elimina tutto",
+      danger: true,
+    });
+    if (!confirmed) return;
+    setClearing(true);
+    try {
+      await deleteAllClosedOrders();
+      setOrders([]);
+      setHasMore(false);
+      setSelectedId(null);
+      setNotice({ tone: "ok", text: "Storico svuotato." });
+    } catch (err) {
+      console.error("[storico] Svuotamento fallito:", err);
+      setNotice({ tone: "error", text: "Svuotamento non riuscito. Riprova." });
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const list = (
+    <section aria-label="Comande chiuse" style={compact
+      ? { padding: "16px 16px 24px", fontFamily: FONT, color: t.ink }
+      : { minHeight: 0, overflowY: "auto", padding: "18px 20px 96px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ fontSize: compact ? 20 : 24, fontWeight: 700 }}>Storico comande</div>
+        {isAdmin && orders.length > 0 && (
+          <TillButton t={t} variant="danger" icon={Trash2} disabled={clearing} onClick={clearAll} style={{ fontSize: 15, padding: "0 14px" }}>
+            {clearing ? "Eliminazione…" : "Svuota storico"}
           </TillButton>
         )}
-      </section>
-      {selected
-        ? <OrderDetail key={selected.id} t={t} menu={menu} order={selected} isAdmin={isAdmin}
-            onDeleted={() => { setOrders((cur) => cur.filter((o) => o.id !== selected.id)); setSelectedId(null); }} />
-        : (
-          <SidePanel t={t} label="Dettaglio comanda">
-            <div style={{ color: t.inkSoft, fontSize: 17, padding: "28px 0", lineHeight: 1.5 }}>
-              Tocca una comanda a sinistra per vederne il dettaglio e ristamparne il preconto.
-            </div>
-          </SidePanel>
-        )}
+      </div>
+      <Notice notice={notice} />
+      {!loading && orders.length === 0 && <div style={{ color: t.inkSoft, fontSize: 17, padding: "12px 0" }}>Nessuna comanda chiusa.</div>}
+      {groups.map((g) => (
+        <div key={g.label} style={{ marginBottom: 18 }}>
+          <SectionTitle t={t} style={{ marginBottom: 8, textTransform: "capitalize" }}>{g.label}</SectionTitle>
+          <div style={{ display: "grid", gap: 8 }}>
+            {g.orders.map((o) => <ClosedOrderRow key={o.id} t={t} order={o} selected={o.id === selectedId} onSelect={() => setSelectedId(o.id)} />)}
+          </div>
+        </div>
+      ))}
+      {hasMore && (
+        <TillButton t={t} disabled={loading} onClick={() => loadPage(cursor, false)} style={{ width: "100%" }}>
+          {loading ? "Caricamento…" : "Carica altre"}
+        </TillButton>
+      )}
+      {loading && orders.length === 0 && <div style={{ color: t.inkSoft, fontSize: 17 }}>Caricamento…</div>}
+    </section>
+  );
+
+  const detail = selected && (
+    <ReceiptPanel key={selected.id} t={t} menu={menu} order={selected} closed sheet={compact} label="Dettaglio comanda"
+      backLabel="Storico" onClose={compact ? () => setSelectedId(null) : undefined}
+      onDelete={isAdmin ? () => remove(selected) : undefined} />
+  );
+
+  if (compact) {
+    return <div>{list}{detail}</div>;
+  }
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `minmax(0, 1fr) ${SIDE_PANEL_WIDTH}`, fontFamily: FONT, color: t.ink }}>
+      {list}
+      {detail || (
+        <SidePanel t={t} label="Dettaglio comanda">
+          <div style={{ color: t.inkSoft, fontSize: 17, padding: "28px 0", lineHeight: 1.5 }}>
+            Tocca una comanda a sinistra per vederne il dettaglio e ristamparne il preconto.
+          </div>
+        </SidePanel>
+      )}
     </div>
   );
 }

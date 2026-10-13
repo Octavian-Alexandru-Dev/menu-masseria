@@ -35,14 +35,14 @@ vedi §6):
 
 Stessa filosofia delle comande: nessuna app/servizio separato, un'area
 riservata in più nello stesso progetto React/Firebase, raggiungibile da tre
-punti (tutti verso lo stesso componente `src/Reservations.jsx`):
+punti (tutti verso la stessa schermata `src/TillReservations.jsx`, la stessa
+su telefono e cassa):
 
 - Route diretta `/prenotazioni` (o `/reservations`), utile per un dispositivo
   dedicato (es. tablet alla reception), gestita in `MenuApp.jsx` come già
   avviene per `/cameriere` e `/cucina`.
-- Tile "Prenotazioni" nella Dashboard (`StaffHome.jsx`).
-- Scorciatoia nell'header dell'area cameriere (`Waiter.jsx`), necessaria
-  perché un account solo-cameriere salta la Dashboard (vedi §5).
+- Sezione "Prenotazioni" nella barra in basso dell'app del telefono
+  (`PhoneApp.jsx`, vedi §6), per tutti gli account cameriere e admin.
 
 Dati e logica di scrittura/lettura in `src/reservationsData.js`, seguendo
 esattamente le convenzioni di `src/orders.js` (stesso stile di listener,
@@ -120,26 +120,20 @@ pulsante "Avvia" richiama `startReservation()`, che:
 Il cameriere continua poi a lavorare sulla comanda esattamente come su un
 tavolo aperto normalmente — nessuna differenza da quel punto in poi.
 
-Un account solo-cameriere salta direttamente in Sala dalla Dashboard (vedi
-§6 di `docs/comande-camerieri.md`, invariato): per questo Sala offre anche
-una scorciatoia diretta al calendario/conferma-rifiuto completo
-(`Reservations.jsx`), non solo alle prenotazioni del giorno.
+Il calendario completo (conferma/rifiuto) è sempre a un tocco dalla Sala:
+è la sezione "Prenotazioni" della barra in basso, oltre alle prenotazioni
+del giorno mostrate in cima ai Tavoli.
 
 ---
 
-## 6. Dashboard (`StaffHome.jsx`)
+## 6. Sezioni dell'app (ex Dashboard, `PhoneApp.jsx`)
 
-La schermata di scelta area (ex 3 pulsanti spogli) mostra ora: saluto +
-data/turno corrente, un tile per area con un'informazione live dove utile
-(tavoli aperti su "Sala", conteggio "da confermare" su "Prenotazioni" con un
-badge). Le sottoscrizioni che alimentano questi numeri si montano solo
-quando la Dashboard è effettivamente mostrata, così un account
-solo-cameriere o solo-cucina — che salta dritto alla propria area — non paga
-il costo di listener che non vedrà mai. Il criterio di skip automatico
-(un'unica area disponibile → nessuna scelta da fare) resta calcolato solo
-sulle tre aree "core" (Gestione menù/Sala/Cucina), non su Prenotazioni:
-altrimenti un account solo-cameriere perderebbe l'attuale accesso diretto a
-Sala non appena gli si desse accesso anche a Prenotazioni.
+Sul telefono la Dashboard a riquadri non c'è più: l'area staff è un'app con
+le sezioni nella barra in basso (Tavoli · Prenotazioni · Storico e, per gli
+admin, Menù · Statistiche — vedi `docs/stampa-scontrini.md` §4.2). Il
+conteggio "da confermare" è il badge arancione su **Prenotazioni**, i tavoli
+aperti il badge su **Tavoli**. `/prenotazioni` apre la stessa app sulla
+sezione Prenotazioni.
 
 ---
 
@@ -152,8 +146,8 @@ Stesso meccanismo "pigro" lato client di `orders.js` (§6 di
   marcate `no_show` al successivo caricamento del calendario
   (`autoFlagNoShows`).
 - Le prenotazioni in stato terminale vengono cancellate 30 giorni dopo
-  (`runDailyExpiredReservationsCleanup`, richiamata sia da `Reservations.jsx`
-  sia da `Waiter.jsx`).
+  (`runDailyExpiredReservationsCleanup`, richiamata sia dalle Prenotazioni,
+  `TillReservations.jsx`, sia dalla Sala, `sala-shared.jsx`).
 
 ---
 

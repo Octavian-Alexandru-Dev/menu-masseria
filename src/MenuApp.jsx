@@ -2,8 +2,8 @@
 //
 // Designed to be light on the customer's phone, on a connection that's
 // often weak (we're at a countryside farmhouse restaurant):
-//  - the management panel (Admin.jsx, which includes Firebase Authentication)
-//    is NOT downloaded until someone clicks "Gestione menù";
+//  - the staff area (StaffHome.jsx and everything behind it, Firebase
+//    Authentication included) is NOT downloaded until someone opens it;
 //  - the menu is read with onSnapshot + a persistent local cache (see
 //    firebase-db.js): once seen, it stays saved on the phone and reappears
 //    instantly even offline, while updating in the background;
@@ -13,8 +13,8 @@
 //    connection is retried up to MAX_LOAD_ATTEMPTS times (each attempt has
 //    its own timeout); only after the last failed attempt do we settle on
 //    an explicit message with a reload button.
-import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from "react";
-import { doc, onSnapshot, setDoc, runTransaction } from "firebase/firestore";
+import React, { useState, useEffect, useCallback, Suspense, lazy } from "react";
+import { doc, onSnapshot, runTransaction } from "firebase/firestore";
 import { db } from "./firebase-db";
 import { MENU_DOC_PATH, FALLBACK_STYLE, useUrlState } from "./shared";
 import ClientView from "./ClientView";
@@ -23,14 +23,12 @@ import { MenuEditError } from "./menuEdit";
 
 const StaffHome = lazy(() => import("./StaffHome"));
 const PrintMenu = lazy(() => import("./PrintMenu"));
-const Waiter = lazy(() => import("./Waiter"));
-const Reservations = lazy(() => import("./Reservations"));
 const PrintStation = lazy(() => import("./PrintStation"));
 
 const LOAD_ATTEMPT_TIMEOUT_MS = 5000; // timeout for each attempt
 const MAX_LOAD_ATTEMPTS = 3; // number of automatic retries before the final message
 const SAVE_TIMEOUT_MS = 8000;
-const MAX_UNDO_STEPS = 20;
+const MAX_MENU_BYTES = 900_000; // Firestore's document limit is 1 MiB
 
 // Inside the Windows till client (desktop-client/) the print station runs
 // alongside whatever screen is shown, so receipts sent from any device are
@@ -54,54 +52,23 @@ export default function App() {
   // Back button returns to the public menu instead of doing nothing (see
   // useUrlState in shared.jsx).
   const [view, setView] = useUrlState("area", "client");
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState(null);
-  const [saveError, setSaveError] = useState(null);
   const [loadNotice, setLoadNotice] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(1);
-  const [undoStack, setUndoStack] = useState([]); // previous states of menu, most recent at the end
-
-  const viewRef = useRef(view);
-  useEffect(() => { viewRef.current = view; }, [view]);
-  // Unsaved edits in the Admin editor. Only then does the restricted area
-  // ignore menu updates from the server: otherwise it follows them live, so
-  // the till (open all day) and the waiters' phones see a price or a dish
-  // changed from another device without reloading.
-  const dirtyRef = useRef(false);
-  // Last menu received from the server: "Scarta modifiche" goes back to it.
-  const lastServerMenuRef = useRef(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const markDirty = useCallback((value) => {
-    dirtyRef.current = value;
-    setHasUnsavedChanges(value);
-  }, []);
-
-  // Unsaved Admin edits: the browser asks before the tab is closed or
-  // reloaded. Not at the till: in the Windows client a cancelled unload
-  // would silently stop the program from closing or installing an update
-  // (and there "Gestione completa" already asks before leaving).
-  useEffect(() => {
-    if (!hasUnsavedChanges || getDesktopBridge()) return;
-    const warn = (e) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [hasUnsavedChanges]);
+  // The menu document doesn't exist on the server (not just slow to load).
+  const [menuMissing, setMenuMissing] = useState(false);
 
   const menuDocRef = doc(db, ...MENU_DOC_PATH);
 
-  // Tab opened by the Admin panel ("Esporta PDF / Stampa") just to show the
+  // Tab opened by the menu settings ("Stampa del menù") just to show the
   // print preview: it must not open its own Firestore connection, it reads
   // the menu already prepared in sessionStorage (see PrintMenu.jsx).
   const isPrintMode = typeof window !== "undefined"
     && new URLSearchParams(window.location.search).get("print") === "1";
 
-  // Areas restricted to staff (§2 of docs/comande-camerieri.md): dedicated,
-  // bookmarkable routes (e.g. for the fixed kitchen screen), not reachable
-  // from a button in the public menu. Each handles its own login and role
-  // check (see staff-shared.jsx).
+  // Dedicated, bookmarkable entries to the staff area (§2 of
+  // docs/comande-camerieri.md), e.g. for a device used only for orders or
+  // only at the reception: the same app (StaffHome.jsx), opened on that
+  // section.
   const pathname = typeof window !== "undefined" ? window.location.pathname : "/";
   const isWaiterPath = pathname.startsWith("/cameriere") || pathname.startsWith("/waiter");
   const isReservationsPath = pathname.startsWith("/prenotazioni") || pathname.startsWith("/reservations");
@@ -139,22 +106,18 @@ export default function App() {
           if (snap.exists()) {
             const loaded = snap.data();
             if (loaded && loaded.theme === "cirò") loaded.theme = "ciro";
-            lastServerMenuRef.current = loaded;
-            // Unsaved Admin edits are never overwritten by an update coming
-            // from the server or the cache — also while looking at them in
-            // the public menu ("Anteprima").
-            setMenuState((prev) => {
-              if (!prev) return loaded;
-              if (dirtyRef.current) return prev;
-              return loaded;
-            });
+            // Every device follows the saved menu live: a price or a dish
+            // changed from another device shows up without reloading.
+            setMenuState(loaded);
+            setMenuMissing(false);
             setLoadNotice(null);
           } else if (!snap.metadata.fromCache) {
             // The document doesn't exist yet on Firestore (first-time setup,
             // or a restored database): there's no longer a local sample menu
-            // to show in its place. It must be created from the Admin panel
-            // (login is possible even with no menu loaded — see Admin.jsx),
-            // e.g. by importing a JSON backup. No point retrying in this case.
+            // to show in its place. An admin creates it from a JSON backup
+            // (staff area → MenuBootstrap in MenuSettings.jsx). No point
+            // retrying in this case.
+            setMenuMissing(true);
             setLoadNotice("Nessun menù trovato su Firestore. Accedi come amministratore per crearne uno (es. importando un backup JSON).");
           }
         },
@@ -182,29 +145,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The single place where the menu state changes: every call records the
-  // previous state onto an undo stack (max MAX_UNDO_STEPS steps), so any
-  // Admin action (field edit, translation generation, JSON import, ...)
-  // automatically becomes undoable without having to touch every single
-  // handler in Admin.jsx.
-  const setMenu = useCallback((updater) => {
-    markDirty(true);
-    setMenuState((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (prev !== null && next !== prev) {
-        setUndoStack((stack) => [...stack, prev].slice(-MAX_UNDO_STEPS));
-      }
-      return next;
-    });
-  }, [markDirty]);
-
-  // Exiting the restricted area ("Esci"/"Anteprima" buttons in Admin, or
-  // from the waiter/kitchen/reservations login inside StaffHome): besides
-  // returning to the public menu, this also clears ?sezione (the sub-area
-  // chosen in StaffHome, see StaffHome.jsx) with a silent replaceState — it
-  // must not stay in the URL nor generate its own history entry, otherwise
-  // reopening "Gestione menù" would jump straight back to the last section
-  // instead of showing the Dashboard again.
+  // Leaving the staff area ("Vedi il menù dei clienti" in the menu
+  // settings): back to the public menu, also clearing ?sezione (the section
+  // of the staff app) with a silent replaceState, so reopening the staff
+  // area starts from Tavoli again.
   const handleExitStaff = () => {
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -214,28 +158,10 @@ export default function App() {
     setView("client");
   };
 
-  // Drops the unsaved Admin edits: back to the menu as saved on the server.
-  const handleDiscard = useCallback(() => {
-    if (lastServerMenuRef.current) setMenuState(lastServerMenuRef.current);
-    setUndoStack([]);
-    setSaveError(null);
-    markDirty(false);
-  }, [markDirty]);
-
-  const handleUndo = () => {
-    if (undoStack.length === 0) return;
-    const previous = undoStack[undoStack.length - 1];
-    setUndoStack((stack) => stack.slice(0, -1));
-    markDirty(true);
-    setMenuState(previous);
-  };
-
-  // One edit from the till's menu editor (TillMenu.jsx, edits from
-  // menuEdit.js), saved at once: applied in a transaction to the menu as it
-  // is on the server right now — not to this device's copy, which may be
-  // hours old — then to the copy on screen (keeping any unsaved Admin edits).
-  // Rejects with a readable message.
-  const handlePatch = useCallback(async (edit) => {
+  // Writes the menu document in a transaction, with a timeout and readable
+  // errors. build(current | null) → the new menu (current is null when the
+  // document doesn't exist yet).
+  const writeMenu = useCallback(async (build) => {
     const { auth } = await import("./firebase-auth");
     if (!auth.currentUser) throw new Error("Sessione scaduta: accedi di nuovo e riprova.");
     let timeoutId;
@@ -247,17 +173,16 @@ export default function App() {
         runTransaction(db, async (tx) => {
           const ref = doc(db, ...MENU_DOC_PATH);
           const snap = await tx.get(ref);
-          if (!snap.exists()) throw new MenuEditError("Il menù non esiste ancora: crealo da Gestione completa.");
-          const next = edit(snap.data());
-          if (new Blob([JSON.stringify(next)]).size > 900_000) {
-            throw new MenuEditError("I dati del menù sono troppo grandi per essere salvati.");
+          const next = build(snap.exists() ? snap.data() : null);
+          if (new Blob([JSON.stringify(next)]).size > MAX_MENU_BYTES) {
+            throw new MenuEditError("I dati del menù sono troppo grandi per essere salvati (le foto vanno caricate, non incollate nel testo).");
           }
           tx.set(ref, next);
         }),
         timeout,
       ]);
     } catch (err) {
-      console.error("[menu] Modifica dalla cassa fallita:", err);
+      console.error("[menu] Salvataggio del menù fallito:", err);
       if (err instanceof MenuEditError) throw err;
       if (err?.code === "permission-denied") throw new Error("Salvataggio non autorizzato: l'account non può modificare il menù.");
       if (err?.message?.startsWith("Nessuna risposta")) throw err;
@@ -266,64 +191,33 @@ export default function App() {
       if (err?.code === "unavailable" || err?.code === "deadline-exceeded") {
         throw new Error("Salvataggio non riuscito: controlla la connessione e riprova.");
       }
-      throw new Error("Salvataggio non riuscito per un errore imprevisto. Riprova; se si ripete, usa Gestione completa.");
+      throw new Error("Salvataggio non riuscito per un errore imprevisto. Riprova; se si ripete, scarica un backup e segnala il problema.");
     } finally {
       clearTimeout(timeoutId);
     }
+  }, []);
+
+  // One edit from the menu editor (TillMenu.jsx / MenuSettings.jsx, edits
+  // from menuEdit.js), saved at once: applied to the menu as it is on the
+  // server right now — not to this device's copy, which may be hours old —
+  // then to the copy on screen. Rejects with a readable message.
+  const handlePatch = useCallback(async (edit) => {
+    await writeMenu((current) => {
+      if (!current) throw new MenuEditError("Il menù non esiste ancora: crealo da un backup.");
+      return edit(current);
+    });
     setMenuState((prev) => {
       if (!prev) return prev;
       try { return edit(prev); } catch { return prev; } // stale copy: the live update brings the saved one
     });
-  }, []);
+  }, [writeMenu]);
 
-  const handleSave = async () => {
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const sizeInBytes = new Blob([JSON.stringify(menu)]).size;
-      if (sizeInBytes > 900_000) {
-        throw new Error(
-          "I dati del menù sono troppo grandi (probabilmente per una o più immagini incollate per intero invece che come link). Usa un URL immagine (es. https://...) invece di incollare la foto direttamente."
-        );
-      }
-
-      // Auth is required before writing: with the persistent cache, setDoc
-      // without auth can hang forever.
-      const { auth } = await import("./firebase-auth");
-      if (!auth.currentUser) {
-        throw new Error("Sessione scaduta. Effettua di nuovo l'accesso e riprova.");
-      }
-      // Force a token refresh to avoid silent rejections.
-      try { await auth.currentUser.getIdToken(true); } catch (_) { /* proceed anyway */ }
-
-      let timeoutId;
-      const timeout = new Promise((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error("Nessuna risposta dal server entro " + (SAVE_TIMEOUT_MS/1000) + " secondi. Verifica di aver pubblicato le regole (firebase deploy --only firestore:rules) e la connessione, poi riprova.")),
-          SAVE_TIMEOUT_MS
-        );
-      });
-      try {
-        await Promise.race([setDoc(menuDocRef, menu), timeout]);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-      markDirty(false);
-      setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
-      return true;
-    } catch (e) {
-      console.error("[menu] Salvataggio fallito:", e);
-      const msg = e && e.message ? e.message : "";
-      if (e && e.code === "permission-denied") {
-        setSaveError("Salvataggio non riuscito: accesso non autorizzato. Verifica di aver pubblicato le regole Firestore (firebase deploy --only firestore:rules) e di aver effettuato l'accesso con un utente valido.");
-      } else {
-        setSaveError(msg ? `Salvataggio non riuscito: ${msg}` : "Salvataggio non riuscito. Riprova.");
-      }
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  };
+  // Restoring a JSON backup (menuBackup.js): replaces the whole menu, also
+  // creating it when the document doesn't exist yet.
+  const handleRestore = useCallback(async (data) => {
+    await writeMenu(() => data);
+    setMenuState(data);
+  }, [writeMenu]);
 
   if (isPrintMode) {
     return (
@@ -339,25 +233,10 @@ export default function App() {
     );
   }
 
-  if (isWaiterPath || isReservationsPath) {
-    const StaffArea = isReservationsPath ? Reservations : Waiter;
-    return withPrintStation(
-      <Suspense
-        fallback={
-          <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", ...FALLBACK_STYLE }}>
-            Caricamento…
-          </div>
-        }
-      >
-        <StaffArea menu={menu} />
-      </Suspense>
-    );
-  }
-
-  // The restricted area can also open without a menu loaded yet (the Admin
-  // panel inside it lets you import a JSON backup if the document doesn't
-  // exist yet on Firestore — see Admin.jsx).
-  if (view === "staff") {
+  // The staff area can also open without a menu loaded yet: an admin can
+  // create it from a JSON backup there (MenuBootstrap).
+  const staffPath = isWaiterPath || isReservationsPath;
+  if (staffPath || view === "staff") {
     return withPrintStation(
       <Suspense
         fallback={
@@ -368,17 +247,11 @@ export default function App() {
       >
         <StaffHome
           menu={menu}
-          setMenu={setMenu}
-          onSave={handleSave}
-          saving={saving}
-          savedAt={savedAt}
-          saveError={saveError || loadNotice}
-          onExit={handleExitStaff}
-          onUndo={handleUndo}
-          canUndo={undoStack.length > 0}
+          menuMissing={menuMissing}
+          entrySection={isReservationsPath ? "reservations" : "waiter"}
           onPatch={handlePatch}
-          onDiscard={handleDiscard}
-          hasUnsavedChanges={hasUnsavedChanges}
+          onRestore={handleRestore}
+          onExit={staffPath ? () => window.location.assign("/") : handleExitStaff}
         />
       </Suspense>
     );

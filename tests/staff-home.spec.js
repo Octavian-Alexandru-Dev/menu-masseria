@@ -30,13 +30,20 @@ test.describe("Area riservata (StaffHome)", () => {
     await expect(page.getByRole("button", { name: /^esci$/i })).toBeVisible();
   });
 
-  test("un account con una sola area (cameriere) salta la Dashboard e apre direttamente Sala", async ({ page }) => {
+  test("un cameriere entra direttamente nei Tavoli e vede solo le sue sezioni", async ({ page }) => {
     await staffLogin(page, TEST_WAITER);
     await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
-    // Niente Dashboard (saluto "Ciao,") né barra "Cambia area": un account
-    // solo-cameriere non le vede mai (StaffHome.jsx).
+    // Niente Dashboard (saluto "Ciao,") né barra "Cambia area": l'app si
+    // apre sui Tavoli, le sezioni stanno nella barra in basso (PhoneApp.jsx).
     await expect(page.getByText(/^ciao,/i)).toHaveCount(0);
     await expect(page.getByRole("button", { name: /cambia area/i })).toHaveCount(0);
+    const nav = page.getByRole("navigation", { name: "Sezioni" });
+    for (const name of ["Tavoli", "Prenotazioni", "Storico"]) {
+      await expect(nav.getByRole("button", { name, exact: true })).toBeVisible();
+    }
+    // Menù e Statistiche sono solo per gli admin.
+    await expect(nav.getByRole("button", { name: "Menù", exact: true })).toHaveCount(0);
+    await expect(nav.getByRole("button", { name: "Statistiche", exact: true })).toHaveCount(0);
   });
 
   test("dopo l'uscita 'Rientra come …' fa rientrare con un tocco l'ultimo account, senza riscrivere la password", async ({ page }) => {
@@ -101,26 +108,26 @@ test.describe("Area riservata (StaffHome)", () => {
     await expect(page.getByRole("button", { name: /rientra come/i })).toHaveCount(0);
   });
 
-  test("un account admin vede la Dashboard con tutte le aree e naviga con il pulsante Indietro del browser", async ({ page }) => {
+  test("un account admin vede tutte le sezioni nella barra in basso e naviga con il pulsante Indietro del browser", async ({ page }) => {
     await staffLogin(page, TEST_ADMIN);
-    await expect(page.getByText(/^ciao,/i)).toBeVisible({ timeout: 10_000 });
-    // Le Dashboard cards includono un contatore live nel nome accessibile
-    // (es. "Sala0 tavoli aperti"), quindi si verifica un prefisso, non il
-    // nome esatto (StaffHome.jsx, Dashboard: opt.label + count).
-    await expect(page.getByRole("button", { name: /^gestione menù/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^sala/i })).toBeVisible();
-    // Niente più area Cucina: la cucina lavora con le comande stampate.
-    await expect(page.getByRole("button", { name: /^cucina/i })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^prenotazioni/i })).toBeVisible();
-
-    await page.getByRole("button", { name: /^sala/i }).click();
+    // L'app si apre sui Tavoli (non c'è più la Dashboard a riquadri).
     await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
-    await expect(page).toHaveURL(/sezione=waiter/);
-    // Più di un'area core disponibile (admin): la barra "Cambia area" è visibile.
-    await expect(page.getByRole("button", { name: /cambia area/i })).toBeVisible();
+    await expect(page.getByText(/^ciao,/i)).toHaveCount(0);
+    const nav = page.getByRole("navigation", { name: "Sezioni" });
+    for (const name of ["Tavoli", "Prenotazioni", "Storico", "Menù", "Statistiche"]) {
+      await expect(nav.getByRole("button", { name, exact: true })).toBeVisible();
+    }
+    await expect(nav.getByRole("button", { name: "Tavoli", exact: true })).toHaveAttribute("aria-current", "page");
+    // Niente più area Cucina: la cucina lavora con le comande stampate.
+    await expect(nav.getByRole("button", { name: /cucina/i })).toHaveCount(0);
+
+    await nav.getByRole("button", { name: "Prenotazioni", exact: true }).click();
+    await expect(page).toHaveURL(/sezione=reservations/);
+    await expect(nav.getByRole("button", { name: "Prenotazioni", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("heading", { name: "Prenotazioni" })).toBeVisible();
 
     await page.goBack();
-    await expect(page.getByText(/^ciao,/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page).not.toHaveURL(/sezione=/);
+    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page).not.toHaveURL(/sezione=reservations/);
   });
 });

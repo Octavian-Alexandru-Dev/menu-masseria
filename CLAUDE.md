@@ -2,7 +2,7 @@
 
 This project uses Playwright for end-to-end contract tests, run against a **local Firebase emulator** (Auth + Firestore, containerized — see `docker-compose.emulator.yml`), never against the real production project. Tests live in `tests/*.spec.js` and are plain JavaScript (the app itself has no TypeScript).
 
-After implementing or changing a UI feature (`ClientView.jsx`, `Admin.jsx`, `Waiter.jsx`, `Reservations.jsx`, `OrderHistory.jsx`, `Stats.jsx`, `PrintMenu.jsx`, `ReceiptOverlay.jsx`, `PrintStation.jsx`, `StaffHome.jsx`, `shared.jsx`, `staff-shared.jsx`, `sala-shared.jsx`, `MenuApp.jsx`, the till screens `Till*.jsx`, or the till client in `desktop-client/`), verify it yourself before considering the task done:
+After implementing or changing a UI feature (`ClientView.jsx`, `PrintMenu.jsx`, `PrintStation.jsx`, `StaffHome.jsx`, `PhoneApp.jsx`, `Waiter.jsx`, `OrderUi.jsx`, `MenuSettings.jsx`, `shared.jsx`, `staff-shared.jsx`, `sala-shared.jsx`, `MenuApp.jsx`, the staff screens `Till*.jsx`, or the till client in `desktop-client/`), verify it yourself before considering the task done:
 
 ```
 npm run test:e2e       # headless run — self-contained, starts/seeds/tears down the emulator automatically
@@ -18,32 +18,34 @@ The emulator container starts already populated — `Dockerfile.emulator` bakes 
 Test accounts (`TEST_ADMIN`, `TEST_WAITER`, `TEST_KITCHEN`, see `tests/test-env.js` / `scripts/seed-emulator.js`): fixed, non-secret credentials, meaningless outside the ephemeral local emulator.
 
 Notes:
-- `tests/client-view.spec.js` / `tests/admin-login.spec.js` / `tests/staff-home.spec.js` / `tests/waiter-order.spec.js` / `tests/reservations.spec.js` cover the public menu, staff login screens, and full authenticated flows (orders and kitchen ticket, reservations lifecycle). Assertions favor structure/role/text over hardcoded content.
+- `tests/client-view.spec.js` / `tests/admin-login.spec.js` / `tests/staff-home.spec.js` / `tests/waiter-order.spec.js` / `tests/reservations.spec.js` / `tests/order-history.spec.js` / `tests/stats-dashboard.spec.js` / `tests/menu-settings.spec.js` / `tests/admin-menu-costs.spec.js` cover the public menu, staff login screens, and full authenticated flows (orders and kitchen ticket, reservations lifecycle, history, statistics, menu settings). The staff-area specs run on a 6" smartphone viewport (`test.use(PHONE)`, `tests/helpers/phone.js`); `tests/phone-app.spec.js` checks the phone app itself (no sideways scrolling, bottom navigation, order taking by taps, full-screen pages). A full-screen page (`SidePanel` `sheet`) makes the app underneath inert, but Playwright still sees it: look for controls inside the open `dialog` (`sheet()` in the helper). Assertions favor structure/role/text over hardcoded content.
 - `tests/receipt-printing.spec.js` / `tests/escpos.spec.js` cover receipt and kitchen-ticket printing (print queue, till print station via a mocked `window.mdpDesktop`, ESC/POS output). `tests/till-sala.spec.js` covers the till interface (Tavoli, comanda, Storico, Prenotazioni, Menù, Statistiche) and `tests/till-client.spec.js` the till's menu/banners/login; they run in their own sequential Playwright projects (every till page is a print station). `tests/desktop-client.spec.js` launches the real Electron till client (`desktop-client/`) against a fake TCP printer; it is skipped unless `cd desktop-client && npm install && npx install-electron` has been run. Coverage checklist: `docs/stampa-scontrini.md`.
 - `tests/firestore-cleanup.js` deletes test-created orders/reservations between tests within a run (parallel test isolation); the whole emulator is discarded after the run regardless.
 - When adding a new UI feature, add or extend a spec in `tests/` alongside it.
 
 # Telefono e cassa — regola obbligatoria
 
-L'area staff ha **due interfacce** per le stesse funzioni:
+L'area staff si usa da **due tipi di dispositivo**, con **una sola interfaccia per funzione**:
 
-- **telefono / browser** (mobile-first): `StaffHome.jsx` (Dashboard), `Waiter.jsx`, `Reservations.jsx`, `OrderHistory.jsx`, `ReceiptOverlay.jsx`, `Admin.jsx`, `Stats.jsx` (non c'è più un'area Cucina: la cucina lavora con le comande stampate);
-- **cassa** (client Windows `desktop-client/`, riconosciuta da `getDesktopBridge()` in `src/desktop.js`): `TillSala.jsx` (barra delle sezioni + Tavoli/comanda), `TillReservations.jsx`, `TillHistory.jsx`, `TillMenu.jsx`, `TillStats.jsx`, costruite con i pezzi di `TillUi.jsx`.
+- **telefono / browser**: l'app `PhoneApp.jsx` (barra in alto + barra delle sezioni in basso: Tavoli · Prenotazioni · Storico · Menù · Statistiche, niente Dashboard). `/cameriere` e `/prenotazioni` aprono la stessa app su quella sezione (`StaffHome.jsx`);
+- **cassa** (client Windows `desktop-client/`, riconosciuta da `getDesktopBridge()` in `src/desktop.js`): `TillSala.jsx` (barra delle sezioni in alto + Tavoli/comanda).
+
+Prenotazioni, Storico, Menù e Statistiche sono **la stessa schermata** sui due dispositivi (`TillReservations.jsx`, `TillHistory.jsx`, `TillMenu.jsx` + `MenuSettings.jsx`, `TillStats.jsx`): `useCompactLayout()` (`TillUi.jsx`) sceglie la disposizione — alla cassa elenco + barra laterale, sul telefono una colonna con la barra laterale che diventa una pagina intera (`SidePanel` con `sheet`). Solo la **Sala** (tavoli e comanda) ha due presentazioni, perché il gesto è diverso (cassa: schermo diviso con tastierino; telefono: piatti a riquadri e barra in basso): `Waiter.jsx` e `TillSala.jsx`, con i pezzi in comune in `OrderUi.jsx` (modifica riga, coperti, riquadro piatto, riga dello scontrino, preconto) e la logica in `sala-shared.jsx`. Non c'è più un'area Cucina (comande stampate), né l'editor classico del menù (ex `Admin.jsx`), né le vecchie schermate da telefono: non reintrodurre doppioni.
 
 | Funzione | Telefono | Cassa | Logica condivisa |
 |---|---|---|---|
-| Sala, comanda, invio, chiusura | `Waiter.jsx` | `TillSala.jsx` | `sala-shared.jsx`, `orders.js` |
-| Preconto e stampa | `ReceiptOverlay.jsx` | `TillSala.jsx`, `TillHistory.jsx` | `printJobs.js`, `usePrintJob.js`, `escpos.js` |
+| Sala, comanda, invio, chiusura, modifica riga | `Waiter.jsx` | `TillSala.jsx` | `sala-shared.jsx`, `orders.js`, `OrderUi.jsx` |
+| Preconto e stampa | `OrderUi.jsx` > `ReceiptPanel` | `TillSala.jsx` (stampa diretta), `ReceiptPanel` nello Storico | `printJobs.js`, `usePrintJob.js`, `escpos.js` |
 | Comanda per la cucina | `Waiter.jsx` | `TillSala.jsx` | `kitchenTicket.js`, `printJobs.js` |
-| Storico | `OrderHistory.jsx` | `TillHistory.jsx` | `orders.js` |
-| Prenotazioni | `Reservations.jsx` | `TillReservations.jsx` | `reservationsData.js` |
-| Gestione menù | `Admin.jsx` | `TillMenu.jsx` | `menuEdit.js`, `menuCosts.js` |
-| Statistiche | `Stats.jsx` | `TillStats.jsx` | `statsData.js` |
+| Storico | `TillHistory.jsx` | `TillHistory.jsx` | `orders.js` |
+| Prenotazioni | `TillReservations.jsx` | `TillReservations.jsx` | `reservationsData.js` |
+| Gestione menù e impostazioni | `TillMenu.jsx`, `MenuSettings.jsx` | `TillMenu.jsx`, `MenuSettings.jsx` | `menuEdit.js`, `menuCosts.js`, `menuBackup.js`, `menuPrint.js`, `staffData.js` |
+| Statistiche | `TillStats.jsx` | `TillStats.jsx` | `statsData.js` |
 
-> 1. Ogni funzione o interazione nuova dell'area staff (un campo nuovo di un piatto, un'azione sulla comanda, un filtro…) va fatta **in entrambe le interfacce** nello stesso intervento. Se una funzione deve esistere solo da una parte (es. il PDF del menù resta in "Gestione completa"), dillo esplicitamente nel riepilogo all'utente e scrivilo in `docs/stampa-scontrini.md` §4.1.
-> 2. La logica (dati, regole, calcoli, scritture su Firestore) sta nei moduli condivisi della colonna a destra, mai duplicata nei due componenti: le due interfacce cambiano solo la presentazione. Un campo nuovo del menù passa da `menuEdit.js` ed è modificabile sia in `Admin.jsx` sia in `TillMenu.jsx`; aggiorna anche `scripts/seed-emulator.js` (se serve per i test) e `docs/data-model.md`.
-> 3. Alla cassa segui i principi già applicati in `TillUi.jsx` (dettagli in `docs/stampa-scontrini.md` §4.1): bersagli touch ≥ 48px, etichette di testo sempre visibili, stato mai affidato al solo colore (palette fissa `STATUS`), modifica nella barra laterale che si applica solo con "Salva", tastierino a schermo per i numeri, conferma prima delle azioni irreversibili, nessun "Esci". Usa i componenti di `TillUi.jsx` invece di stili nuovi.
-> 4. Test: almeno un test E2E per il telefono (progetto `chromium`) e uno per la cassa (`tests/till-sala.spec.js`, con `installDesktopBridgeMock`), più la riga nella matrice di copertura di `docs/stampa-scontrini.md` §7.
+> 1. Ogni funzione o interazione nuova dell'area staff (un campo nuovo di un piatto, un'azione sulla comanda, un filtro…) deve funzionare **su entrambi i dispositivi** nello stesso intervento: nelle schermate condivise basta farla una volta (controllando entrambe le disposizioni), nella Sala va fatta in `Waiter.jsx` e in `TillSala.jsx`. Se una funzione deve esistere solo da una parte, dillo esplicitamente nel riepilogo all'utente e scrivilo in `docs/stampa-scontrini.md` §4.1.
+> 2. La logica (dati, regole, calcoli, scritture su Firestore) sta nei moduli condivisi della colonna a destra, mai duplicata nei componenti, che cambiano solo la presentazione. Le modifiche al menù si salvano una alla volta con `onPatch` (MenuApp.jsx > `handlePatch`, una transazione sul menù com'è sul server) e scrivono solo i campi cambiati; un campo nuovo del menù passa da `menuEdit.js`; aggiorna anche `scripts/seed-emulator.js` (se serve per i test) e `docs/data-model.md`.
+> 3. Stessi principi ovunque, quelli di `TillUi.jsx` (dettagli in `docs/stampa-scontrini.md` §4.1–4.2): bersagli touch ≥ 48px, etichette di testo sempre visibili, stato mai affidato al solo colore (palette fissa `STATUS`), modifiche che si applicano solo con "Salva", conferma (`confirmAction`) prima delle azioni irreversibili, tastierino a schermo per i numeri alla cassa, nessun "Esci" alla cassa. Sul telefono in più: azione principale in basso (barra fissa o "Salva" in fondo alla pagina), sezioni nella barra in basso, pagine intere invece di finestre sovrapposte, nessuno scorrimento laterale a 393px. Usa i componenti di `TillUi.jsx` invece di stili nuovi: nessuna schermata deve avere un aspetto diverso dalle altre.
+> 4. Test: almeno un test E2E sul telefono (progetto `chromium`, `test.use(PHONE)`) e uno alla cassa (`tests/till-sala.spec.js`, con `installDesktopBridgeMock`), più la riga nella matrice di copertura di `docs/stampa-scontrini.md` §7.
 
 # Contract testing E2E — regola obbligatoria
 
@@ -55,6 +57,20 @@ L'area staff ha **due interfacce** per le stesse funzioni:
 > 3. Ogni nuova funzionalità o interazione UI aggiunta deve essere accompagnata da almeno un test E2E corrispondente prima di considerare la feature completa. Nessuna funzionalità va considerata "fatta" senza il relativo contract test.
 > 4. Non eliminare o disabilitare test esistenti senza segnalarlo esplicitamente e motivarlo (es. funzionalità rimossa — non "test che dava fastidio").
 > 5. Mantieni la matrice di copertura aggiornata: se una modifica introduce nuovi stati o interazioni, aggiorna la checklist di copertura, non solo il codice dei test.
+
+# Test dell'interfaccia per ogni nuova funzionalità — regola obbligatoria
+
+> 1. **Ogni nuova funzionalità** (o modifica di comportamento) dell'interfaccia va consegnata **insieme ai test E2E** Playwright che la validano. Senza test la funzionalità non è finita, e non si fa commit né push.
+> 2. I test coprono i **casi principali e significativi dell'interazione**, non solo "la pagina si apre":
+>    - il percorso felice completo (es. aggiungere un piatto → inviare → vederlo nella comanda);
+>    - le varianti che cambiano il risultato (es. quantità, prezzo offerto/scontato, nota, rimozione);
+>    - gli stati vuoti e di errore (nessun risultato, campo obbligatorio mancante, salvataggio fallito, dato cancellato da un altro dispositivo);
+>    - le conferme prima delle azioni irreversibili (chiudere un tavolo, eliminare);
+>    - la persistenza quando conta (dopo un ricaricamento o visto da un'altra sessione).
+> 3. **Telefono:** per le schermate dell'area staff da telefono, almeno un test gira con viewport da smartphone 6" (393×851: `test.use(PHONE)` da `tests/helpers/phone.js`, vedi `tests/phone-app.spec.js`) e verifica che non ci sia scorrimento laterale e che i comandi principali siano ≥ 48px e raggiungibili (barra in basso / "Salva" in fondo). **Cassa:** test in `tests/till-sala.spec.js` con `installDesktopBridgeMock` (vedi la regola "Telefono e cassa").
+> 4. Selettori per ruolo/etichetta accessibile e testo visibile (`getByRole`, `getByLabel`), non per classi CSS o struttura del DOM: così i test descrivono l'interazione dell'utente e restano validi se cambia solo lo stile.
+> 5. Ogni bug corretto nell'interfaccia riceve un test che lo riproduce (fallisce prima della correzione, passa dopo), per evitare che ritorni.
+> 6. Aggiorna la matrice di copertura in `docs/stampa-scontrini.md` §7 con le nuove righe.
 
 # Deploy — firestore.rules
 

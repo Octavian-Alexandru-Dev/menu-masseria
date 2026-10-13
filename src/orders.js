@@ -231,7 +231,7 @@ export async function loadClosedOrdersPage(afterClosedAt) {
 
 // Deletes a single order from the history (targeted correction of an order
 // created by mistake). Reserved for admins on the UI side — see
-// OrderHistory.jsx.
+// TillHistory.jsx.
 export async function deleteOrder(orderId) {
   return deleteDoc(orderRef(orderId));
 }

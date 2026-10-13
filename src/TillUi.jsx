@@ -11,6 +11,7 @@
 //    (a table's ticket, a closed order, a reservation, a dish) is shown and
 //    edited; form edits apply only on "Salva".
 import React from "react";
+import { createPortal } from "react-dom";
 import { Minus, Plus, Delete } from "lucide-react";
 
 export const TOUCH = 48;
@@ -99,16 +100,74 @@ export function SectionTitle({ t, children, color, style }) {
   );
 }
 
+// Phones (and narrow browser windows) get the same screens as the till,
+// laid out for one hand: the side panel becomes a full-screen page (see
+// SidePanel's `sheet`), grids drop to two columns. Shared by the phone shell
+// (PhoneApp.jsx) and the screens it reuses from the till (TillMenu.jsx).
+export const COMPACT_QUERY = "(max-width: 760px)";
+
+export function useCompactLayout() {
+  const get = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(COMPACT_QUERY).matches;
+  const [compact, setCompact] = React.useState(get);
+  React.useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia(COMPACT_QUERY);
+    const onChange = () => setCompact(mq.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+  return compact;
+}
+
 // The right-hand panel: header, scrolling body, footer fixed at the bottom
 // (primary actions always in the same place).
-export function SidePanel({ t, label, header, footer, children }) {
-  return (
-    <section aria-label={label} style={{ display: "flex", flexDirection: "column", minHeight: 0, borderLeft: `1px solid ${t.line}`, background: t.card, fontFamily: FONT, color: t.ink }}>
-      {header && <div style={{ padding: "16px 18px 10px" }}>{header}</div>}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 18px 12px" }}>{children}</div>
-      {footer && <div style={{ padding: "14px 18px 18px", borderTop: `1px solid ${t.line}`, display: "grid", gap: 10 }}>{footer}</div>}
+// sheet: on a phone the same panel opens as a full-screen page above
+// everything (like a native app's pushed screen): header at the top, the
+// footer with the primary action at the bottom, in reach of the thumb.
+let openSheets = 0;
+
+export function SidePanel({ t, label, header, footer, children, sheet = false }) {
+  // While a sheet is open the app underneath neither scrolls nor can be
+  // reached (screen readers, keyboard): the sheet is mounted on <body>, the
+  // app's root is made inert. A counter, so sheets opened one over the other
+  // restore it only when the last one closes.
+  React.useEffect(() => {
+    if (!sheet) return undefined;
+    const root = document.getElementById("root");
+    openSheets += 1;
+    document.body.style.overflow = "hidden";
+    if (root) root.inert = true;
+    return () => {
+      openSheets -= 1;
+      if (openSheets === 0) {
+        document.body.style.overflow = "";
+        if (root) root.inert = false;
+      }
+    };
+  }, [sheet]);
+  const sheetStyle = sheet ? {
+    position: "fixed", inset: 0, zIndex: 150, borderLeft: "none", background: t.bg,
+    animation: "mdpSheetIn .18s ease-out",
+  } : null;
+  const panel = (
+    <section aria-label={label} role={sheet ? "dialog" : undefined} aria-modal={sheet ? "true" : undefined} style={{ display: "flex", flexDirection: "column", minHeight: 0, borderLeft: `1px solid ${t.line}`, background: t.card, fontFamily: FONT, color: t.ink, ...sheetStyle }}>
+      {sheet && <style>{"@keyframes mdpSheetIn { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } } @media (prefers-reduced-motion: reduce) { [role=dialog] { animation: none !important; } }"}</style>}
+      {header && (
+        <div style={sheet
+          ? { padding: "calc(8px + env(safe-area-inset-top)) 16px 8px", background: t.card, borderBottom: `1px solid ${t.line}` }
+          : { padding: "16px 18px 10px" }}>{header}</div>
+      )}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: sheet ? "12px 16px 16px" : "0 18px 12px" }}>{children}</div>
+      {footer && (
+        <div style={{
+          padding: sheet ? "12px 16px calc(12px + env(safe-area-inset-bottom))" : "14px 18px 18px",
+          borderTop: `1px solid ${t.line}`, display: "grid", gap: 10, background: t.card,
+          boxShadow: sheet ? "0 -6px 18px rgba(0,0,0,0.06)" : undefined,
+        }}>{footer}</div>
+      )}
     </section>
   );
+  return sheet ? createPortal(panel, document.body) : panel;
 }
 
 // prefix: what is being printed, when more than one print status can be on

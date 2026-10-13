@@ -1,11 +1,12 @@
-// Prenotazioni for the till (inside TillSala.jsx), in place of the phone's
-// Reservations.jsx: same data and rules (reservationsData.js), laid out like
-// the rest of the till — a large month calendar on the left (bookings and
-// covers per day at a glance), the selected day's reservations in the middle,
-// and the side panel on the right for the selected reservation (details +
-// actions) or the new/edit form. Times are picked from the same slots the
-// public booking form offers (landing page), covers and table with
-// steppers: only name and phone need the keyboard.
+// Prenotazioni — the same screen at the till (inside TillSala.jsx) and on
+// phones (PhoneApp.jsx). Data and rules in reservationsData.js. At the till:
+// a large month calendar on the left (bookings and covers per day at a
+// glance), the selected day's reservations in the middle, and the side panel
+// on the right for the selected reservation (details + actions) or the
+// new/edit form. On a phone the same pieces in one column, the panel as a
+// full-screen page. Times are picked from the same slots the public booking
+// form offers (landing page) or typed ("Altro orario"), covers and table
+// with steppers.
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, Check, X, Play, Pencil, Phone, Users, CalendarDays } from "lucide-react";
 import {
@@ -15,7 +16,7 @@ import {
 } from "./reservationsData";
 import { confirmAction } from "./confirmDialog";
 import { BackButton } from "./shared";
-import { FONT, STATUS, TOUCH, SIDE_PANEL_WIDTH, TillButton, Stepper, SidePanel, SectionTitle, StatusPill } from "./TillUi";
+import { FONT, STATUS, TOUCH, SIDE_PANEL_WIDTH, TillButton, Stepper, SidePanel, SectionTitle, StatusPill, useCompactLayout } from "./TillUi";
 
 const MONTH_LABEL = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const WEEKDAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "short" });
@@ -50,7 +51,7 @@ function monthStart(d) {
 
 /* -------------------------------- calendar -------------------------------- */
 
-function Calendar({ t, month, onMonth, selected, onSelect, counts }) {
+function Calendar({ t, month, onMonth, selected, onSelect, counts, compact = false }) {
   const first = monthStart(month);
   const offset = (first.getDay() + 6) % 7; // Monday first
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -67,7 +68,7 @@ function Calendar({ t, month, onMonth, selected, onSelect, counts }) {
         <div style={{ fontSize: 20, fontWeight: 700, textTransform: "capitalize" }}>{MONTH_LABEL.format(month)}</div>
         <button type="button" aria-label="Mese successivo" onClick={() => onMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="mdp-btn" style={navBtn}><ChevronRight size={22} /></button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: compact ? 4 : 6 }}>
         {[0, 1, 2, 3, 4, 5, 6].map((i) => (
           <div key={i} style={{ textAlign: "center", fontSize: 13, fontWeight: 600, color: t.inkSoft, textTransform: "uppercase" }}>
             {WEEKDAY_LABEL.format(new Date(2024, 0, 1 + i))}
@@ -84,14 +85,14 @@ function Calendar({ t, month, onMonth, selected, onSelect, counts }) {
             <button key={key} type="button" onClick={() => onSelect(key)} aria-pressed={isSel} className="mdp-btn"
               aria-label={c?.total ? `${CELL_DATE_LABEL.format(date)}, ${c.total} prenotazioni, ${c.covers} coperti${c.pending ? `, ${c.pending} da confermare` : ""}` : CELL_DATE_LABEL.format(date)}
               style={{
-                position: "relative", minHeight: 58, borderRadius: 12, cursor: "pointer", fontFamily: FONT, padding: "4px 2px",
+                position: "relative", minHeight: compact ? 48 : 58, borderRadius: compact ? 10 : 12, cursor: "pointer", fontFamily: FONT, padding: "4px 2px",
                 border: `1.5px solid ${isSel ? t.primary : isToday ? t.ink : t.line}`,
                 background: isSel ? t.primary : t.card, color: isSel ? t.bg : t.ink,
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
               }}>
-              <span style={{ fontSize: 18, fontWeight: isToday ? 800 : 600 }}>{day}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, visibility: c?.total ? "visible" : "hidden" }}>
-                {c?.total || 0} · {c?.covers || 0}p
+              <span style={{ fontSize: compact ? 16 : 18, fontWeight: isToday ? 800 : 600 }}>{day}</span>
+              <span style={{ fontSize: compact ? 10 : 11, fontWeight: 700, visibility: c?.total ? "visible" : "hidden", whiteSpace: "nowrap" }}>
+                {compact ? `${c?.total || 0}·${c?.covers || 0}p` : `${c?.total || 0} · ${c?.covers || 0}p`}
               </span>
               {c?.pending > 0 && (
                 <span aria-hidden="true" style={{ position: "absolute", top: 5, right: 5, width: 9, height: 9, borderRadius: 5, background: STATUS.waiting, border: "1.5px solid #fff" }} />
@@ -131,7 +132,7 @@ function SlotGrid({ t, title, slots, value, onPick }) {
   );
 }
 
-function ReservationForm({ t, initial, defaultDate, busy, onCancel, onSave }) {
+function ReservationForm({ t, initial, defaultDate, busy, onCancel, onSave, sheet = false }) {
   const isEdit = Boolean(initial);
   const [date, setDate] = useState(initial?.date || defaultDate);
   const [time, setTime] = useState(initial?.time || "");
@@ -160,6 +161,7 @@ function ReservationForm({ t, initial, defaultDate, busy, onCancel, onSave }) {
   return (
     <SidePanel
       t={t}
+      sheet={sheet}
       label={isEdit ? "Modifica prenotazione" : "Nuova prenotazione"}
       header={(
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -188,11 +190,19 @@ function ReservationForm({ t, initial, defaultDate, busy, onCancel, onSave }) {
             <span aria-label="Data della prenotazione" style={{ flex: 1, textAlign: "center", fontSize: 18, fontWeight: 700, textTransform: "capitalize" }}>{DAY_LABEL.format(parseKey(date))}</span>
             <button type="button" aria-label="Giorno successivo" onClick={() => setDate((d) => shiftDay(d, 1))} className="mdp-btn" style={smallNav}><ChevronRight size={20} /></button>
           </div>
+          <label style={{ ...label, marginTop: 10, fontWeight: 500, fontSize: 14 }}>
+            Oppure scegli la data
+            <input type="date" aria-label="Scegli la data" style={input} value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+          </label>
         </div>
         <div>
           <span style={label}>Orario</span>
           <SlotGrid t={t} title="Pranzo" slots={[...LUNCH_SLOTS, ...extraSlot]} value={time} onPick={setTime} />
           <SlotGrid t={t} title="Cena" slots={DINNER_SLOTS} value={time} onPick={setTime} />
+          <label style={{ ...label, marginTop: 10, fontWeight: 500, fontSize: 14 }}>
+            Altro orario
+            <input type="time" aria-label="Altro orario" style={input} value={time} onChange={(e) => setTime(e.target.value)} />
+          </label>
         </div>
         <label style={label}>
           Nome *
@@ -223,7 +233,7 @@ function ReservationForm({ t, initial, defaultDate, busy, onCancel, onSave }) {
 
 /* --------------------------------- detail --------------------------------- */
 
-function ReservationDetail({ t, r, busy, onConfirm, onReject, onCancelReservation, onEdit, onAvvia, onGoToTable }) {
+function ReservationDetail({ t, r, busy, onConfirm, onReject, onCancelReservation, onEdit, onAvvia, onGoToTable, sheet = false, onClose }) {
   const info = STATUS_INFO[r.status] || STATUS_INFO.pending;
   const isToday = r.date === dateKey();
   const row = (lbl, val) => val ? (
@@ -258,9 +268,11 @@ function ReservationDetail({ t, r, busy, onConfirm, onReject, onCancelReservatio
   return (
     <SidePanel
       t={t}
+      sheet={sheet}
       label="Dettaglio prenotazione"
       header={(
         <>
+          {sheet && <BackButton t={t} onClick={onClose} label="Prenotazioni" style={{ marginBottom: 10 }} />}
           <StatusPill color={info.color}>{info.label}</StatusPill>
           <div style={{ fontSize: 26, fontWeight: 700, marginTop: 8 }}>{r.name || "Senza nome"}</div>
           <div style={{ fontSize: 16, color: t.inkSoft, textTransform: "capitalize" }}>{DAY_LABEL.format(parseKey(r.date))}{r.time ? ` · ore ${r.time}` : ""}</div>
@@ -283,6 +295,7 @@ function ReservationDetail({ t, r, busy, onConfirm, onReject, onCancelReservatio
 /* --------------------------------- screen --------------------------------- */
 
 export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
+  const compact = useCompactLayout();
   const [month, setMonth] = useState(() => monthStart(new Date()));
   const [selectedDate, setSelectedDate] = useState(dateKey());
   const [monthList, setMonthList] = useState([]);
@@ -386,17 +399,17 @@ export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
 
   let side;
   if (panel.mode === "new" || panel.mode === "edit") {
-    side = <ReservationForm key={panel.mode === "edit" ? panel.r.id : `new-${selectedDate}`} t={t} initial={panel.mode === "edit" ? panel.r : null}
+    side = <ReservationForm key={panel.mode === "edit" ? panel.r.id : `new-${selectedDate}`} t={t} sheet={compact} initial={panel.mode === "edit" ? panel.r : null}
       defaultDate={selectedDate} busy={busy} onCancel={() => setPanel(panel.mode === "edit" ? { mode: "detail", id: panel.r.id } : { mode: "none" })} onSave={save} />;
   } else if (selected) {
-    side = <ReservationDetail t={t} r={selected} busy={busy}
+    side = <ReservationDetail t={t} r={selected} busy={busy} sheet={compact} onClose={() => setPanel({ mode: "none" })}
       onConfirm={() => run(() => confirmReservation(selected.id, by))}
       onReject={() => reject(selected)}
       onCancelReservation={() => cancel(selected)}
       onEdit={() => setPanel({ mode: "edit", r: selected })}
       onAvvia={() => onAvvia(selected)}
       onGoToTable={onGoToTable} />;
-  } else {
+  } else if (!compact) {
     side = (
       <SidePanel t={t} label="Dettaglio prenotazione"
         footer={<TillButton t={t} variant="primary" size={60} icon={Plus} onClick={() => setPanel({ mode: "new" })}>Nuova prenotazione</TillButton>}>
@@ -407,36 +420,66 @@ export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
     );
   }
 
+  const calendar = (
+    <>
+      <Calendar t={t} month={month} onMonth={setMonth} selected={selectedDate} onSelect={selectDate} counts={counts} compact={compact} />
+      <TillButton t={t} icon={CalendarDays} onClick={() => selectDate(dateKey())} style={{ width: "100%", marginTop: 14 }}>Oggi</TillButton>
+    </>
+  );
+  const dayView = (
+    <>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: compact ? 20 : 24, fontWeight: 700, textTransform: "capitalize" }}>
+            {selectedDate === dateKey() ? "Oggi · " : ""}{DAY_LABEL.format(parseKey(selectedDate))}
+          </div>
+          <div style={{ fontSize: 16, color: t.inkSoft, marginTop: 2 }}>
+            {active.length} {active.length === 1 ? "prenotazione" : "prenotazioni"} · {dayCovers} coperti
+            {dayPending > 0 && <span style={{ color: STATUS.waiting, fontWeight: 700 }}> · {dayPending} da confermare</span>}
+          </div>
+        </div>
+        {!compact && <TillButton t={t} variant="primary" icon={Plus} onClick={() => setPanel({ mode: "new" })}>Nuova</TillButton>}
+      </div>
+      {active.length === 0 && <div style={{ color: t.inkSoft, fontSize: 17, padding: "12px 0" }}>Nessuna prenotazione per questo giorno.</div>}
+      <div style={{ display: "grid", gap: 10 }}>{active.map(rowFor)}</div>
+      {others.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <TillButton t={t} variant="ghost" onClick={() => setShowOthers((v) => !v)} aria-expanded={showOthers} style={{ paddingLeft: 0, textAlign: "left" }}>
+            {showOthers ? "Nascondi" : "Mostra"} rifiutate, annullate e non presentate ({others.length})
+          </TillButton>
+          {showOthers && <div style={{ display: "grid", gap: 10, marginTop: 8, opacity: 0.8 }}>{others.map(rowFor)}</div>}
+        </div>
+      )}
+    </>
+  );
+
+  if (compact) {
+    return (
+      <div style={{ fontFamily: FONT, color: t.ink, padding: "16px 16px 96px", display: "grid", gap: 22 }}>
+        <section aria-label="Calendario">{calendar}</section>
+        <section aria-label="Prenotazioni del giorno">{dayView}</section>
+        {/* Primary action of the screen, floating above the bottom bar. */}
+        <button type="button" onClick={() => setPanel({ mode: "new" })} className="mdp-btn" style={{
+          position: "fixed", right: 16, bottom: "calc(var(--mdp-bottom-nav, 0px) + 16px)", zIndex: 30,
+          minHeight: 60, padding: "0 22px 0 18px", borderRadius: 18, border: "none", background: t.primary, color: t.bg,
+          fontSize: 17, fontWeight: 700, fontFamily: FONT, cursor: "pointer", display: "flex", alignItems: "center", gap: 10,
+          boxShadow: "0 6px 18px rgba(0,0,0,0.22)",
+        }}>
+          <Plus size={24} strokeWidth={2.5} /> Nuova prenotazione
+        </button>
+        {side}
+      </div>
+    );
+  }
+
   return (
     <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `minmax(340px, 420px) minmax(0, 1fr) ${SIDE_PANEL_WIDTH}`, fontFamily: FONT, color: t.ink }}>
       <section aria-label="Calendario" style={{ minHeight: 0, overflowY: "auto", padding: "18px 18px 96px", borderRight: `1px solid ${t.line}` }}>
-        <Calendar t={t} month={month} onMonth={setMonth} selected={selectedDate} onSelect={selectDate} counts={counts} />
-        <TillButton t={t} icon={CalendarDays} onClick={() => selectDate(dateKey())} style={{ width: "100%", marginTop: 14 }}>Oggi</TillButton>
+        {calendar}
       </section>
 
       <section aria-label="Prenotazioni del giorno" style={{ minHeight: 0, overflowY: "auto", padding: "18px 20px 96px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 24, fontWeight: 700, textTransform: "capitalize" }}>
-              {selectedDate === dateKey() ? "Oggi · " : ""}{DAY_LABEL.format(parseKey(selectedDate))}
-            </div>
-            <div style={{ fontSize: 16, color: t.inkSoft, marginTop: 2 }}>
-              {active.length} {active.length === 1 ? "prenotazione" : "prenotazioni"} · {dayCovers} coperti
-              {dayPending > 0 && <span style={{ color: STATUS.waiting, fontWeight: 700 }}> · {dayPending} da confermare</span>}
-            </div>
-          </div>
-          <TillButton t={t} variant="primary" icon={Plus} onClick={() => setPanel({ mode: "new" })}>Nuova</TillButton>
-        </div>
-        {active.length === 0 && <div style={{ color: t.inkSoft, fontSize: 17, padding: "12px 0" }}>Nessuna prenotazione per questo giorno.</div>}
-        <div style={{ display: "grid", gap: 10 }}>{active.map(rowFor)}</div>
-        {others.length > 0 && (
-          <div style={{ marginTop: 18 }}>
-            <TillButton t={t} variant="ghost" onClick={() => setShowOthers((v) => !v)} aria-expanded={showOthers} style={{ paddingLeft: 0 }}>
-              {showOthers ? "Nascondi" : "Mostra"} rifiutate, annullate e non presentate ({others.length})
-            </TillButton>
-            {showOthers && <div style={{ display: "grid", gap: 10, marginTop: 8, opacity: 0.8 }}>{others.map(rowFor)}</div>}
-          </div>
-        )}
+        {dayView}
       </section>
 
       {side}

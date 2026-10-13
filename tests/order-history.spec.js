@@ -2,181 +2,121 @@ import { test, expect } from "@playwright/test";
 import { TEST_WAITER, TEST_ADMIN } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
 import { seedClosedOrders, deleteOrdersByWaiterName } from "./helpers/seedClosedOrders";
+import { PHONE, navTo, sheet } from "./helpers/phone";
 
-// Storico comande (OrderHistory.jsx) — condiviso tra area cameriere e cucina,
-// qui raggiunto da /cameriere. HISTORY_PAGE_SIZE è 20 (orders.js): per
-// testare la paginazione in modo deterministico si seminano 25 comande
-// chiuse direttamente su Firestore invece di aprirle/chiuderle una a una
-// dall'interfaccia (troppo lento, e non aggiungerebbe copertura oltre al
-// flusso completo già testato in waiter-order.spec.js).
-// Marker univoco per test: i test di questo file partono in parallelo e
-// "DelTest<ms>" è contenuto in "NoDelTest<ms>" se iniziano nello stesso
-// millisecondo (la ricerca della riga per nome li trovava entrambi).
+// Storico comande (TillHistory.jsx, la stessa schermata della cassa) dal
+// telefono: elenco per giorno, tocco su una comanda → il suo preconto a
+// pagina intera (OrderUi.jsx > ReceiptPanel) con "Ristampa preconto" e, per
+// l'admin, l'eliminazione. HISTORY_PAGE_SIZE è 20 (orders.js): per la
+// paginazione si seminano comande chiuse direttamente su Firestore.
+// Marker univoco per test (i test partono in parallelo): è il nome del
+// cameriere delle comande seminate, visibile nella riga.
 function uniqueMarker(prefix) {
   return `${prefix}${Date.now()}x${Math.random().toString(36).slice(2, 7)}`;
 }
 
+test.use(PHONE);
+
+async function openHistory(page, account) {
+  await page.goto("/cameriere");
+  await staffLogin(page, account);
+  await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+  await navTo(page, "Storico");
+  await expect(page.getByText("Storico comande")).toBeVisible();
+}
+
 test.describe("Storico comande", () => {
-  test("mostra il pulsante 'Carica altre' quando ci sono più di una pagina di risultati", async ({ page }) => {
-    // 25 comande scritte e poi cancellate dentro il test: con gli altri file
-    // in parallelo servono più dei 15 secondi standard.
-    test.slow();
+  test("mostra 'Carica altre' quando ci sono più comande di una pagina", async ({ page }) => {
+    test.slow(); // 25 comande scritte e poi cancellate, con gli altri file in parallelo
     const marker = uniqueMarker("PagTest");
     await seedClosedOrders(25, marker);
     try {
-      await page.goto("/cameriere");
-      await staffLogin(page, TEST_WAITER);
-      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
-      await page.getByRole("button", { name: /storico/i }).click();
-      await expect(page.getByText("Storico comande")).toBeVisible();
-
+      await openHistory(page, TEST_WAITER);
+      const rows = page.getByRole("region", { name: "Comande chiuse" }).getByRole("button", { name: new RegExp(marker) });
       const loadMore = page.getByRole("button", { name: /carica altre/i });
       await expect(loadMore).toBeVisible({ timeout: 10_000 });
-      const rowsBefore = await page.locator("text=€").count();
+      const before = await rows.count();
       await loadMore.click();
-      await expect(async () => {
-        const rowsAfter = await page.locator("text=€").count();
-        expect(rowsAfter).toBeGreaterThan(rowsBefore);
-      }).toPass({ timeout: 10_000 });
+      await expect.poll(() => rows.count(), { timeout: 10_000 }).toBeGreaterThan(before);
     } finally {
       await deleteOrdersByWaiterName(marker);
     }
   });
 
-  test("una riga si espande mostrando le voci e il pulsante di stampa apre il preconto in sola lettura", async ({ page }) => {
+  test("una comanda si apre come preconto a pagina intera, in sola lettura, con la ristampa", async ({ page }) => {
     const marker = uniqueMarker("ExpTest");
     await seedClosedOrders(1, marker);
     try {
-      await page.goto("/cameriere");
-      await staffLogin(page, TEST_WAITER);
-      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
-      await page.getByRole("button", { name: /storico/i }).click();
-
-      // La riga mostra sia il nome cameriere (marker, univoco per questo
-      // test) sia il totale: usiamo il marker per individuare il bottone
-      // giusto tra le eventuali altre comande chiuse nello storico.
-      const toggle = page.getByRole("button", { name: new RegExp(marker) });
-      await expect(toggle).toBeVisible({ timeout: 10_000 });
-      await toggle.click();
-      await expect(page.getByText("Voce di test").first()).toBeVisible();
-
-      // Il pulsante di stampa è un fratello del toggle nella stessa riga
-      // (OrderHistory.jsx > OrderRow): risalire da lì, invece di prendere
-      // il primo pulsante "Stampa preconto" della pagina, evita di colpire
-      // la riga sbagliata quando nello storico sono presenti anche comande
-      // chiuse da altri test in esecuzione in parallelo.
-      await toggle.locator("xpath=following-sibling::button[1]").click();
-      await expect(page.getByText("Documento non fiscale")).toBeVisible();
-      await expect(page.getByText("Voce di test").last()).toBeVisible();
-      // Sola lettura: una comanda già chiusa non si modifica più — niente
-      // pulsante Modifica né Conferma preconto.
-      await expect(page.getByRole("button", { name: /^modifica$/i })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: /^conferma preconto$/i })).toHaveCount(0);
-      await page.getByRole("button", { name: "Chiudi preconto" }).click();
-      await expect(page.getByText("Documento non fiscale")).toHaveCount(0);
+      await openHistory(page, TEST_WAITER);
+      await page.getByRole("button", { name: new RegExp(marker) }).click();
+      const detail = sheet(page, "Dettaglio comanda");
+      await expect(detail).toBeVisible();
+      await expect(detail).toContainText("Documento non fiscale");
+      await expect(detail).toContainText("Voce di test");
+      await expect(detail.getByRole("button", { name: "Ristampa preconto" })).toBeVisible();
+      await expect(detail.getByRole("button", { name: "Stampa dal browser" })).toBeVisible();
+      // Una comanda chiusa non si modifica più.
+      await expect(detail.getByRole("button", { name: /conferma preconto/i })).toHaveCount(0);
+      await detail.getByRole("button", { name: "Storico", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
     } finally {
       await deleteOrdersByWaiterName(marker);
     }
   });
 
-  test("il cameriere non vede alcun pulsante per eliminare le comande", async ({ page }) => {
+  test("il cameriere non può eliminare comande né svuotare lo storico", async ({ page }) => {
     const marker = uniqueMarker("NoDelTest");
     await seedClosedOrders(1, marker);
     try {
-      await page.goto("/cameriere");
-      await staffLogin(page, TEST_WAITER);
-      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
-      await page.getByRole("button", { name: /storico/i }).click();
-
-      const toggle = page.getByRole("button", { name: new RegExp(marker) });
-      await expect(toggle).toBeVisible({ timeout: 10_000 });
-      // Solo il pulsante di stampa (fratello del toggle) è presente: niente
-      // pulsante Elimina per un ruolo diverso da admin (OrderHistory.jsx).
-      await expect(toggle.locator("xpath=following-sibling::button")).toHaveCount(1);
+      await openHistory(page, TEST_WAITER);
       await expect(page.getByRole("button", { name: /svuota storico/i })).toHaveCount(0);
+      await page.getByRole("button", { name: new RegExp(marker) }).click();
+      await expect(sheet(page, "Dettaglio comanda").getByRole("button", { name: /elimina/i })).toHaveCount(0);
     } finally {
       await deleteOrdersByWaiterName(marker);
     }
   });
 
-  test("l'admin elimina una singola comanda dallo storico con doppia conferma", async ({ page }) => {
+  test("l'admin elimina una comanda dallo storico dopo una conferma, e resta eliminata", async ({ page }) => {
     const marker = uniqueMarker("DelTest");
     await seedClosedOrders(1, marker);
     try {
-      await page.goto("/cameriere");
-      await staffLogin(page, TEST_ADMIN);
-      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
-      await page.getByRole("button", { name: /storico/i }).click();
+      await openHistory(page, TEST_ADMIN);
+      const row = page.getByRole("button", { name: new RegExp(marker) });
+      await row.click();
+      const detail = sheet(page, "Dettaglio comanda");
+      await detail.getByRole("button", { name: "Elimina dallo storico" }).click();
+      const confirm = page.getByRole("alertdialog", { name: /eliminare tavolo \d+ dallo storico/i });
+      await confirm.getByRole("button", { name: "Annulla" }).click();
+      await expect(detail).toBeVisible();
 
-      const toggle = page.getByRole("button", { name: new RegExp(marker) });
-      await expect(toggle).toBeVisible({ timeout: 10_000 });
-      // Elimina comanda è il secondo pulsante fratello del toggle (dopo
-      // Stampa preconto, sempre presente — vedi test sopra).
-      const deleteBtn = toggle.locator("xpath=following-sibling::button[2]");
-      await expect(deleteBtn).toBeVisible();
+      await detail.getByRole("button", { name: "Elimina dallo storico" }).click();
+      await confirm.getByRole("button", { name: "Elimina comanda" }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(row).toHaveCount(0);
 
-      // Primo click: arma la conferma, non elimina ancora.
-      await deleteBtn.click();
-      await expect(toggle).toBeVisible();
-      await expect(page.getByRole("button", { name: /conferma eliminazione comanda/i })).toBeVisible();
-
-      // Secondo click: elimina davvero.
-      await page.getByRole("button", { name: /conferma eliminazione comanda/i }).click();
-      await expect(toggle).toHaveCount(0);
-
-      // Persistita: ricaricando la pagina la comanda resta sparita (non era
-      // solo uno stato locale).
+      // Ricaricando si resta nello Storico (sezione nell'URL) e la comanda non c'è più.
       await page.reload();
-      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
-      await page.getByRole("button", { name: /storico/i }).click();
+      await expect(page.getByText("Storico comande")).toBeVisible({ timeout: 10_000 });
       await expect(page.getByRole("button", { name: new RegExp(marker) })).toHaveCount(0);
     } finally {
       await deleteOrdersByWaiterName(marker);
     }
   });
 
-  test("il pulsante 'Svuota storico' è visibile solo all'admin e richiede una doppia conferma prima di eliminare", async ({ page }) => {
-    // Non si esegue mai la seconda conferma in questo test: "Svuota storico"
-    // elimina TUTTE le comande chiuse dell'emulatore (non solo quelle con
-    // questo marker), quindi eseguirlo davvero comprometterebbe altri test
-    // in esecuzione in parallelo (fullyParallel, vedi playwright.config.js)
-    // che dipendono su comande chiuse proprie o sui dati seminati di
-    // default (es. stats-dashboard.spec.js). Qui si verifica solo che il
-    // pulsante sia riservato all'admin e che il primo click armi la
-    // conferma senza cancellare nulla.
-    const marker = uniqueMarker("ClearAllTest");
+  test("'Svuota storico' è solo dell'admin e chiede conferma prima di eliminare tutto", async ({ page }) => {
+    const marker = uniqueMarker("ClearTest");
     await seedClosedOrders(1, marker);
     try {
-      await page.goto("/cameriere");
-      await staffLogin(page, TEST_ADMIN);
-      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
-      await page.getByRole("button", { name: /storico/i }).click();
-
-      const clearAll = page.getByRole("button", { name: /^svuota storico$/i });
-      await expect(clearAll).toBeVisible({ timeout: 10_000 });
-      await clearAll.click();
-      await expect(page.getByRole("button", { name: /confermi\? elimina tutto/i })).toBeVisible();
-
-      // La comanda seminata per questo test è ancora lì: nessuna
-      // eliminazione è avvenuta con un solo click.
+      await openHistory(page, TEST_ADMIN);
+      await page.getByRole("button", { name: "Svuota storico" }).click();
+      const confirm = page.getByRole("alertdialog", { name: "Svuotare tutto lo storico?" });
+      await expect(confirm).toBeVisible();
+      // Non si conferma: altri test in parallelo usano lo storico.
+      await confirm.getByRole("button", { name: "Annulla" }).click();
       await expect(page.getByRole("button", { name: new RegExp(marker) })).toBeVisible();
     } finally {
       await deleteOrdersByWaiterName(marker);
     }
   });
-
-  // Lo stato di errore di OrderHistory (banner "Impossibile caricare lo
-  // storico...") esiste nel codice (vedi il catch in OrderHistory.jsx) ma
-  // non è stato incluso qui: con la persistentLocalCache configurata in
-  // firebase-db.js, il client Firestore instrada anche le letture one-shot
-  // (getDocs) sullo stesso canale WebChannel multiplexato e con retry
-  // automatico usato dalle sottoscrizioni realtime — non esiste una singola
-  // richiesta HTTP isolabile da interrompere per simulare solo il
-  // fallimento dello storico. Interromperla a livello di rete (Playwright
-  // route.abort) o rompe anche le sottoscrizioni già attive (side effect
-  // indesiderato, non rappresentativo di un guasto reale mirato) oppure,
-  // per via del retry automatico dell'SDK, non fa mai fallire la promise in
-  // un tempo ragionevole. Riprodurlo in modo pulito richiederebbe di
-  // mockare l'SDK stesso, il che va contro l'approccio di questa suite
-  // (test contro il backend reale/emulato, non contro finti interni).
 });

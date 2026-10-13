@@ -1,13 +1,8 @@
 // Firestore helpers for table reservations (waiter/admin area).
 // See docs/prenotazioni.md for the full data model.
 //
-// File loaded ONLY by the waiter/reservations areas (Waiter.jsx/
-// Reservations.jsx, both lazy-loaded), never by the public site.
-//
-// Name deliberately different from Reservations.jsx: a name that only
-// differs by case creates an ambiguous import on case-insensitive
-// filesystems (macOS/Windows), where Vite could resolve "./Reservations"
-// to this file instead of the component.
+// File loaded ONLY by the staff area (TillReservations.jsx, the Sala
+// screens — all lazy-loaded), never by the public site.
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
   orderBy, serverTimestamp, Timestamp,

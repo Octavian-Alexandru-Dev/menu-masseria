@@ -3,6 +3,16 @@
 Stato: **bozza approvata, pronta per l'implementazione**
 Ultimo aggiornamento: 2026-09-04
 
+> **Nota (13 ottobre 2026), componenti:** l'area staff è ora un'unica app
+> (`PhoneApp.jsx` sui telefoni, `TillSala.jsx` alla cassa) con una sola
+> schermata per funzione, vedi `docs/architecture.md`. Nei paragrafi storici
+> qui sotto: `Admin.jsx` (editor del menù) → `TillMenu.jsx` +
+> `MenuSettings.jsx`; `OrderHistory.jsx` → `TillHistory.jsx`;
+> `ReceiptOverlay.jsx` → `ReceiptPanel` in `OrderUi.jsx` (la "Modifica" del
+> preconto non c'è più: le righe si tolgono dalla modifica riga);
+> `Reservations.jsx` → `TillReservations.jsx`; `Stats.jsx` → `TillStats.jsx`;
+> la Dashboard a riquadri → la barra delle sezioni.
+
 > **Nota (ottobre 2026):** l'area Cucina descritta qui (`Kitchen.jsx`,
 > `/cucina`, "Segna uscita", ruolo `kitchen`) è stata **rimossa**: in cucina
 > non c'è uno schermo, le comande arrivano stampate dalla cassa con i soli

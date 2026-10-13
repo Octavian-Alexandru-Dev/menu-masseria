@@ -9,12 +9,13 @@ import { CheckCircle2, Clock } from "lucide-react";
 import { uid, TYPE, parsePriceToCents, currentShiftStart, itemMatchesSearch } from "./shared";
 import {
   subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, buildOrderLine, closeOrder,
-  autoCloseStaleOrders, orderTotalCents,
+  autoCloseStaleOrders, orderTotalCents, updateOrderLine, removeOrderLine,
 } from "./orders";
 import { subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup } from "./reservationsData";
 import { subscribeMenuCosts } from "./menuCosts";
 import { sendOrderLinesWithKitchenTicket, subscribeUnfinishedKitchenJobs, kitchenJobProblem } from "./printJobs";
 import { useOrderKitchenTickets } from "./usePrintJob";
+import { STATUS } from "./TillUi";
 
 export function formatTime(ts) {
   return ts?.toDate ? ts.toDate().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : null;
@@ -53,12 +54,15 @@ export function SyncBadge({ t, hasPendingWrites }) {
   );
 }
 
-export function lineStatusLabel(status) {
-  return status === "out" ? "Uscita" : status === "preparing" ? "In preparazione" : "Inviata";
-}
-
-export function lineStatusColor(t, status) {
-  return status === "out" ? t.secondary : status === "preparing" ? t.accent : t.inkSoft;
+// Status of an open table, written + fixed colour (never colour alone), the
+// same on the till's tiles and the phone's. A kitchen ticket that may not
+// have printed comes first: it needs action.
+export function tableStatus(order, kitchenProblems = 0) {
+  if (kitchenProblems > 0) return { label: "Comanda cucina non stampata", color: STATUS.danger };
+  if (order.receipt?.confirmedAt) return { label: "Preconto confermato", color: STATUS.info };
+  if (order.receipt?.printedAt) return { label: "Preconto stampato", color: STATUS.info };
+  if ((order.items || []).length === 0) return { label: "Da ordinare", color: STATUS.idle };
+  return { label: "Comanda inviata", color: STATUS.ok };
 }
 
 // Distinct search-tag chips across the whole menu (not just the items
@@ -250,6 +254,30 @@ export function useOrderDraft({ menu, menuCosts, order, senderName }) {
   // Whole-line edit from the till's line editor (quantity, price, note).
   const updateDraftLine = (lineId, patch) => setDraft((d) => d.map((l) => (l.lineId === lineId ? { ...l, ...patch } : l)));
 
+  // A line opened in the line editor (OrderUi.jsx > LineEditor): a draft
+  // line changes locally, an already-sent one on the order itself.
+  // Resolve true on success.
+  const saveLine = async ({ lineId, sent }, patch) => {
+    if (!sent) { updateDraftLine(lineId, patch); return true; }
+    try {
+      await updateOrderLine(order.id, order.items || [], lineId, patch);
+      return true;
+    } catch (err) {
+      console.error("[sala] Modifica riga fallita:", err);
+      return false;
+    }
+  };
+  const removeLine = async ({ lineId, sent }) => {
+    if (!sent) { removeDraftLine(lineId); return true; }
+    try {
+      await removeOrderLine(order.id, order.items || [], lineId);
+      return true;
+    } catch (err) {
+      console.error("[sala] Rimozione riga fallita:", err);
+      return false;
+    }
+  };
+
   // Kitchen tickets of this table (status, and "Ristampa" for any that
   // didn't print), read from the print queue: see useOrderKitchenTickets.
   const kitchenTicket = useOrderKitchenTickets(order.id);
@@ -307,7 +335,7 @@ export function useOrderDraft({ menu, menuCosts, order, senderName }) {
   const totalCents = orderTotalCents(order) + draft.reduce((s, l) => s + parsePriceToCents(l.price) * l.quantity, 0);
 
   return {
-    draft, draftCount, addToDraft, changeQty, removeDraftLine, setDraftNote, updateDraftLine,
+    draft, draftCount, addToDraft, changeQty, removeDraftLine, setDraftNote, updateDraftLine, saveLine, removeLine,
     send, sending, sendError, closeTable, closing,
     kitchenTicket,
     normalItems, offMenuItems, searchEnabled, itemSearch, setItemSearch, isItemSearching,

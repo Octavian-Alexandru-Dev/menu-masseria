@@ -200,12 +200,11 @@ test("con il client 1.4 non c'è nessun 'Esci' nell'interfaccia: il logout si fa
     await nav.getByRole("button", { name: section }).click();
     await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
   }
-  // Nemmeno nella gestione completa del menù.
+  // Nemmeno nelle impostazioni del menù.
   await nav.getByRole("button", { name: /^menù$/i }).click();
-  await page.getByRole("button", { name: "Gestione completa" }).click();
-  await expect(page.getByText("Identità del locale", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Impostazioni", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Impostazioni del menù" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("button", { name: /^esci$/i })).toHaveCount(0);
-  await page.getByRole("button", { name: "Menù della cassa" }).click();
   await expect(page.getByRole("region", { name: "Piatti del menù" })).toBeVisible();
 
   // "Esci dall'account" confermato nelle impostazioni del programma.
@@ -229,7 +228,7 @@ test("alla cassa senza account salvato, dopo l'uscita 'Rientra come …' fa rien
   await page.evaluate(() => globalThis.__fireLogoutRequest());
   const again = page.getByRole("button", { name: `Rientra come Cameriere di test (${TEST_WAITER.email})` });
   await expect(again).toBeVisible({ timeout: 10_000 });
-  await expect(again).toHaveCSS("min-height", "56px");
+  expect((await again.boundingBox()).height).toBeGreaterThanOrEqual(56); // grande, a un tocco
   await page.waitForTimeout(1000);
   await expect(nav).toHaveCount(0); // nessun rientro automatico: serve il tocco
   await again.click();

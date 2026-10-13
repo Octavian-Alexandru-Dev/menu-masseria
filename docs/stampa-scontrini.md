@@ -36,7 +36,7 @@ Telefono cameriere / cassa                   Firestore                    Client
   "Invia comanda"       ──addDoc──►  (type=kitchen, solo piatti
                                       "In comanda")
   stato in tempo reale  ◄──────────  printing → printed | error  ◄──────  escpos.js → bytes
-  (ReceiptOverlay.jsx,                                                     window.mdpDesktop.printRaw
+  (preconto, OrderUi.jsx,                                                  window.mdpDesktop.printRaw
    sotto "Invia comanda")                                                  → main.js → TCP 9100 → stampante
 ```
 
@@ -381,15 +381,21 @@ comande, preconto, chiusura.
   - **Nessun piatto selezionato**: la barra mostra la categoria (nome,
     sottotitolo, visibilità, *Tutti/Nessuno in comanda*, posizione,
     eliminazione).
-  - **Impostazioni**: coperto adulti/bambini dal tastierino, ricerca piatti,
-    **traduzioni automatiche** dei testi mancanti per lingua.
-  - **Gestione completa**: apre l'editor classico per ciò che alla cassa
-    serve di rado (traduzioni testo per testo, PDF, backup JSON, link,
-    personale). Uscendo con modifiche non salvate chiede di salvarle (se il
-    salvataggio fallisce si resta lì, con l'errore); passando a un'altra
-    sezione chiede se scartarle. Non restano mai nella copia del menù della
-    cassa, che altrimenti smetterebbe di seguire le modifiche dagli altri
-    dispositivi.
+  - **Impostazioni** (`src/MenuSettings.jsx`): un elenco, ogni voce un
+    pannello con **Salva** in fondo — *Locale e grafica* (nome, località,
+    frase di apertura, nota a piè di pagina, tema), *Coperto e ricerca*
+    (coperto adulti/bambini dal tastierino, ricerca piatti), *Link e social*
+    (recensioni Google/TripAdvisor, Instagram, Facebook, shop: link e
+    interruttore "Mostra"), *Traduzioni* (per lingua: traduzione automatica
+    dei testi mancanti, ogni testo correggibile a mano, eliminazione con
+    conferma), *Personale* (UID, nome e ruolo; "Togli accesso" con
+    conferma), *Stampa del menù* (lingua, contenuto, impaginazione,
+    categorie → anteprima di stampa / PDF), *Backup* (scarica il JSON;
+    ripristino da file con conferma, subito su tutti i dispositivi) e *Vedi
+    il menù dei clienti*. Non c'è più un editor "completo" separato (ex
+    `Admin.jsx`): tutto il menù si gestisce da qui, con una modifica alla
+    volta salvata subito sul server — non esistono più modifiche "in
+    sospeso" da salvare o scartare.
   - **Ogni "Salva" modifica solo i campi cambiati di quel piatto o di quella
     categoria** (non quelli rimasti com'erano all'apertura del pannello),
     dentro una
@@ -399,12 +405,13 @@ comande, preconto, chiusura.
     modifiche fatte altrove compaiono da sole, senza ricaricare (anche nella
     Sala: prezzi e piatti nuovi).
 - **Statistiche** (solo admin, `src/TillStats.jsx`): periodo a tocco (Oggi,
-  Ieri, Ultimi 7 giorni, Mese corrente, Ultimi 30 giorni, Anno corrente),
-  numeri grandi (incasso, scontrino medio, coperti, comande, piatti, margine),
-  confronto con il periodo precedente (variazione scritta con freccia),
-  classifica dei piatti per quantità/incasso/margine e, nella barra
-  laterale, incasso per categoria e per cameriere. Il confronto su date
-  libere e i grafici orari restano nella versione da telefono/computer.
+  Ieri, Ultimi 7 giorni, Ultimi 30 giorni, Mese corrente, Anno corrente) o
+  date libere (Personalizzato), numeri grandi (incasso, scontrino medio,
+  coperti, comande, piatti, margine), confronto con il periodo precedente o
+  con un altro periodo (variazione scritta con freccia), classifica dei
+  piatti per quantità/incasso/margine e, nella barra laterale, piatti
+  ordinati meno, incasso per categoria, per cameriere, per ora e per giorno
+  della settimana — elenchi con barre, leggibili senza grafici.
 - **Stampa interrotta:** se il programma della cassa si chiude mentre sta
   stampando, dopo 30 secondi chi ha chiesto la stampa vede "La stampa si è
   interrotta" e può premere **Riprova stampa**.
@@ -431,9 +438,73 @@ Principi seguiti (nessuna invenzione da zero):
   (conferme, tavolo già aperto), riconoscere invece di ricordare (riquadri e
   schede invece di codici).
 
-Sui telefoni l'interfaccia resta quella di prima (pensata per lo schermo
-piccolo). Ogni
-funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
+Ogni funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
+
+### 4.2 App del telefono (area staff)
+
+Sul telefono (e in qualunque browser fuori dalla cassa) l'area staff è
+un'app sola, `src/PhoneApp.jsx`, costruita con gli stessi principi e gli
+stessi pezzi della cassa (`TillUi.jsx`, `OrderUi.jsx`), disposti per
+l'uso a una mano su uno schermo da 6":
+
+- **Niente Dashboard:** dopo l'accesso si apre subito **Tavoli**. Le sezioni
+  stanno nella **barra in basso** (Tavoli · Prenotazioni · Storico e, per
+  gli admin, Menù · Statistiche), con icona ed etichetta sempre visibili; i
+  numeri che prima mostrava la Dashboard (tavoli aperti, prenotazioni da
+  confermare) sono badge sulla barra. In alto: nome della sezione, chi è
+  collegato, il turno ed "Esci". La sezione resta nell'URL (`?sezione=…`):
+  il tasto Indietro e un ricaricamento restano lì.
+- **Tavoli:** riquadri a due colonne (numero, nome, coperti, tempo, totale,
+  stato scritto su colore fisso come alla cassa); **Nuovo tavolo** è il
+  pulsante flottante in basso a destra. Il modulo del nuovo tavolo è a
+  schermo intero (numero dalla tastiera numerica del telefono, coperti con
+  +/−, avviso se il tavolo è già aperto con "Vai al tavolo").
+- **Comanda:** schermata intera senza le barre dell'app. In alto il tavolo e
+  i coperti; sotto, la ricerca e le **categorie come schede fisse** che
+  saltano alla loro sezione (e seguono lo scorrimento); i piatti a
+  **riquadri in due colonne: un tocco = uno in più**, con il conteggio sul
+  riquadro. In basso una barra che non si sposta mai: **Comanda** (quanti da
+  inviare e totale) a sinistra, **Invia comanda (N)** — o **Preconto**
+  quando non c'è nulla da inviare — a destra. Lo stato della comanda per la
+  cucina (e "Ristampa"/"Ignora" se non è stata stampata) sta sopra la barra.
+- **Comanda del tavolo** (tocco su "Comanda"): pagina a schermo intero con
+  "Da inviare" (− / + su ogni riga; con una sola porzione il "−" diventa
+  "Rimuovi") e "Inviata", totale, Invia comanda, Preconto e **Chiudi
+  tavolo** (con conferma). Toccando una riga si apre la **modifica riga**
+  della cassa: quantità, nota per la cucina, prezzo (Pieno, Offerto,
+  −10/−20/−50%, Altro dal tastierino), Rimuovi — tutto solo con **Salva**.
+- **Menù** (solo admin): la stessa schermata della cassa (`TillMenu.jsx`,
+  `MenuSettings.jsx`) in una colonna: schede delle categorie, riquadri dei
+  piatti, "Nuovo piatto", e in alto Nuova categoria / Impostazioni. Il
+  piatto, la categoria e ogni impostazione si aprono a pagina intera con
+  **Salva** sempre in fondo; ogni "Salva" modifica solo i campi cambiati.
+- **Prenotazioni, Storico, Statistiche**: le stesse schermate della cassa
+  (`TillReservations.jsx`, `TillHistory.jsx`, `TillStats.jsx`) in una
+  colonna, con la scheda o il modulo a pagina intera. "Avvia" di una
+  prenotazione porta ai Tavoli e apre la comanda. Lo Storico apre ogni
+  comanda come preconto (ristampa, "Stampa dal browser", per l'admin
+  eliminazione e "Svuota storico", sempre con conferma). Le Statistiche
+  hanno periodi a tocco o date libere, confronto con il periodo precedente
+  o con un altro periodo, classifiche, incasso per ora e per giorno della
+  settimana, piatti ordinati meno.
+- **Preconto** (dalla comanda): pagina intera con l'anteprima del
+  documento non fiscale, **Stampa** (alla cassa, con lo stato in tempo
+  reale), "Stampa dal browser" e **Conferma preconto** (con conferma: le
+  righe inviate non si modificano più). Per togliere una riga si usa la
+  modifica riga, come alla cassa.
+- **Accesso e messaggi** (`staff-shared.jsx`): la schermata di accesso,
+  "Rientra come …" e i messaggi (account senza ruolo, ecc.) usano gli
+  stessi pezzi e lo stesso aspetto dell'app.
+- **Installabile:** nell'area staff (solo lì, non nel menù pubblico) c'è il
+  manifest `public/staff.webmanifest`: da Chrome/Safari "Aggiungi a
+  schermata Home" la apre a tutto schermo come un'app.
+
+Principi in più rispetto alla cassa, per il telefono: azioni principali
+nella parte bassa dello schermo, raggiungibile col pollice; barra di
+navigazione in basso con 3–5 destinazioni (Material Design); schermate
+operative a pagina intera invece di finestre sovrapposte; testo ≥ 16px nei
+campi (niente zoom automatico su iOS); nessuno scorrimento laterale a
+393px di larghezza.
 
 ## 5. Risoluzione problemi
 
@@ -509,7 +580,7 @@ funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
 | Cassa: griglia dei tavoli a tutta larghezza, schede e "Nuovo tavolo" ≥ 48px | `tests/till-sala.spec.js` |
 | Cassa: apertura con tastierino, comanda a riquadri per categoria, nota dall'editor, invio, stato e totale sul riquadro del tavolo | `tests/till-sala.spec.js` |
 | Cassa: ricerca piatti, tavolo già aperto segnalato con "Vai al tavolo", chiusura con conferma e tavolo nello Storico | `tests/till-sala.spec.js` |
-| Nessun "Esci" alla cassa con client 1.4 (Dashboard e tutte le aree); logout dalle impostazioni senza rientro automatico; "Esci" con conferma per i client 1.1–1.3 | `tests/till-client.spec.js` |
+| Nessun "Esci" alla cassa con client 1.4 (tutte le sezioni e le impostazioni del menù); logout dalle impostazioni senza rientro automatico; "Esci" con conferma per i client 1.1–1.3 | `tests/till-client.spec.js` |
 | Telefono: "Indietro" con etichetta e alto almeno 48px | `tests/waiter-order.spec.js` |
 | Cassa: modifica riga nella barra laterale (quantità, sconto, offerto, prezzo libero da tastierino), solo con "Salva"; su righe da inviare e già inviate; preconto stampato con "(sconto 20%)"/"(prezzo modificato)" | `tests/till-sala.spec.js` |
 | Cassa: rimozione di una riga già inviata con conferma | `tests/till-sala.spec.js` |
@@ -525,16 +596,29 @@ funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
 | Comanda cucina non stampata (errore): tavolo segnalato nell'elenco, ristampa riaprendo il tavolo anche dopo altri invii e mentre si aggiungono piatti, "Ignora" con conferma | `tests/till-sala.spec.js`, `tests/waiter-order.spec.js` |
 | Emoji nelle note stampate come "?", andare a capo sui caratteri stampati | `tests/escpos.spec.js` |
 | Aggiungere un piatto/una categoria due volte (riprova dopo timeout) non crea copie | `tests/menu-edit.spec.js` |
-| Telefono: comandi del tavolo (coperti, piatti, quantità, nota, rimuovi, Invia comanda) ≥ 44px | `tests/waiter-order.spec.js` |
+| Telefono: comandi del tavolo (coperti, piatti, schede categorie, barra in basso, quantità, rimuovi, modifica riga, Invia comanda) ≥ 44px | `tests/waiter-order.spec.js` |
+| Telefono 6" (393×851): nessuna schermata scorre di lato (sezioni, comanda, comanda del tavolo, modifica riga); barra delle sezioni in fondo con etichette intere | `tests/phone-app.spec.js` |
+| Telefono: un tocco = un piatto in più col conteggio sul riquadro; "Invia comanda" nella barra in basso; riga inviata resa "Offerto" dall'editor con "Salva" | `tests/phone-app.spec.js` |
+| Telefono: le schede delle categorie restano in alto e portano alla loro sezione; l'ultima resta evidenziata anche se non può salire in cima (bug corretto), scorrendo a mano la scheda segue la sezione in vista | `tests/phone-app.spec.js` |
+| Telefono: gestione menù rapida — piatto nuovo con prezzo dal tastierino, "Aggiungi piatto"/"Salva" in fondo allo schermo, "Disponibile" spento → "Nascosto" | `tests/phone-app.spec.js` |
+| Telefono: area staff installabile (manifest solo nell'area staff) | `tests/phone-app.spec.js` |
+| Telefono: niente Dashboard, sezioni nella barra in basso (Menù/Statistiche solo admin), tasto Indietro del browser tra le sezioni | `tests/staff-home.spec.js` |
+| Telefono: nota, quantità e rimozione di una riga da inviare dalla comanda del tavolo | `tests/waiter-order.spec.js` |
 | Menù pubblico: lingua scelta (`aria-pressed`) e categoria corrente (`aria-current`) leggibili dagli screen reader | `tests/client-view.spec.js` |
-| Gestione menù da telefono: avviso del browser prima di chiudere con modifiche non salvate | `tests/admin.spec.js` |
-| Gestione menù da telefono: interruttore "In comanda" | `tests/admin.spec.js` |
-| Cassa (admin): niente Dashboard, sezioni Menù e Statistiche nella barra; un cameriere non le vede | `tests/till-sala.spec.js`, `tests/till-client.spec.js` |
+| Impostazioni del menù (telefono): elenco e ritorno; Locale e link salvano solo ciò che cambia e il menù pubblico li mostra; tema evidenziato; coperto dal tastierino solo con «Usa» | `tests/menu-settings.spec.js` |
+| Impostazioni del menù (telefono): traduzione corretta a mano e lingua eliminata con conferma; personale aggiunto con ruolo e tolto con conferma | `tests/menu-settings.spec.js` |
+| Impostazioni del menù (telefono): stampa del menù — errore senza categorie, anteprima in una nuova scheda; backup scaricato, file non valido, ripristino che chiede conferma; "Vedi il menù dei clienti" | `tests/menu-settings.spec.js` |
+| Costo interno del piatto dal tastierino nella scheda del piatto, salvato e mantenuto dopo il ricaricamento; scheda aperta prima dell'arrivo dei costi (bug corretto) | `tests/admin-menu-costs.spec.js` |
+| Storico (telefono): "Carica altre", comanda come preconto in sola lettura con ristampa, cameriere senza eliminazione, admin elimina con conferma (persistente), "Svuota storico" con conferma | `tests/order-history.spec.js` |
+| Prenotazioni (telefono): crea/conferma/rifiuta/annulla con conferma, modulo con nome obbligatorio e "Salva" in basso, orario e data liberi, tutti i campi ritrovati in modifica, calendario con mesi e riepilogo per giorno, "Avvia" da Prenotazioni e dai Tavoli | `tests/reservations.spec.js` |
+| Statistiche (telefono): numeri e classifiche, importi esatti di "Ieri", esclusione delle chiusure automatiche, periodo personalizzato vuoto, margine senza costi noti, incasso per ora e per giorno in euro, confronto con il periodo precedente e con un altro periodo | `tests/stats-dashboard.spec.js` |
+| Telefono: preconto a pagina intera; riga inviata tolta dalla modifica riga, preconto confermato che blocca le righe | `tests/waiter-order.spec.js` |
+| Cassa (admin): sezioni Menù e Statistiche nella barra; un cameriere non le vede | `tests/till-sala.spec.js`, `tests/till-client.spec.js` |
 | Cassa: Menù — piatto nuovo con prezzo dal tastierino, modifica (disponibile, in comanda) solo con "Salva", eliminazione con conferma, salvataggio verificato sul server | `tests/till-sala.spec.js` |
 | Cassa: Menù — le modifiche da un altro dispositivo compaiono da sole e un salvataggio dalla cassa non le cancella (salva solo i campi cambiati, anche con il pannello già aperto) | `tests/till-sala.spec.js` |
 | Cassa: Menù — "In comanda" del piatto nuovo segue la categoria scelta; tastierino che riparte dalla prima cifra; costo interno da tastierino; niente "Salva" con un tastierino aperto | `tests/till-sala.spec.js` |
-| Cassa: "Gestione completa" — uscendo dal Menù con modifiche non salvate chiede (resta / scarta); nessun avviso del browser alla chiusura del programma | `tests/till-sala.spec.js` |
+| Cassa: impostazioni del menù nella barra laterale, valgono solo con "Salva" (coperto); nessuna "Gestione completa" | `tests/till-sala.spec.js`, `tests/till-client.spec.js` |
 | Cassa: Menù — "Tutti/Nessuno in comanda" per categoria | `tests/till-sala.spec.js` |
 | Cassa: Statistiche — periodo a tocco (≥ 48px), numeri, classifica, confronto con il periodo precedente | `tests/till-sala.spec.js` |
-| Vecchio ruolo "cucina": nessuna area, messaggio che spiega perché (telefono con "Esci", cassa senza); admin senza area Cucina nella Dashboard | `tests/staff-home.spec.js`, `tests/till-client.spec.js` |
+| Vecchio ruolo "cucina": nessuna area, messaggio che spiega perché (telefono con "Esci", cassa senza); admin senza area Cucina nella barra delle sezioni | `tests/staff-home.spec.js`, `tests/till-client.spec.js` |
 | Non coperto automaticamente: stampa fisica su POSBANK (anche la leggibilità reale della comanda a doppia/tripla dimensione), ricerca in rete reale, installer NSIS e aggiornamento automatico su Windows, apertura durante l'installer (notifica + uscita), notifiche di Windows, tastiera touch/osk reale, cifratura DPAPI | Verifica manuale (§3) |

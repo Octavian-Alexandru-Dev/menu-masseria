@@ -3,11 +3,12 @@
 // (see docs/comande-camerieri.md, §3). Loaded only by those (lazy-loaded in
 // MenuApp.jsx), never by the public site.
 import React, { useState, useEffect, useRef } from "react";
-import { Lock, AlertCircle, LogOut, UserRound } from "lucide-react";
+import { Lock, AlertCircle, LogOut, UserRound, LogIn } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase-db";
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "./firebase-auth";
-import { THEMES, ital, GlobalStyle, Logo, TYPE, FALLBACK_STYLE } from "./shared";
+import { THEMES, GlobalStyle, Logo, FALLBACK_STYLE } from "./shared";
+import { FONT, STATUS, TOUCH, TillButton, Field, tillInputStyle } from "./TillUi";
 import { getDesktopBridge } from "./desktop";
 import { confirmAction } from "./confirmDialog";
 import { getLastStaffAccount, rememberStaffAccount, forgetLastStaffAccount, rememberStaffPassword, loadStaffPassword, forgetStaffPassword } from "./lastStaffAccount";
@@ -154,36 +155,18 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
     return () => { cancelled = true; };
   }, []);
 
+  const input = tillInputStyle(t);
   return (
-    <div className="mdp-root" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <GlobalStyle t={t} />
-      <form onSubmit={submit} style={{
-        background: t.card, border: `1px solid ${t.line}`, borderRadius: 12,
-        padding: "36px 30px", width: "100%", maxWidth: 340, boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
-      }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-          <Logo width={120} />
-        </div>
-        <div className="mdp-display" style={{ textAlign: "center", fontStyle: ital(t), fontSize: TYPE.modalTitle, fontWeight: 600, color: t.primary }}>
-          {title}
-        </div>
-        {subtitle && (
-          <div style={{ textAlign: "center", fontSize: TYPE.smallPlus, color: t.inkSoft, marginTop: 6, marginBottom: 22 }}>
-            {subtitle}
-          </div>
-        )}
+    <StaffCard t={t}>
+      <form onSubmit={submit} style={{ display: "grid", gap: 16 }}>
+        <CardTitle t={t} title={title} subtitle={subtitle} />
 
         {savedLogin && (
           <>
-            <button type="button" onClick={signInSaved} disabled={busy} className="mdp-btn" style={{
-              width: "100%", minHeight: 56, marginBottom: 18, background: t.primary, color: t.bg, border: "none",
-              borderRadius: 8, fontSize: TYPE.bodyLg, fontWeight: 600, cursor: "pointer",
-            }}>
+            <TillButton t={t} variant="primary" size={60} icon={LogIn} onClick={signInSaved} disabled={busy}>
               {busy ? "Accesso…" : `Accedi come ${savedLogin.email}`}
-            </button>
-            <div style={{ textAlign: "center", fontSize: TYPE.tinyPlus, color: t.inkSoft, marginBottom: 16 }}>
-              oppure con un altro account:
-            </div>
+            </TillButton>
+            <div style={{ textAlign: "center", fontSize: 15, color: t.inkSoft }}>oppure con un altro account:</div>
           </>
         )}
 
@@ -191,33 +174,52 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
           <LastAccountSuggestion t={t} account={lastAccount} busy={busy} onUse={last.use} onForget={last.forget} />
         )}
 
-        <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Email</label>
-        <input
-          type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus={!showLastAccount}
-          autoComplete="username" aria-label="Email"
-          style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 16, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg }}
-        />
-        <label style={{ fontSize: TYPE.label, letterSpacing: 1, textTransform: "uppercase", color: t.inkSoft }}>Password</label>
-        <input
-          ref={passRef} type="password" value={pass} onChange={(e) => setPass(e.target.value)}
-          autoComplete="current-password" aria-label="Password"
-          style={{ width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 8, border: `1px solid ${t.line}`, borderRadius: 6, background: t.bg, color: t.ink, fontSize: TYPE.bodyLg }}
-        />
+        <Field t={t} label="Email">
+          <input
+            type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus={!showLastAccount}
+            autoComplete="username" aria-label="Email" inputMode="email" autoCapitalize="off" style={input}
+          />
+        </Field>
+        <Field t={t} label="Password">
+          <input
+            ref={passRef} type="password" value={pass} onChange={(e) => setPass(e.target.value)}
+            autoComplete="current-password" aria-label="Password" style={input}
+          />
+        </Field>
 
         {error && (
-          <div style={{ display: "flex", gap: 6, alignItems: "center", color: t.accent2, fontSize: TYPE.smallPlus, marginTop: 8 }}>
-            <AlertCircle size={14} /> {error}
+          <div role="alert" style={{ display: "flex", gap: 8, alignItems: "flex-start", color: STATUS.danger, fontSize: 15, fontWeight: 600, lineHeight: 1.4 }}>
+            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} /> {error}
           </div>
         )}
 
-        <button type="submit" disabled={busy} className="mdp-btn" style={{
-          width: "100%", marginTop: 18, padding: "11px 0", background: t.primary, color: t.bg,
-          border: "none", borderRadius: 6, fontSize: TYPE.bodyPlus, letterSpacing: 1, textTransform: "uppercase",
-          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-        }}>
-          <Lock size={14} /> {busy ? "Accesso…" : "Accedi"}
-        </button>
+        <TillButton t={t} type="submit" variant="primary" size={56} icon={Lock} disabled={busy}>
+          {busy ? "Accesso…" : "Accedi"}
+        </TillButton>
       </form>
+    </StaffCard>
+  );
+}
+
+// The card the staff screens before the app (login, messages) sit in: same
+// look as the rest of the staff area (TillUi.jsx).
+function StaffCard({ t, children }) {
+  return (
+    <div className="mdp-root" style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: t.bg, fontFamily: FONT, color: t.ink }}>
+      <GlobalStyle t={t} />
+      <div style={{ width: "100%", maxWidth: 400, padding: "28px 22px", borderRadius: 20, border: `1.5px solid ${t.line}`, background: t.card, boxShadow: "0 10px 30px rgba(0,0,0,0.06)" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CardTitle({ t, title, subtitle }) {
+  return (
+    <div style={{ textAlign: "center", display: "grid", gap: 6, justifyItems: "center" }}>
+      <Logo width={110} />
+      <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{title}</div>
+      {subtitle && <div style={{ fontSize: 15, color: t.inkSoft, lineHeight: 1.4 }}>{subtitle}</div>}
     </div>
   );
 }
@@ -229,27 +231,27 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
 export function LastAccountSuggestion({ t, account, busy, onUse, onForget }) {
   const who = account.name && account.name !== account.email ? account.name : account.email;
   return (
-    <div role="group" aria-label="Ultimo account usato" style={{ marginBottom: 18 }}>
+    <div role="group" aria-label="Ultimo account usato" style={{ display: "grid", gap: 4 }}>
       <button type="button" onClick={onUse} disabled={busy} autoFocus className="mdp-btn" aria-label={`Rientra come ${who} (${account.email})`} style={{
-        width: "100%", minHeight: 56, padding: "10px 14px", background: t.bgAlt, color: t.ink,
-        border: `1px solid ${t.line}`, borderRadius: 8, cursor: "pointer",
+        width: "100%", minHeight: 64, padding: "10px 14px", background: `${t.primary}10`, color: t.ink,
+        border: `1.5px solid ${t.primary}`, borderRadius: 12, cursor: "pointer", fontFamily: FONT,
         display: "flex", alignItems: "center", gap: 12, textAlign: "left",
       }}>
-        <UserRound size={22} color={t.primary} aria-hidden="true" style={{ flexShrink: 0 }} />
+        <UserRound size={24} color={t.primary} aria-hidden="true" style={{ flexShrink: 0 }} />
         <span style={{ minWidth: 0 }}>
-          <span style={{ display: "block", fontSize: TYPE.bodyLg, fontWeight: 600, color: t.primary }}>{busy ? "Accesso…" : `Rientra come ${who}`}</span>
+          <span style={{ display: "block", fontSize: 17, fontWeight: 700 }}>{busy ? "Accesso…" : `Rientra come ${who}`}</span>
           {who !== account.email && (
-            <span style={{ display: "block", fontSize: TYPE.smallPlus, color: t.inkSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ display: "block", fontSize: 14, color: t.inkSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {account.email}
             </span>
           )}
         </span>
       </button>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
-        <span style={{ fontSize: TYPE.tinyPlus, color: t.inkSoft }}>oppure inserisci un altro account:</span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontSize: 14, color: t.inkSoft }}>oppure un altro account:</span>
         <button type="button" onClick={onForget} disabled={busy} className="mdp-btn" style={{
-          minHeight: 44, padding: "0 4px", background: "none", border: "none",
-          color: t.inkSoft, fontSize: TYPE.smallPlus, textDecoration: "underline", cursor: "pointer",
+          minHeight: TOUCH, padding: "0 4px", background: "none", border: "none", fontFamily: FONT,
+          color: t.inkSoft, fontSize: 15, textDecoration: "underline", cursor: "pointer",
         }}>
           Non sei tu?
         </button>
@@ -261,28 +263,16 @@ export function LastAccountSuggestion({ t, account, busy, onUse, onForget }) {
 export function StaffMessageScreen({ theme, title, message, onLogout }) {
   const t = THEMES[theme] || THEMES.minimal;
   return (
-    <div className="mdp-root" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <GlobalStyle t={t} />
-      <div style={{
-        background: t.card, border: `1px solid ${t.line}`, borderRadius: 12,
-        padding: "32px 28px", width: "100%", maxWidth: 380, textAlign: "center",
-      }}>
-        <AlertCircle size={28} color={t.accent2} style={{ marginBottom: 12 }} />
-        <div className="mdp-display" style={{ fontStyle: ital(t), fontSize: TYPE.heading, fontWeight: 600, color: t.primary, marginBottom: 10 }}>
-          {title}
-        </div>
-        <div style={{ fontSize: TYPE.body, color: t.inkSoft, marginBottom: 20, lineHeight: 1.5 }}>
-          {message}
-        </div>
-        {!logoutHiddenAtTill() && <button onClick={onLogout} className="mdp-btn" style={{
-          margin: "0 auto", padding: "9px 18px", background: "none", border: `1px solid ${t.line}`,
-          borderRadius: 6, color: t.ink, fontSize: TYPE.smallPlus, cursor: "pointer",
-          display: "flex", alignItems: "center", gap: 6,
-        }}>
-          <LogOut size={13} /> Esci
-        </button>}
+    <StaffCard t={t}>
+      <div style={{ display: "grid", gap: 14, textAlign: "center", justifyItems: "center" }}>
+        <AlertCircle size={34} color={STATUS.waiting} />
+        <div style={{ fontSize: 22, fontWeight: 700 }}>{title}</div>
+        <div style={{ fontSize: 16, color: t.inkSoft, lineHeight: 1.5 }}>{message}</div>
+        {!logoutHiddenAtTill() && (
+          <TillButton t={t} icon={LogOut} onClick={onLogout} style={{ width: "100%", marginTop: 6 }}>Esci</TillButton>
+        )}
       </div>
-    </div>
+    </StaffCard>
   );
 }
 
@@ -290,7 +280,9 @@ export function StaffLoadingScreen({ theme }) {
   const bg = theme ? (THEMES[theme]?.bg || FALLBACK_STYLE.background) : FALLBACK_STYLE.background;
   const color = theme ? (THEMES[theme]?.ink || FALLBACK_STYLE.color) : FALLBACK_STYLE.color;
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: bg, color, fontFamily: FALLBACK_STYLE.fontFamily }}>
+    <div role="status" style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", gap: 14, alignItems: "center", justifyContent: "center", background: bg, color, fontFamily: FONT, fontSize: 17 }}>
+      <style>{"@keyframes mdpStaffSpin { to { transform: rotate(360deg); } }"}</style>
+      <span aria-hidden="true" style={{ width: 34, height: 34, borderRadius: "50%", border: `3px solid ${color}33`, borderTopColor: color, animation: "mdpStaffSpin .8s linear infinite" }} />
       Caricamento…
     </div>
   );

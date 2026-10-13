@@ -523,34 +523,33 @@ test("il menù della cassa segue le modifiche fatte da un altro dispositivo e sa
   expect(after.visible).toBe(false);
 });
 
-test("alla cassa le modifiche non salvate di 'Gestione completa' non restano nel menù: uscendo dal Menù si scartano", async ({ page }) => {
+test("alla cassa le impostazioni del menù stanno nella barra laterale e valgono solo con 'Salva'", async ({ page }) => {
   const nav = await openTillAsAdmin(page);
   await nav.getByRole("button", { name: /^menù$/i }).click();
-  await page.getByRole("button", { name: "Gestione completa" }).click();
-  const location = page.getByLabel("Località");
-  await expect(location).toBeVisible({ timeout: 10_000 });
-  const original = await location.inputValue();
-  await location.fill("Modifica non salvata dalla cassa");
-
-  await nav.getByRole("button", { name: /^tavoli/i }).click();
-  const dialog = page.getByRole("alertdialog", { name: "Modifiche al menù non salvate" });
-  await dialog.getByRole("button", { name: "Resta nel Menù" }).click();
-  await expect(location).toHaveValue("Modifica non salvata dalla cassa");
-
-  await nav.getByRole("button", { name: /^tavoli/i }).click();
-  await dialog.getByRole("button", { name: "Scarta modifiche" }).click();
-  await expect(page.getByRole("button", { name: "Nuovo tavolo" })).toBeVisible();
-  await nav.getByRole("button", { name: /^menù$/i }).click();
-  await page.getByRole("button", { name: "Gestione completa" }).click();
-  await expect(page.getByLabel("Località")).toHaveValue(original, { timeout: 10_000 });
-
-  // Alla cassa nessun avviso del browser alla chiusura (bloccherebbe il
-  // programma e gli aggiornamenti): le uscite sono già protette qui sopra.
-  await page.getByLabel("Località").fill("Altra modifica non salvata");
-  const dialogs = [];
-  page.on("dialog", (d) => { dialogs.push(d.type()); d.accept(); });
-  await page.close({ runBeforeUnload: true });
-  expect(dialogs).toEqual([]);
+  // Non c'è più "Gestione completa": tutto è nelle Impostazioni.
+  await expect(page.getByRole("button", { name: "Gestione completa" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Impostazioni", exact: true }).click();
+  const hub = page.getByRole("region", { name: "Impostazioni del menù" });
+  await hub.getByRole("button", { name: /^Coperto e ricerca/ }).click();
+  const panel = page.getByRole("region", { name: "Coperto e ricerca" });
+  const original = (await getMenu()).coperto.children;
+  try {
+    await panel.getByRole("button", { name: "Cambia coperto bambini" }).click();
+    for (const k of ["1", "5", "0"]) await panel.getByRole("button", { name: `Cifra ${k}` }).click();
+    await panel.getByRole("button", { name: "Usa € 1,50" }).click();
+    expect((await getMenu()).coperto.children).toBe(original); // non ancora salvato
+    await panel.getByRole("button", { name: "Salva" }).click();
+    await expect(panel.getByRole("status")).toHaveText("Salvato.", { timeout: 10_000 });
+    expect((await getMenu()).coperto.children).toBe("1,50");
+  } finally {
+    await panel.getByRole("button", { name: "Cambia coperto bambini" }).click();
+    for (const k of original.replace(",", "").replace(/^0+/, "")) await panel.getByRole("button", { name: `Cifra ${k}` }).click();
+    await panel.getByRole("button", { name: `Usa € ${original}` }).click();
+    await panel.getByRole("button", { name: "Salva" }).click();
+    await expect(panel.getByRole("status")).toHaveText("Salvato.", { timeout: 10_000 });
+  }
+  await panel.getByRole("button", { name: "Impostazioni", exact: true }).click();
+  await expect(hub.getByRole("button", { name: /^Personale/ })).toBeVisible();
 });
 
 test("alla cassa la categoria manda in comanda tutti i suoi piatti o nessuno, con un tocco", async ({ page }) => {
@@ -579,17 +578,17 @@ test("statistiche della cassa: periodo a tocco, numeri grandi, confronto e class
   const periods = page.getByRole("group", { name: "Periodo" });
   await expect(periods.getByRole("button", { name: "Oggi" })).toHaveAttribute("aria-pressed", "true");
   // Il menù demo ha comande chiuse oggi e ieri (scripts/seed-emulator.js).
-  await expect(page.getByTestId("till-kpi-revenue")).toHaveText(/^€ \d+,\d{2}$/, { timeout: 10_000 });
+  await expect(page.getByTestId("kpi-revenue")).toHaveText(/^€ \d+,\d{2}$/, { timeout: 10_000 });
   for (const b of await periods.getByRole("button").all()) expect((await b.boundingBox()).height).toBeGreaterThanOrEqual(48);
 
   await periods.getByRole("button", { name: "Ieri" }).click();
   await expect(periods.getByRole("button", { name: "Ieri" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("till-kpi-orders")).toHaveText(/^\d+$/, { timeout: 10_000 });
+  await expect(page.getByTestId("kpi-orders")).toHaveText(/^\d+$/, { timeout: 10_000 });
   await expect(page.getByRole("list", { name: "Classifica dei piatti" }).getByRole("listitem").first()).toBeVisible();
 
-  const compare = page.getByRole("switch", { name: "Confronta con il periodo precedente" });
+  const compare = page.getByRole("group", { name: "Confronta con" }).getByRole("button", { name: "Periodo precedente" });
   await compare.click();
-  await expect(compare).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByRole("region", { name: "Statistiche", exact: true })).toContainText(/confronto con/);
+  await expect(compare).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("region", { name: "Dettagli delle statistiche" })).toContainText(/rispetto a/);
   await expect(page.getByRole("region", { name: "Statistiche", exact: true })).toContainText(/%|invariato|nuovo/, { timeout: 10_000 });
 });

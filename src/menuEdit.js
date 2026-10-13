@@ -1,11 +1,9 @@
-// Menu edits as pure functions ("mutators": menu → new menu), shared by the
-// two menu editors:
-//  - Admin.jsx (phone/desktop browser): edits a local draft, saved as a
-//    whole with "Salva modifiche";
-//  - TillMenu.jsx (the till): every "Salva" applies one mutator at once,
-//    inside a Firestore transaction on the latest saved menu (MenuApp.jsx >
-//    handlePatch) — the till stays open all day, and writing back its own
-//    copy of the whole menu would undo edits made meanwhile from a phone.
+// Menu edits as pure functions ("mutators": menu → new menu), used by the
+// menu editor (TillMenu.jsx and its settings, MenuSettings.jsx — the same
+// screens on the till and on phones): every "Salva" applies one mutator at
+// once, inside a Firestore transaction on the latest saved menu (MenuApp.jsx
+// > handlePatch) — a device stays open all day, and writing back its own
+// copy of the whole menu would undo edits made meanwhile from another one.
 //
 // Mutators find dishes and categories by id and throw MenuEditError when
 // they're gone (deleted from another device in the meantime). They must be
@@ -17,7 +15,7 @@ export class MenuEditError extends Error {}
 // Firestore rejects `undefined` field values: a menu that has no
 // translations yet (a brand-new one, the demo menu) must not get
 // `translations: undefined` when a dish is deleted or moved — the key is
-// left out instead. Used by both editors.
+// left out instead.
 export function withTranslations(menu, translations) {
   return translations === undefined ? menu : { ...menu, translations };
 }
@@ -100,13 +98,45 @@ const mapCategory = (menu, catId, fn) => ({
   categories: menu.categories.map((c) => (c.id === catId ? fn(c) : c)),
 });
 
+// Deep merge of plain objects (translation texts): `patch` wins, nested
+// objects are merged instead of replaced.
+function mergeDeep(base, patch) {
+  const out = { ...(base || {}) };
+  for (const [key, value] of Object.entries(patch)) {
+    out[key] = value && typeof value === "object" && !Array.isArray(value) ? mergeDeep(out[key], value) : value;
+  }
+  return out;
+}
+
 export const menuEdits = {
   updateFields: (fields) => (menu) => ({ ...menu, ...fields }),
+
+  // One external link (group "reviewLinks" or "socialLinks", key e.g.
+  // "google"): { url?, visible? }, merged with what's there.
+  updateLink: (group, key, fields) => (menu) => {
+    const current = menu[group] || {};
+    return { ...menu, [group]: { ...current, [key]: { url: "", visible: false, ...(current[key] || {}), ...fields } } };
+  },
 
   setTranslation: (lang, translation) => (menu) => ({
     ...menu,
     translations: { ...(menu.translations || {}), [lang]: translation },
   }),
+
+  // Only the given texts of a language (same shape as a translation:
+  // { tagline, categories: { [catId]: { name, items: { [itemId]: { … } } } } }),
+  // so a correction never puts back texts changed meanwhile elsewhere.
+  updateTranslationTexts: (lang, texts) => (menu) => ({
+    ...menu,
+    translations: { ...(menu.translations || {}), [lang]: mergeDeep(menu.translations?.[lang], texts) },
+  }),
+
+  removeTranslation: (lang) => (menu) => {
+    if (!menu.translations || !(lang in menu.translations)) return menu;
+    const translations = { ...menu.translations };
+    delete translations[lang];
+    return { ...menu, translations };
+  },
 
   // Adding is idempotent (same id = already there): retrying after a timeout
   // whose transaction committed anyway must not create a copy.

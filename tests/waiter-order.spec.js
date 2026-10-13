@@ -17,6 +17,14 @@ function freshTableNumber() {
   return 10000 + Math.floor(Math.random() * 500);
 }
 
+// La comanda del tavolo (righe da inviare e inviate, totale, Preconto,
+// Chiudi tavolo) si apre a schermo intero dal pulsante "Comanda" della barra
+// in basso (Waiter.jsx > OrderDetail).
+async function openTicket(page) {
+  await page.getByRole("button", { name: "Apri la comanda del tavolo" }).click();
+  await expect(page.getByRole("dialog", { name: "Comanda del tavolo" })).toBeVisible();
+}
+
 async function openFreshTable(page) {
   const tableNumber = freshTableNumber();
   await page.getByRole("button", { name: /nuovo tavolo/i }).click();
@@ -77,8 +85,9 @@ test.describe("Area cameriere", () => {
     await expect(page.getByText(/sincronizzata|invio in corso/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/sincronizzata/i)).toBeVisible({ timeout: 15_000 });
 
-    // La riga inviata compare nella comanda con lo stato "Inviata".
-    await expect(page.getByText(/inviata/i).first()).toBeVisible();
+    // La riga inviata compare nella comanda, nel gruppo "Inviata".
+    await openTicket(page);
+    await expect(page.getByRole("group", { name: "Già inviato" })).toContainText(/inviata/i);
     // La comanda per la cucina va in coda alla stampante della cassa (qui
     // nessuna cassa è accesa: resta in attesa, e il cameriere lo vede).
     await expect(page.getByRole("status", { name: "Stampa comanda cucina" })).toHaveText(/comanda cucina: inviato alla cassa, in attesa/i, { timeout: 10_000 });
@@ -142,21 +151,39 @@ test.describe("Area cameriere", () => {
       const tableNumber = await openFreshTable(page);
       openedTableNumbers.push(tableNumber);
       await page.getByRole("button", { name: /bruschetta/i }).click();
-      const targets = [
+      const check = async (targets) => {
+        for (const target of targets) {
+          const box = await target.boundingBox();
+          expect(box.height).toBeGreaterThanOrEqual(44);
+          expect(box.width).toBeGreaterThanOrEqual(44);
+        }
+      };
+      // Schermata dei piatti e barra in basso.
+      await check([
         page.getByRole("button", { name: "Aumenta adulti" }),
         page.getByRole("button", { name: "Diminuisci bambini" }),
         page.getByRole("button", { name: /orecchiette/i }),
+        page.getByRole("tab", { name: "Primi" }),
+        page.getByRole("button", { name: "Apri la comanda del tavolo" }),
+        page.getByRole("button", { name: /invia comanda/i }),
+      ]);
+      // Comanda: − / + sulla riga (con una sola porzione "−" diventa "Rimuovi").
+      await openTicket(page);
+      await check([
+        page.getByRole("button", { name: "Modifica Bruschetta" }),
         page.getByRole("button", { name: "Aumenta quantità di Bruschetta" }),
-        page.getByRole("button", { name: "Diminuisci quantità di Bruschetta" }),
-        page.getByRole("textbox", { name: "Nota per Bruschetta" }),
         page.getByRole("button", { name: "Rimuovi Bruschetta dalla comanda" }),
         page.getByRole("button", { name: /invia comanda/i }),
-      ];
-      for (const target of targets) {
-        const box = await target.boundingBox();
-        expect(box.height).toBeGreaterThanOrEqual(44);
-        expect(box.width).toBeGreaterThanOrEqual(44);
-      }
+      ]);
+      await page.getByRole("button", { name: "Aumenta quantità di Bruschetta" }).click();
+      await check([page.getByRole("button", { name: "Diminuisci quantità di Bruschetta" })]);
+      // Modifica della riga.
+      await page.getByRole("button", { name: "Modifica Bruschetta" }).click();
+      await check([
+        page.getByRole("textbox", { name: "Nota di Bruschetta" }),
+        page.getByRole("button", { name: "Offerto" }),
+        page.getByRole("button", { name: /^salva$/i }),
+      ]);
     });
 
     test("la ricerca piatti filtra 'Aggiungi piatti' e mostra lo stato senza risultati", async ({ page }) => {
@@ -212,16 +239,20 @@ test.describe("Area cameriere", () => {
       await page.getByRole("button", { name: /bruschetta/i }).click();
       await expect(page.getByRole("button", { name: /invia comanda \(1\)/i })).toBeVisible();
 
+      await openTicket(page);
       await page.getByRole("button", { name: "Aumenta quantità di Bruschetta" }).click();
       await expect(page.getByRole("button", { name: /invia comanda \(2\)/i })).toBeVisible();
       await page.getByRole("button", { name: "Diminuisci quantità di Bruschetta" }).click();
       await expect(page.getByRole("button", { name: /invia comanda \(1\)/i })).toBeVisible();
 
-      await page.locator('input[placeholder="nota"]').fill("senza aglio");
-      await expect(page.locator('input[placeholder="nota"]')).toHaveValue("senza aglio");
+      // Nota: si tocca la riga, si scrive nell'editor e vale solo con "Salva".
+      await page.getByRole("button", { name: "Modifica Bruschetta" }).click();
+      await page.getByRole("textbox", { name: "Nota di Bruschetta" }).fill("senza aglio");
+      await page.getByRole("button", { name: /^salva$/i }).click();
+      await expect(page.getByRole("group", { name: "Da inviare" })).toContainText("senza aglio");
 
       await page.getByRole("button", { name: "Rimuovi Bruschetta dalla comanda" }).click();
-      // Carrello vuoto: torna al footer coi totali/Preconto/Chiudi tavolo.
+      // Comanda vuota: niente "Invia comanda", restano Preconto/Chiudi tavolo.
       await expect(page.getByRole("button", { name: /invia comanda/i })).toHaveCount(0);
       await expect(page.getByRole("button", { name: /preconto/i })).toBeVisible();
     });
@@ -243,19 +274,20 @@ test.describe("Area cameriere", () => {
       await expect(childrenGroup).toContainText("1");
     });
 
-    test("Preconto apre il riepilogo stampabile e si può chiudere", async ({ page }) => {
+    test("Preconto apre il riepilogo stampabile a pagina intera e si torna ai piatti", async ({ page }) => {
       const tableNumber = await openFreshTable(page);
       openedTableNumbers.push(tableNumber);
 
-      await page.getByRole("button", { name: /preconto/i }).click();
-      await expect(page.getByText("Documento non fiscale")).toBeVisible();
-      await expect(page.getByText("Nessun piatto ordinato.")).toBeVisible();
+      await page.getByRole("button", { name: /^preconto$/i }).click();
+      const receipt = page.getByRole("dialog", { name: "Preconto" });
+      await expect(receipt).toContainText("Documento non fiscale");
+      await expect(receipt).toContainText("Nessun piatto ordinato.");
 
-      await page.getByRole("button", { name: "Chiudi preconto" }).click();
-      await expect(page.getByText("Documento non fiscale")).toHaveCount(0);
+      await receipt.getByRole("button", { name: "Piatti", exact: true }).click();
+      await expect(page.getByRole("dialog")).toHaveCount(0);
     });
 
-    test("il Preconto si modifica (rimuove una riga) e si conferma, bloccandosi", async ({ page }) => {
+    test("una riga inviata si toglie dalla comanda, poi il preconto si conferma e blocca le righe", async ({ page }) => {
       const tableNumber = await openFreshTable(page);
       openedTableNumbers.push(tableNumber);
 
@@ -264,39 +296,46 @@ test.describe("Area cameriere", () => {
       await page.getByRole("button", { name: /invia comanda/i }).click();
       await expect(page.getByText(/sincronizzata/i)).toBeVisible({ timeout: 15_000 });
 
-      await page.getByRole("button", { name: /preconto/i }).click();
-      await expect(page.getByText("Documento non fiscale")).toBeVisible();
-      // In sola lettura (non ancora in modifica) le righe non hanno un
-      // bottone di rimozione.
-      await expect(page.getByRole("button", { name: /^rimuovi .* dal preconto$/i })).toHaveCount(0);
+      // Riga già inviata: si apre dalla comanda e si rimuove, con conferma.
+      await openTicket(page);
+      await page.getByRole("button", { name: /^modifica bruschetta: 1 ×/i }).click();
+      await page.getByRole("dialog", { name: "Modifica riga" }).getByRole("button", { name: "Rimuovi dalla comanda" }).click();
+      await page.getByRole("alertdialog", { name: "Rimuovere Bruschetta?" }).getByRole("button", { name: "Rimuovi" }).click();
+      const sent = page.getByRole("group", { name: "Già inviato" });
+      await expect(sent).not.toContainText("Bruschetta", { timeout: 10_000 });
+      await expect(sent).toContainText("Caprese");
 
-      await page.getByRole("button", { name: /^modifica$/i }).click();
-      const removeButtons = page.getByRole("button", { name: /^rimuovi .* dal preconto$/i });
-      await expect(removeButtons).toHaveCount(2);
-      await removeButtons.first().click();
-      await expect(removeButtons).toHaveCount(1, { timeout: 10_000 });
+      // Preconto dalla comanda: conferma (con conferma) e il conto si blocca.
+      await page.getByRole("dialog", { name: "Comanda del tavolo" }).getByRole("button", { name: /^preconto$/i }).click();
+      const receipt = page.getByRole("dialog", { name: "Preconto" });
+      await expect(receipt).toContainText("Caprese");
+      await expect(receipt).not.toContainText("Bruschetta");
+      await receipt.getByRole("button", { name: "Conferma preconto" }).click();
+      await page.getByRole("alertdialog", { name: "Confermare il preconto?" }).getByRole("button", { name: "Conferma preconto" }).click();
+      await expect(receipt.getByText("Preconto confermato")).toBeVisible({ timeout: 10_000 });
+      await expect(receipt.getByRole("button", { name: "Conferma preconto" })).toHaveCount(0);
 
-      await page.getByRole("button", { name: /^fine modifica$/i }).click();
-      await page.getByRole("button", { name: /^conferma preconto$/i }).click();
-      await expect(page.getByText(/^preconto confermato$/i)).toBeVisible({ timeout: 10_000 });
-      // Bloccato: niente più Modifica/Conferma.
-      await expect(page.getByRole("button", { name: /^modifica$/i })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: /^conferma preconto$/i })).toHaveCount(0);
+      await receipt.getByRole("button", { name: "Comanda", exact: true }).click();
+      await page.getByRole("button", { name: /^modifica caprese: 1 ×/i }).click();
+      const editor = page.getByRole("dialog", { name: "Modifica riga" });
+      await expect(editor).toContainText("Preconto confermato: le righe non si possono più modificare.");
+      await expect(editor.getByRole("button", { name: "Rimuovi dalla comanda" })).toHaveCount(0);
     });
 
-    test("i link Storico e Prenotazioni nell'header aprono le rispettive sezioni e si può tornare a Sala", async ({ page }) => {
-      await page.getByRole("button", { name: /storico/i }).click();
+    test("la barra in basso apre Storico e Prenotazioni e riporta ai Tavoli", async ({ page }) => {
+      const nav = page.getByRole("navigation", { name: "Sezioni" });
+      // Comandi della barra facili da toccare: etichetta di testo sempre
+      // visibile e almeno 48px (Material 48dp / Apple 44pt / WCAG 2.5.5).
+      for (const name of ["Tavoli", "Prenotazioni", "Storico"]) {
+        expect((await nav.getByRole("button", { name, exact: true }).boundingBox()).height).toBeGreaterThanOrEqual(48);
+      }
+      await nav.getByRole("button", { name: "Storico", exact: true }).click();
       await expect(page.getByText("Storico comande")).toBeVisible();
-      // "Indietro" ben visibile e facile da toccare: etichetta di testo e
-      // almeno 48px di altezza (Material 48dp / Apple 44pt / WCAG 2.5.5).
-      const back = page.getByRole("button", { name: "Indietro", exact: true });
-      expect((await back.boundingBox()).height).toBeGreaterThanOrEqual(48);
-      await back.click();
-      await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
 
-      await page.getByRole("button", { name: /prenotazioni/i }).click();
-      await expect(page.getByText(/^prenotazioni —/i)).toBeVisible({ timeout: 10_000 });
-      await page.getByRole("button", { name: /^sala$/i }).click();
+      await nav.getByRole("button", { name: "Prenotazioni", exact: true }).click();
+      await expect(page.getByRole("region", { name: "Calendario" })).toBeVisible({ timeout: 10_000 });
+
+      await nav.getByRole("button", { name: "Tavoli", exact: true }).click();
       await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
     });
 
@@ -310,6 +349,7 @@ test.describe("Area cameriere", () => {
         await otherPage.goto("/cameriere");
         await staffLogin(otherPage, TEST_WAITER);
         await otherPage.getByText(`Tavolo ${tableNumber}`, { exact: true }).click();
+        await openTicket(otherPage);
         await expect(otherPage.getByRole("button", { name: /chiudi tavolo/i })).toBeVisible({ timeout: 10_000 });
         await otherPage.getByRole("button", { name: /chiudi tavolo/i }).click();
         await otherPage.getByRole("button", { name: /conferma chiusura/i }).click();

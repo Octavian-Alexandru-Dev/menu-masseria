@@ -1,6 +1,6 @@
 // Sending something to the till's printer queue (printJobs.js) and following
-// its status in realtime — shared by the phone receipt (ReceiptOverlay.jsx),
-// the till (TillSala.jsx, TillHistory.jsx) and the kitchen ticket sent with
+// its status in realtime — shared by the receipt page (OrderUi.jsx >
+// ReceiptPanel), the till (TillSala.jsx) and the kitchen ticket sent with
 // "Invia comanda" (sala-shared.jsx), so all say the same things the same way.
 import { useState, useEffect } from "react";
 import {

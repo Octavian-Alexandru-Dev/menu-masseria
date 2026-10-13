@@ -25,12 +25,8 @@ export function subscribeMenuCosts(onChange, onError) {
   return onSnapshot(menuCostsRef(), (snap) => onChange(snap.exists() ? snap.data() : {}), onError);
 }
 
-export async function saveMenuCosts(costs) {
-  return setDoc(menuCostsRef(), costs);
-}
-
-// One dish's cost, without rewriting the others (the till's menu editor
-// saves one dish at a time — TillMenu.jsx).
+// One dish's cost, without rewriting the others (the menu editor saves one
+// dish at a time — TillMenu.jsx).
 export async function saveMenuCost(itemId, value) {
   return setDoc(menuCostsRef(), { [itemId]: value }, { merge: true });
 }

@@ -183,17 +183,6 @@ export function formatCentsAsPrice(cents) {
   return (cents / 100).toFixed(2).replace(".", ",");
 }
 
-// For chart axis labels (Stats.jsx): raw integer values in cents (e.g.
-// 125000) read directly as ticks would be misleading compared to the
-// actual euro amount shown in the tooltip — this formats them compactly
-// ("€ 1,2 mila") so the axis stays readable even with large amounts,
-// without formatCentsAsPrice's decimals (unnecessary on an axis with few
-// ticks).
-const compactEuroFormatter = new Intl.NumberFormat("it-IT", { notation: "compact", maximumFractionDigits: 1 });
-export function formatCentsCompact(cents) {
-  return `€ ${compactEuroFormatter.format(cents / 100)}`;
-}
-
 // Current service shift (lunch/dinner), determined automatically from the
 // time of day — no configuration needed. Threshold fixed at 17:00: before
 // that it's lunch, from then on it's dinner. If the restaurant's actual

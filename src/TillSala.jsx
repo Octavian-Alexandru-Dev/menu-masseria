@@ -27,16 +27,17 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import {
   Plus, X, Users, Clock, Search, Utensils, CalendarDays, History, LayoutGrid, BookOpen, BarChart3,
-  Play, Send, Lock, Printer, LogOut, Gift, Percent, RotateCcw, Trash2, Check, Keyboard,
+  Play, Send, Lock, Printer, LogOut,
 } from "lucide-react";
 import {
-  THEMES, GlobalStyle, Logo, formatCentsAsPrice, parsePriceToCents, tableIdentity, currentShiftLabel, BackButton,
+  THEMES, GlobalStyle, Logo, formatCentsAsPrice, tableIdentity, currentShiftLabel, BackButton,
 } from "./shared";
-import { orderTotalCents, copertoTotalCents, updateCovers, updateOrderLine, removeOrderLine, markReceiptPrinted } from "./orders";
+import { orderTotalCents, copertoTotalCents, markReceiptPrinted } from "./orders";
 import { coversLabel } from "./reservationsData";
 import { confirmAction } from "./confirmDialog";
 import { staffLogout, logoutHiddenAtTill } from "./staff-shared";
-import { formatTime, elapsedLabel, SyncBadge, useSalaData, useOrderDraft } from "./sala-shared";
+import { formatTime, elapsedLabel, SyncBadge, useSalaData, useOrderDraft, tableStatus } from "./sala-shared";
+import { LineEditor, CoversControl, DishTile, TicketLine } from "./OrderUi";
 import { usePrintJob } from "./usePrintJob";
 import {
   TOUCH, FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine,
@@ -123,16 +124,6 @@ function TopBar({ t, session, tab, onTab, openCount, withAdmin }) {
 }
 
 /* ---------------------------------- floor ---------------------------------- */
-
-// Status of an open table, written + fixed colour (never colour alone).
-// A kitchen ticket that may not have printed comes first: it needs action.
-function tableStatus(order, kitchenProblems = 0) {
-  if (kitchenProblems > 0) return { label: "Comanda cucina non stampata", color: STATUS.danger };
-  if (order.receipt?.confirmedAt) return { label: "Preconto confermato", color: STATUS.info };
-  if (order.receipt?.printedAt) return { label: "Preconto stampato", color: STATUS.info };
-  if ((order.items || []).length === 0) return { label: "Da ordinare", color: STATUS.idle };
-  return { label: "Comanda inviata", color: STATUS.ok };
-}
 
 function TableTile({ t, order, kitchenProblems, onOpen }) {
   const id = tableIdentity(order);
@@ -298,230 +289,7 @@ function NewTableDialog({ t, openOrders, onCancel, onCreate, onGoTo, busy, reser
   );
 }
 
-/* ------------------------------- line editor ------------------------------- */
-
-const DISCOUNTS = [10, 20, 50];
-
-// Editor of one ticket line, in the side panel. Works on a local copy:
-// nothing changes until "Salva" (a stray tap costs nothing). Price options
-// follow what POS systems offer: back to the menu price, offered (0 €),
-// quick percentage discounts, or any price from the keypad.
-function LineEditor({ t, line, sent, locked, onSave, onRemove, onClose }) {
-  const menuPrice = line.originalPrice || line.price;
-  const [quantity, setQuantity] = useState(line.quantity);
-  const [price, setPrice] = useState(line.price);
-  const [priceNote, setPriceNote] = useState(line.priceNote || null);
-  const [notes, setNotes] = useState(line.notes || "");
-  const [customDigits, setCustomDigits] = useState(null); // null = keypad closed
-  const [saving, setSaving] = useState(false);
-
-  const menuCents = parsePriceToCents(menuPrice);
-  const unitCents = parsePriceToCents(price);
-  const setPriceCents = (cents, note) => {
-    setPrice(formatCentsAsPrice(cents));
-    setPriceNote(note);
-  };
-  const pressCustom = (k) => {
-    if (k === "C") setCustomDigits("");
-    else if (k === "⌫") setCustomDigits((d) => (d || "").slice(0, -1));
-    else setCustomDigits((d) => ((d || "").length >= 6 ? d : `${d || ""}${k}`.replace(/^0+/, "")));
-  };
-  const customCents = parseInt(customDigits || "0", 10);
-
-  const save = async () => {
-    setSaving(true);
-    const changedPrice = price !== menuPrice;
-    const ok = await onSave({
-      quantity, price, notes: notes.trim(),
-      priceNote: changedPrice ? priceNote : null,
-      originalPrice: changedPrice ? menuPrice : null,
-    });
-    setSaving(false);
-    if (ok !== false) onClose();
-  };
-
-  const option = (active) => ({
-    minHeight: TOUCH, borderRadius: 10, fontSize: 16, fontWeight: 600, cursor: locked ? "default" : "pointer", fontFamily: FONT,
-    border: `1.5px solid ${active ? t.primary : t.line}`, background: active ? t.primary : t.card, color: active ? t.bg : t.ink,
-    display: "flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: locked ? 0.5 : 1,
-  });
-
-  return (
-    <SidePanel
-      t={t}
-      label="Modifica riga"
-      header={(
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <BackButton t={t} onClick={onClose} label="Comanda" />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 21, fontWeight: 700, lineHeight: 1.2 }}>{line.name}</div>
-            <div style={{ fontSize: 14, color: t.inkSoft }}>{line.categoryName}{sent ? ` · inviato ${formatTime(line.sentAt) || ""}` : " · da inviare"}</div>
-          </div>
-        </div>
-      )}
-      footer={locked ? (
-        <div style={{ fontSize: 15, color: t.inkSoft, textAlign: "center" }}>Preconto confermato: le righe non si possono più modificare.</div>
-      ) : (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 17, fontWeight: 600 }}>Totale riga</span>
-            <span data-testid="till-line-total" style={{ fontSize: 26, fontWeight: 800 }}>€ {formatCentsAsPrice(unitCents * quantity)}</span>
-          </div>
-          <TillButton t={t} variant="primary" size={60} icon={Check} disabled={saving} onClick={save}>{saving ? "Salvataggio…" : "Salva"}</TillButton>
-        </>
-      )}
-    >
-      <div style={{ display: "grid", gap: 18, paddingTop: 6 }}>
-        <div style={{ pointerEvents: locked ? "none" : "auto", opacity: locked ? 0.5 : 1 }}>
-          <Stepper t={t} label="Quantità" value={quantity} min={1} onChange={setQuantity} />
-        </div>
-
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-            <SectionTitle t={t}>Prezzo unitario</SectionTitle>
-            <span style={{ fontSize: 20, fontWeight: 700 }}>
-              € {price}
-              {price !== menuPrice && <span style={{ fontSize: 14, color: t.inkSoft, fontWeight: 500, textDecoration: "line-through", marginLeft: 8 }}>€ {menuPrice}</span>}
-            </span>
-          </div>
-          {priceNote && price !== menuPrice && <StatusPill color={STATUS.info} style={{ marginBottom: 8 }}>{priceNote}</StatusPill>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-            <button type="button" disabled={locked} aria-pressed={price === menuPrice} onClick={() => setPriceCents(menuCents, null)} className="mdp-btn" style={option(price === menuPrice)}>
-              <RotateCcw size={16} /> Pieno
-            </button>
-            <button type="button" disabled={locked} aria-pressed={unitCents === 0} onClick={() => setPriceCents(0, "Offerto")} className="mdp-btn" style={option(unitCents === 0)}>
-              <Gift size={16} /> Offerto
-            </button>
-            {DISCOUNTS.map((p) => {
-              const cents = Math.round((menuCents * (100 - p)) / 100);
-              const active = priceNote === `Sconto ${p}%`;
-              return (
-                <button key={p} type="button" disabled={locked} aria-pressed={active} aria-label={`Sconto ${p}%`} onClick={() => setPriceCents(cents, `Sconto ${p}%`)} className="mdp-btn" style={option(active)}>
-                  <Percent size={15} /> −{p}%
-                </button>
-              );
-            })}
-            <button type="button" disabled={locked} aria-pressed={customDigits != null} onClick={() => setCustomDigits((d) => (d == null ? "" : null))} className="mdp-btn" style={option(customDigits != null)}>
-              <Keyboard size={16} /> Altro
-            </button>
-          </div>
-          {customDigits != null && !locked && (
-            <div style={{ marginTop: 12, padding: 12, borderRadius: 14, border: `1.5px solid ${t.line}`, background: t.bg }}>
-              <div aria-label="Nuovo prezzo" role="textbox" aria-readonly="true" style={{
-                minHeight: 56, borderRadius: 12, border: `2px solid ${t.primary}`, background: t.card, marginBottom: 10,
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, fontWeight: 700,
-              }}>€ {formatCentsAsPrice(customCents)}</div>
-              <Keypad t={t} onKey={pressCustom} keyHeight={52} />
-              <TillButton t={t} variant="primary" style={{ width: "100%", marginTop: 10 }}
-                onClick={() => { setPriceCents(customCents, customCents === 0 ? "Offerto" : "Prezzo modificato"); setCustomDigits(null); }}>
-                Usa € {formatCentsAsPrice(customCents)}
-              </TillButton>
-            </div>
-          )}
-        </div>
-
-        <label style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft }}>
-          Nota per la cucina
-          <input disabled={locked} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="es. senza glutine" aria-label={`Nota di ${line.name}`}
-            style={{ width: "100%", minHeight: 52, marginTop: 6, padding: "0 14px", borderRadius: 12, border: `1.5px solid ${t.line}`, background: t.bg, color: t.ink, fontSize: 17, fontFamily: FONT, boxSizing: "border-box" }} />
-        </label>
-
-        {!locked && (
-          <TillButton t={t} variant="danger" icon={Trash2} onClick={onRemove}>Rimuovi dalla comanda</TillButton>
-        )}
-      </div>
-    </SidePanel>
-  );
-}
-
 /* ------------------------------- order screen ------------------------------- */
-
-function CoversControl({ t, order }) {
-  const [busy, setBusy] = useState(false);
-  const change = async (field, delta) => {
-    const next = {
-      adults: order.covers?.adults || 0,
-      children: order.covers?.children || 0,
-      [field]: Math.max(0, (order.covers?.[field] || 0) + delta),
-    };
-    setBusy(true);
-    try {
-      await updateCovers(order.id, next);
-    } catch (err) {
-      console.error("[till] Modifica coperti fallita:", err);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const btn = {
-    width: TOUCH, height: TOUCH, borderRadius: 10, border: `1.5px solid ${t.line}`, background: t.card, color: t.ink,
-    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 22,
-  };
-  const group = (field, label) => (
-    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 15, color: t.inkSoft }}>{label}</span>
-      <button type="button" aria-label={`Diminuisci ${label.toLowerCase()}`} disabled={busy} onClick={() => change(field, -1)} className="mdp-btn" style={btn}>−</button>
-      <span style={{ minWidth: 24, textAlign: "center", fontSize: 20, fontWeight: 700 }}>{order.covers?.[field] || 0}</span>
-      <button type="button" aria-label={`Aumenta ${label.toLowerCase()}`} disabled={busy} onClick={() => change(field, 1)} className="mdp-btn" style={btn}>+</button>
-    </span>
-  );
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-      <Users size={18} color={t.inkSoft} />
-      {group("adults", "Adulti")}
-      {group("children", "Bambini")}
-    </div>
-  );
-}
-
-function DishTile({ t, item, quantityInDraft, offMenu, onAdd }) {
-  return (
-    <button
-      type="button"
-      onClick={onAdd}
-      aria-label={`Aggiungi ${item.name}, € ${item.price}`}
-      className="mdp-btn"
-      style={{
-        position: "relative", display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left",
-        minHeight: 104, padding: "12px 14px", borderRadius: 14, cursor: "pointer", fontFamily: FONT, color: t.ink,
-        border: offMenu ? `2px dashed ${STATUS.waiting}` : `1.5px solid ${quantityInDraft ? t.primary : t.line}`,
-        background: quantityInDraft ? `${t.primary}14` : t.card,
-      }}
-    >
-      <span style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.25, paddingRight: quantityInDraft ? 34 : 0 }}>{item.name}</span>
-      <span style={{ fontSize: 16, color: t.inkSoft, marginTop: 8 }}>€ {item.price}</span>
-      {quantityInDraft > 0 && (
-        <span aria-hidden="true" style={{
-          position: "absolute", top: 10, right: 10, minWidth: 30, height: 30, borderRadius: 15, padding: "0 8px",
-          background: t.primary, color: t.bg, fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
-        }}>{quantityInDraft}</span>
-      )}
-    </button>
-  );
-}
-
-// One tappable line of the ticket (sent or to send): tap → its editor.
-function TicketLine({ t, line, sent, onSelect }) {
-  const total = parsePriceToCents(line.price) * line.quantity;
-  return (
-    <button type="button" onClick={onSelect} className="mdp-btn"
-      aria-label={`Modifica ${line.name}: ${line.quantity} × € ${line.price}${line.priceNote ? `, ${line.priceNote}` : ""}`}
-      style={{
-        display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 56, padding: "8px 4px", textAlign: "left",
-        border: "none", borderBottom: `1px solid ${t.line}`, background: "none", color: t.ink, cursor: "pointer", fontFamily: FONT,
-      }}>
-      <span style={{ minWidth: 34, fontSize: 18, fontWeight: 800 }}>{line.quantity}×</span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontSize: 17, fontWeight: 600 }}>{line.name}</span>
-        <span style={{ fontSize: 13, color: t.inkSoft }}>
-          {line.priceNote && <span style={{ color: STATUS.info, fontWeight: 700 }}>{line.priceNote} · </span>}
-          {line.notes ? `${line.notes} · ` : ""}{sent ? `inviato ${formatTime(line.sentAt) || ""}` : line.categoryName}
-        </span>
-      </span>
-      <span style={{ fontSize: 17, fontWeight: 700, whiteSpace: "nowrap" }}>€ {formatCentsAsPrice(total)}</span>
-    </button>
-  );
-}
 
 function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
   const d = useOrderDraft({ menu, menuCosts, order, senderName });
@@ -558,30 +326,17 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
     ? (editing.sent ? sentLines : d.draft).find((l) => l.lineId === editing.lineId)
     : null;
 
-  const saveLine = async (patch) => {
-    if (!editing.sent) { d.updateDraftLine(editing.lineId, patch); return true; }
-    try {
-      await updateOrderLine(order.id, sentLines, editing.lineId, patch);
-      return true;
-    } catch (err) {
-      console.error("[till] Modifica riga fallita:", err);
-      return false;
-    }
-  };
+  const saveLine = (patch) => d.saveLine(editing, patch);
   const removeLine = async () => {
-    if (!editing.sent) { d.removeDraftLine(editing.lineId); setEditing(null); return; }
-    const confirmed = await confirmAction({
-      title: `Rimuovere ${editingLine.name}?`,
-      message: "Il piatto è già stato inviato: viene tolto dalla comanda e dal conto.",
-      confirmLabel: "Rimuovi", danger: true,
-    });
-    if (!confirmed) return;
-    try {
-      await removeOrderLine(order.id, sentLines, editing.lineId);
-      setEditing(null);
-    } catch (err) {
-      console.error("[till] Rimozione riga fallita:", err);
+    if (editing.sent) {
+      const confirmed = await confirmAction({
+        title: `Rimuovere ${editingLine.name}?`,
+        message: "Il piatto è già stato inviato: viene tolto dalla comanda e dal conto.",
+        confirmLabel: "Rimuovi", danger: true,
+      });
+      if (!confirmed) return;
     }
+    if (await d.removeLine(editing)) setEditing(null);
   };
 
   const printReceipt = async () => {
@@ -754,9 +509,9 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
 
 /* ---------------------------------- shell ---------------------------------- */
 
-// admin: Gestione menù props from StaffHome/MenuApp (setMenu, onSave, onPatch…)
-// — present only for admin accounts, and it adds the Menù and Statistiche
-// sections.
+// admin: menu editing props from StaffHome/MenuApp (onPatch, onRestore,
+// onExit) — present only for admin accounts, and it adds the Menù and
+// Statistiche sections.
 export default function TillSala({ menu, session, initialTab = "floor", admin = null }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
   const sala = useSalaData({ menu, session });
@@ -786,29 +541,14 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
     if (newId) goToOrder(newId);
   };
 
-  const goTab = async (key) => {
-    // Unsaved edits from "Gestione completa" (Menù) don't stay behind in the
-    // till's menu: leaving the section saves nothing, so it asks first.
-    if (tab === "menu" && key !== "menu" && admin?.hasUnsavedChanges) {
-      const discard = await confirmAction({
-        title: "Modifiche al menù non salvate",
-        message: "Le modifiche fatte in Gestione completa non sono salvate. Uscendo dal Menù vengono scartate.",
-        confirmLabel: "Scarta modifiche",
-        cancelLabel: "Resta nel Menù",
-        danger: true,
-      });
-      if (!discard) return;
-      admin.onDiscard();
-    }
+  const goTab = (key) => {
     setTab(key);
     setOpenOrderId(null);
   };
   const loading = <div style={{ padding: 40, color: t.inkSoft, fontSize: 18, fontFamily: FONT }}>Caricamento…</div>;
 
   return (
-    // Full screen, minus StaffHome's "Cambia area" bar when an admin account
-    // is at the till (--mdp-area-bar, 0 otherwise).
-    <div className="mdp-root" style={{ height: "calc(100vh - var(--mdp-area-bar, 0px))", display: "flex", flexDirection: "column", background: t.bg, overflow: "hidden" }}>
+    <div className="mdp-root" style={{ height: "100vh", display: "flex", flexDirection: "column", background: t.bg, overflow: "hidden" }}>
       <GlobalStyle t={t} />
       <TopBar t={t} session={session} tab={tab} onTab={goTab} openCount={sala.orders.length} withAdmin={withAdmin} />
 

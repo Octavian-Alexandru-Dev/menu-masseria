@@ -9,8 +9,8 @@
 // the same job twice) and sends them to the printer. Status updates flow
 // back in realtime to the device that asked for the print.
 //
-// Staff-only module (imports firebase-auth): loaded by ReceiptOverlay and the
-// print station, never by the public menu.
+// Staff-only module (imports firebase-auth): loaded by the staff screens
+// (receipt, kitchen ticket) and the print station, never by the public menu.
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where,
   runTransaction, serverTimestamp, Timestamp, writeBatch, arrayUnion,

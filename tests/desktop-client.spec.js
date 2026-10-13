@@ -74,7 +74,8 @@ test.afterAll(async () => {
 
 test("il client carica la web app, espone il bridge e stampa un preconto inviato da un telefono", async ({ page }) => {
   const till = await app.firstWindow();
-  await expect(till.getByText("Area cameriere")).toBeVisible({ timeout: 20_000 });
+  // /cameriere apre la stessa area riservata (StaffHome.jsx), sui Tavoli.
+  await expect(till.getByText("Area riservata")).toBeVisible({ timeout: 20_000 });
   expect(await till.evaluate(() => typeof globalThis.mdpDesktop?.printRaw)).toBe("function");
   // API 1.1.0: stato schermo intero (avviato in finestra, startFullscreen:
   // false) e nessuna credenziale della cassa salvata.

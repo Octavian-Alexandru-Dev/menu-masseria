@@ -37,10 +37,11 @@ dish is printed on the kitchen ticket when an order is sent (see
 keep printing everything), drinks are typically `false`. A new dish gets
 its category's default (`false` only if no dish in the category is printed).
 
-Both menu editors write these fields: `Admin.jsx` (draft + "Salva
-modifiche", whole document) and the till's `TillMenu.jsx` (one edit at a
-time from `src/menuEdit.js`, applied in a Firestore transaction to the
-current server document — `MenuApp.jsx > handlePatch`).
+The menu editor (`TillMenu.jsx` + `MenuSettings.jsx`, the same screens on
+the till and on phones) writes these fields one edit at a time
+(`src/menuEdit.js`), applied in a Firestore transaction to the current
+server document (`MenuApp.jsx > handlePatch`). The only whole-document
+write is restoring a JSON backup (`MenuApp.jsx > handleRestore`).
 
 **Translation**: `{ restaurantName?, tagline?, footerNote?, categories: { [catId]: { name?, subtitle?, items: { [itemId]: { name?, description?, tag? } } } } }`
 — every field is optional per-entry (falls back to the Italian source, see
@@ -94,7 +95,7 @@ sub-object, the 24h auto-close). Key points not to duplicate here:
   this is what both the realtime "open orders" listener and the paginated
   history query filter on.
 - Orders are never deleted automatically (permanent history for Stats);
-  admin-only manual deletion exists (`OrderHistory.jsx`).
+  admin-only manual deletion exists (Storico, `TillHistory.jsx`).
 
 ## `reservations/{id}`
 

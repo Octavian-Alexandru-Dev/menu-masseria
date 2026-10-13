@@ -85,7 +85,7 @@ shows "Windows protected your PC" → *More info* → *Run anyway*. Setup, print
 ## Features
 
 - **Multilingual public menu** (IT/EN/ES/DE/FR): translations are generated
-  once from the admin panel (editable by hand) and read by the client with
+  once from the menu settings (editable by hand) and read by the client with
   no network call on language switch.
 - **Real-time order flow**: the waiter sends the order from their phone or
   from the till; every staff device sees it instantly (Firestore realtime
@@ -98,20 +98,27 @@ shows "Windows protected your PC" → *More info* → *Run anyway*. Setup, print
   till client prints as ESC/POS on the 80mm thermal printer, with live
   status back on the device that asked (`printJobs.js`, `escpos.js`,
   `PrintStation.jsx`, `desktop-client/`).
-- **Till interface**: inside the Windows client the staff area becomes a
-  full-screen touch POS (`TillSala.jsx` and the other `Till*.jsx` screens:
-  tables grid, order with in-context line editing — quantity, offered,
-  discounts — reservations calendar, history, menu management and
-  statistics), built from shared pieces (`TillUi.jsx`) and the same data
-  layer as the phone screens. Every staff feature exists in both versions
-  (rule in `CLAUDE.md`).
-- **Table reservations** with a dedicated staff view (`Reservations.jsx`).
-- **Admin panel**: menu editor with drag & drop category/dish reordering,
-  translation management, a configurable printable PDF export (language,
-  images, columns, page size), JSON export/import for backups, and undo for
-  up to 20 actions.
-- **Sales and usage statistics** for staff (`Stats.jsx`, charts via
-  Recharts).
+- **Staff app for phones** (`PhoneApp.jsx`): installable, with the sections
+  in a bottom navigation bar (Tables, Reservations, History, Menu,
+  Statistics), order taking by taps on dish tiles with a fixed bottom bar,
+  full-screen pages for the ticket, line edits and every editor.
+- **Till interface**: inside the Windows client the same staff area becomes
+  a full-screen touch POS (`TillSala.jsx`: tables grid, order with
+  in-context line editing — quantity, offered, discounts). Reservations,
+  history, menu management and statistics are the same screens on the till
+  and on phones (`Till*.jsx`, laid out by screen size), all built from
+  shared pieces (`TillUi.jsx`, `OrderUi.jsx`) and the same data layer.
+- **Table reservations**: month calendar with bookings and covers per day,
+  booking slots, confirm/reject/cancel, start a booked table.
+- **Menu management**: dishes and categories (price from an on-screen
+  keypad, availability, off-menu, kitchen ticket, internal cost, photo),
+  identity and theme, review/social links, translations (automatic for
+  missing texts, editable by hand), staff accounts and roles, a
+  configurable printable menu (PDF), JSON backup and restore — every
+  "Salva" writes only what changed, in a transaction on the live menu.
+- **Sales and usage statistics** for admins (`TillStats.jsx`): presets or
+  custom dates, comparison with another period, rankings by dish, category,
+  waiter, hour and weekday.
 - **SEO**: meta tags, Open Graph/Twitter Card, `schema.org/Restaurant`
   structured data, sitemap.
 
@@ -123,7 +130,6 @@ shows "Windows protected your PC" → *More info* → *Run anyway*. Setup, print
 - **Firestore** (realtime listeners, persistent local cache) for all data;
   **Firebase Authentication** (email/password) for the staff area.
 - **Cloudinary** for dish photo uploads (unsigned, client-side).
-- **Recharts** for the staff statistics dashboard.
 - **Playwright** for end-to-end tests, run against a local, containerized
   Firebase emulator — never against the real project.
 - Plain JavaScript throughout (no TypeScript), plain inline styles (no CSS
@@ -184,16 +190,18 @@ to run the suite and how to handle a failing test after a change.
 
 ```
 src/
-  MenuApp.jsx        # app shell: routing (URL path/query), menu loading, save/undo
+  MenuApp.jsx        # app shell: routing (URL path/query), menu loading, menu writes (patch / restore)
   ClientView.jsx      # public menu (no Firebase Auth import — kept light)
-  Admin.jsx            # menu management panel (lazy-loaded, includes Firebase Auth)
-  StaffHome.jsx         # staff landing page / dashboard, role-based area picker (straight to TillSala at the till)
-  Waiter.jsx, Reservations.jsx, Stats.jsx  # staff areas (phone/browser)
-  OrderHistory.jsx, ReceiptOverlay.jsx, PrintMenu.jsx    # shared staff UI
-  TillSala.jsx, TillReservations.jsx, TillHistory.jsx, TillMenu.jsx, TillStats.jsx, TillUi.jsx  # till interface
+  StaffHome.jsx         # staff entry: login + role, then PhoneApp (phones) or TillSala (till)
+  PhoneApp.jsx          # staff app for phones: top bar + bottom navigation
+  Waiter.jsx            # Tables and order screen on phones
+  TillSala.jsx          # till: sections bar + tables and order screen
+  TillReservations.jsx, TillHistory.jsx, TillMenu.jsx, MenuSettings.jsx, TillStats.jsx  # the other sections, same screen on phone and till
+  TillUi.jsx, OrderUi.jsx  # shared UI pieces (buttons, panels, keypads; line editor, receipt…)
+  PrintMenu.jsx         # printable menu (PDF)
   sala-shared.jsx       # Sala logic shared by Waiter.jsx and TillSala.jsx (draft, send, kitchen ticket…)
   PrintStation.jsx, printJobs.js, usePrintJob.js, escpos.js, kitchenTicket.js, desktop.js  # print queue + ESC/POS (station runs in the till client only)
-  menuEdit.js           # menu edits as pure functions, shared by Admin.jsx and TillMenu.jsx
+  menuEdit.js, menuBackup.js, menuPrint.js, staffData.js  # menu edits as pure functions, backup, printable menu, staff accounts
   shared.jsx, staff-shared.jsx   # cross-cutting UI/data helpers, no Firebase (shared.jsx) vs. auth+role (staff-shared.jsx)
   orders.js, reservationsData.js, statsData.js, menuCosts.js  # Firestore data layer, one module per domain
   firebase-db.js, firebase-auth.js, cloudinary.js  # external service clients

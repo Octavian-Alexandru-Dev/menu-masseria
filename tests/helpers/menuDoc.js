@@ -4,7 +4,7 @@
 // test. Le scritture sono transazioni sul documento com'è ora, come fa la
 // cassa (MenuApp.jsx > handlePatch), così non si cancellano a vicenda.
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc, runTransaction } from "firebase/firestore";
+import { doc, getDoc, runTransaction, deleteDoc } from "firebase/firestore";
 import { TEST_ADMIN } from "../test-env.js";
 import { auth, db } from "./emulatorApp.js";
 
@@ -58,5 +58,49 @@ export async function removeMenuItemsByNamePrefix(prefix) {
     });
   } catch (err) {
     console.error(`[test cleanup] Pulizia voci "${prefix}" dal menù fallita:`, err.message || err);
+  }
+}
+
+// Una traduzione scritta "da un altro dispositivo" (per provarne la
+// correzione a mano) e la sua pulizia.
+export async function setTranslationRemotely(lang, translation) {
+  await ensureSignedIn();
+  await runTransaction(db, async (tx) => {
+    const menu = (await tx.get(menuRef())).data();
+    menu.translations = { ...(menu.translations || {}), [lang]: translation };
+    tx.set(menuRef(), menu);
+  });
+}
+
+export async function removeTranslationRemotely(lang) {
+  try {
+    await ensureSignedIn();
+    await runTransaction(db, async (tx) => {
+      const menu = (await tx.get(menuRef())).data();
+      if (!menu.translations?.[lang]) return;
+      delete menu.translations[lang];
+      tx.set(menuRef(), menu);
+    });
+  } catch (err) {
+    console.error(`[test cleanup] Pulizia traduzione "${lang}" fallita:`, err.message || err);
+  }
+}
+
+// Ripristina campi di primo livello del menù (identità, link…) cambiati da un test.
+export async function setMenuFieldsRemotely(fields) {
+  await ensureSignedIn();
+  await runTransaction(db, async (tx) => {
+    const menu = (await tx.get(menuRef())).data();
+    tx.set(menuRef(), { ...menu, ...fields });
+  });
+}
+
+// Best-effort: una persona aggiunta dal test al personale (staff/{uid}).
+export async function removeStaffRemotely(uid) {
+  try {
+    await ensureSignedIn();
+    await deleteDoc(doc(db, "staff", uid));
+  } catch (err) {
+    console.error(`[test cleanup] Pulizia personale "${uid}" fallita:`, err.message || err);
   }
 }
