@@ -1,7 +1,7 @@
 # Prenotazioni tavoli — documento di progetto
 
 Stato: **implementato**
-Ultimo aggiornamento: 2026-09-05
+Ultimo aggiornamento: 2026-10-14
 
 Questo documento descrive il modello dati e le scelte di progetto della
 funzionalità di gestione prenotazioni tavoli, riservata al personale (stesso
@@ -11,9 +11,8 @@ stile di `docs/comande-camerieri.md` per le comande).
 
 ## 1. Obiettivo
 
-Permettere di registrare manualmente le prenotazioni telefoniche/di persona,
-confermarle o rifiutarle avendo sotto controllo i coperti già prenotati per
-il giorno, e farle apparire automaticamente in Sala il giorno stesso perché
+Permettere di registrare manualmente le prenotazioni telefoniche/di persona
+avendo sotto controllo i coperti già prenotati per il giorno, e farle apparire automaticamente in Sala il giorno stesso perché
 il cameriere possa "avviarle" (aprire la comanda) senza dover ridigitare
 tavolo/coperti/note.
 
@@ -24,7 +23,6 @@ vedi §6):
 - Avvisi di overbooking/capacità massima per turno.
 - Riconoscimento cliente abituale (storico per numero di telefono).
 - Stampa/esportazione della lista prenotazioni del giorno.
-- Link diretto dalla comanda avviata al suo dettaglio in Sala.
 - Un ruolo "bar" dedicato: la panoramica coperti è visibile a chiunque acceda
   a Prenotazioni (cameriere e admin), che copre l'esigenza senza introdurre
   un nuovo ruolo in `staff/{uid}`.
@@ -62,7 +60,8 @@ reservations/{id}
   notes: string
   tableNumber: number | null   // assegnazione facoltativa in anticipo
 
-  status: "pending" | "confirmed" | "rejected" | "started" | "no_show" | "cancelled"
+  status: "confirmed" | "started" | "no_show" | "cancelled"
+          // + "pending" / "rejected" solo su documenti vecchi (vedi sotto)
 
   createdBy: { uid, name }, createdAt: Timestamp
   confirmedBy: { uid, name } | null, confirmedAt: Timestamp | null
@@ -84,13 +83,23 @@ usato in `orders.js`.
 ### Ciclo di stato
 
 ```
-pending ──conferma──▶ confirmed ──avvia──▶ started (con orderId collegato)
-   │                      │
-   └──rifiuta──▶ rejected └──annulla──▶ cancelled
-                          └──(data passata, mai avviata)──▶ no_show (automatico)
+(salva) ──▶ confirmed ──avvia──▶ started (con orderId collegato)
+               ├──annulla──▶ cancelled
+               └──(data passata, mai avviata)──▶ no_show (automatico)
 ```
 
-`started`, `rejected`, `cancelled`, `no_show` sono stati terminali.
+`started`, `cancelled`, `no_show` sono stati terminali.
+
+**Niente più "da confermare" (ottobre 2026).** Lo staff registra solo
+prenotazioni già concordate col cliente, quindi il passaggio di conferma
+creava soltanto confusione: `createReservation()` salva direttamente
+`confirmed` (con `confirmedBy` = chi la inserisce) e l'interfaccia non
+distingue più tra confermate e non confermate (stato scritto: *Prenotata*).
+Le prenotazioni salvate prima come `pending` restano nel database così come
+sono, senza migrazione: `isBooked()` (`reservationsData.js`) le tratta come
+`confirmed` ovunque (Prenotazioni, Tavoli, no-show automatico). Le vecchie
+`rejected` compaiono tra le "annullate e non presentate" come *Rifiutata*
+finché la pulizia dei 30 giorni non le cancella.
 
 ---
 
@@ -106,10 +115,19 @@ autoregistrazione pubblica).
 
 ## 5. Integrazione con l'area cameriere
 
-All'inizio del turno, `Waiter.jsx` sottoscrive le prenotazioni confermate per
-la data odierna (`subscribeReservationsForDate(dateKey())`) e le mostra in
-una sezione "Prenotazioni di oggi" sopra il pulsante "Nuovo tavolo". Il
-pulsante "Avvia" richiama `startReservation()`, che:
+All'inizio del turno, la Sala (`useSalaData` in `sala-shared.jsx`, per
+`Waiter.jsx` e `TillSala.jsx`) sottoscrive le prenotazioni della data
+odierna (`subscribeReservationsForDate(dateKey())`, solo quelle `isBooked`,
+in ordine di orario) e le mostra come "Prenotazioni di oggi": in cima ai
+Tavoli sul telefono, nella colonna a destra alla cassa. Ogni prenotazione è
+una scheda (`ReservationCard`, `OrderUi.jsx`, la stessa sui due
+dispositivi):
+
+- **toccando la scheda** si apre la prenotazione in Prenotazioni
+  (`TillReservations` con `initialReservation`): dettagli, Modifica, Annulla
+  e "Avvia (apri il tavolo)";
+- il pulsante **"Avvia"** sulla scheda resta come scorciatoia e richiama
+  `startReservation()`, che:
 
 1. apre una comanda (`openOrder()` di `orders.js`) con tavolo (se già
    assegnato, altrimenti chiesto al momento con un piccolo modal),
@@ -120,7 +138,7 @@ pulsante "Avvia" richiama `startReservation()`, che:
 Il cameriere continua poi a lavorare sulla comanda esattamente come su un
 tavolo aperto normalmente — nessuna differenza da quel punto in poi.
 
-Il calendario completo (conferma/rifiuto) è sempre a un tocco dalla Sala:
+Il calendario completo è sempre a un tocco dalla Sala:
 è la sezione "Prenotazioni" della barra in basso, oltre alle prenotazioni
 del giorno mostrate in cima ai Tavoli.
 
@@ -130,9 +148,9 @@ del giorno mostrate in cima ai Tavoli.
 
 Sul telefono la Dashboard a riquadri non c'è più: l'area staff è un'app con
 le sezioni nella barra in basso (Tavoli · Prenotazioni · Storico e, per gli
-admin, Menù · Statistiche — vedi `docs/stampa-scontrini.md` §4.2). Il
-conteggio "da confermare" è il badge arancione su **Prenotazioni**, i tavoli
-aperti il badge su **Tavoli**. `/prenotazioni` apre la stessa app sulla
+admin, Menù · Statistiche — vedi `docs/stampa-scontrini.md` §4.2). I tavoli
+aperti sono il badge su **Tavoli**; Prenotazioni non ha badge (non c'è più
+nulla "da confermare"). `/prenotazioni` apre la stessa app sulla
 sezione Prenotazioni.
 
 ---
@@ -142,7 +160,7 @@ sezione Prenotazioni.
 Stesso meccanismo "pigro" lato client di `orders.js` (§6 di
 `docs/comande-camerieri.md`), per restare sul piano Firebase gratuito:
 
-- Le prenotazioni `confirmed` con data ormai passata e mai avviate vengono
+- Le prenotazioni `confirmed` (o vecchie `pending`) con data ormai passata e mai avviate vengono
   marcate `no_show` al successivo caricamento del calendario
   (`autoFlagNoShows`).
 - Le prenotazioni in stato terminale vengono cancellate 30 giorni dopo
@@ -154,13 +172,16 @@ Stesso meccanismo "pigro" lato client di `orders.js` (§6 di
 ## 8. Testing
 
 `tests/reservations.spec.js` (Playwright, stesso stile di
-`tests/waiter-order.spec.js`): login richiesto, creazione, conferma,
-rifiuto, navigazione tra i mesi del calendario, e il flusso end-to-end
-"avvia da Sala → apre comanda con i dati corretti". Dati sentinella
+`tests/waiter-order.spec.js`): login richiesto, creazione (subito valida,
+senza conferma), vecchie `pending` mostrate come le altre
+(`tests/helpers/reservations.js`), annullamento, navigazione tra i mesi del
+calendario, la scheda nei Tavoli che apre la prenotazione, e il flusso
+end-to-end "avvia da Sala → apre comanda con i dati corretti". Alla cassa
+lo stesso in `tests/till-sala.spec.js`. Dati sentinella
 randomizzati e cleanup dedicato in `tests/firestore-cleanup.js`
 (`deleteTestReservationByName`).
 
-I pulsanti di azione per riga (Conferma/Rifiuta/Avvia) hanno un
+I pulsanti di azione per riga ("Avvia", la scheda nei Tavoli) hanno un
 `aria-label` che include il nome della prenotazione: sono infatti ripetuti
 identici per ogni riga della lista (a differenza dei tavoli in Sala,
 identificati dal numero), e i test girano con `fullyParallel: true` — più

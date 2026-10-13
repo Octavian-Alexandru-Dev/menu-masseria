@@ -67,6 +67,12 @@ export const MENU_DOC_PATH = ["menu", "data"];
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
+// "smooth" scrolling, unless the device asks for reduced motion (system
+// setting; also how the E2E tests run): then the jump is instant.
+export function scrollBehavior() {
+  return globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}
+
 /* ============================== DISH SEARCH ============================== */
 // Case/accent-insensitive comparison ("crema di pomodoro" matches "Crémá"),
 // used both by the customer menu and by the waiter's order-taking screen.

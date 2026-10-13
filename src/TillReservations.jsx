@@ -6,12 +6,13 @@
 // new/edit form. On a phone the same pieces in one column, the panel as a
 // full-screen page. Times are picked from the same slots the public booking
 // form offers (landing page) or typed ("Altro orario"), covers and table
-// with steppers.
+// with steppers. `initialReservation`: opens straight on that reservation
+// (tapped in Tavoli).
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, Check, X, Play, Pencil, Phone, Users, CalendarDays } from "lucide-react";
 import {
-  subscribeReservationsForRange, subscribeReservationsForDate, dateKey, coversLabel, autoFlagNoShows,
-  createReservation, updateReservation, confirmReservation, rejectReservation, cancelReservation,
+  subscribeReservationsForRange, subscribeReservationsForDate, dateKey, coversLabel, autoFlagNoShows, isBooked,
+  createReservation, updateReservation, cancelReservation,
   runDailyExpiredReservationsCleanup,
 } from "./reservationsData";
 import { confirmAction } from "./confirmDialog";
@@ -27,15 +28,16 @@ const CELL_DATE_LABEL = new Intl.DateTimeFormat("it-IT", { day: "numeric", month
 const LUNCH_SLOTS = ["12:30", "12:45", "13:00", "13:15", "13:30", "13:45", "14:00", "14:15", "14:30"];
 const DINNER_SLOTS = ["20:00", "20:15", "20:30", "20:45", "21:00", "21:15", "21:30", "21:45", "22:00", "22:15", "22:30"];
 
-const ACTIVE = ["pending", "confirmed", "started"];
+const BOOKED = { label: "Prenotata", color: STATUS.ok };
 const STATUS_INFO = {
-  pending: { label: "Da confermare", color: STATUS.waiting },
-  confirmed: { label: "Confermata", color: STATUS.ok },
   started: { label: "Al tavolo", color: STATUS.info },
-  rejected: { label: "Rifiutata", color: STATUS.idle },
+  rejected: { label: "Rifiutata", color: STATUS.idle }, // only on old documents
   cancelled: { label: "Annullata", color: STATUS.idle },
   no_show: { label: "Non presentata", color: STATUS.idle },
 };
+const statusInfo = (r) => (isBooked(r) ? BOOKED : STATUS_INFO[r.status] || BOOKED);
+// Still counted for the day: booked, or already at the table.
+const isActive = (r) => isBooked(r) || r.status === "started";
 
 function parseKey(key) {
   return new Date(`${key}T00:00:00`);
@@ -83,9 +85,9 @@ function Calendar({ t, month, onMonth, selected, onSelect, counts, compact = fal
           const isToday = key === todayKey;
           return (
             <button key={key} type="button" onClick={() => onSelect(key)} aria-pressed={isSel} className="mdp-btn"
-              aria-label={c?.total ? `${CELL_DATE_LABEL.format(date)}, ${c.total} prenotazioni, ${c.covers} coperti${c.pending ? `, ${c.pending} da confermare` : ""}` : CELL_DATE_LABEL.format(date)}
+              aria-label={c?.total ? `${CELL_DATE_LABEL.format(date)}, ${c.total} prenotazioni, ${c.covers} coperti` : CELL_DATE_LABEL.format(date)}
               style={{
-                position: "relative", minHeight: compact ? 48 : 58, borderRadius: compact ? 10 : 12, cursor: "pointer", fontFamily: FONT, padding: "4px 2px",
+                minHeight: compact ? 48 : 58, borderRadius: compact ? 10 : 12, cursor: "pointer", fontFamily: FONT, padding: "4px 2px",
                 border: `1.5px solid ${isSel ? t.primary : isToday ? t.ink : t.line}`,
                 background: isSel ? t.primary : t.card, color: isSel ? t.bg : t.ink,
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
@@ -94,19 +96,11 @@ function Calendar({ t, month, onMonth, selected, onSelect, counts, compact = fal
               <span style={{ fontSize: compact ? 10 : 11, fontWeight: 700, visibility: c?.total ? "visible" : "hidden", whiteSpace: "nowrap" }}>
                 {compact ? `${c?.total || 0}·${c?.covers || 0}p` : `${c?.total || 0} · ${c?.covers || 0}p`}
               </span>
-              {c?.pending > 0 && (
-                <span aria-hidden="true" style={{ position: "absolute", top: 5, right: 5, width: 9, height: 9, borderRadius: 5, background: STATUS.waiting, border: "1.5px solid #fff" }} />
-              )}
             </button>
           );
         })}
       </div>
-      <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 13, color: t.inkSoft, flexWrap: "wrap" }}>
-        <span>«3 · 12p» = 3 prenotazioni, 12 coperti</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 9, height: 9, borderRadius: 5, background: STATUS.waiting }} /> da confermare
-        </span>
-      </div>
+      <div style={{ marginTop: 10, fontSize: 13, color: t.inkSoft }}>«3 · 12p» = 3 prenotazioni, 12 coperti</div>
     </div>
   );
 }
@@ -169,17 +163,10 @@ function ReservationForm({ t, initial, defaultDate, busy, onCancel, onSave, shee
           <div style={{ fontSize: 22, fontWeight: 700 }}>{isEdit ? "Modifica prenotazione" : "Nuova prenotazione"}</div>
         </div>
       )}
-      footer={isEdit ? (
-        <TillButton t={t} variant="primary" size={60} icon={Check} disabled={!valid || busy} onClick={() => onSave(fields(), false)}>
-          {busy ? "Salvataggio…" : "Salva modifiche"}
+      footer={(
+        <TillButton t={t} variant="primary" size={60} icon={Check} disabled={!valid || busy} onClick={() => onSave(fields())}>
+          {busy ? "Salvataggio…" : isEdit ? "Salva modifiche" : "Salva prenotazione"}
         </TillButton>
-      ) : (
-        <>
-          <TillButton t={t} variant="primary" size={60} icon={Check} disabled={!valid || busy} onClick={() => onSave(fields(), true)}>
-            {busy ? "Salvataggio…" : "Salva e conferma"}
-          </TillButton>
-          <TillButton t={t} disabled={!valid || busy} onClick={() => onSave(fields(), false)}>Salva da confermare</TillButton>
-        </>
       )}
     >
       <div style={{ display: "grid", gap: 16, paddingTop: 4 }}>
@@ -233,8 +220,8 @@ function ReservationForm({ t, initial, defaultDate, busy, onCancel, onSave, shee
 
 /* --------------------------------- detail --------------------------------- */
 
-function ReservationDetail({ t, r, busy, onConfirm, onReject, onCancelReservation, onEdit, onAvvia, onGoToTable, sheet = false, onClose }) {
-  const info = STATUS_INFO[r.status] || STATUS_INFO.pending;
+function ReservationDetail({ t, r, busy, onCancelReservation, onEdit, onAvvia, onGoToTable, sheet = false, onClose }) {
+  const info = statusInfo(r);
   const isToday = r.date === dateKey();
   const row = (lbl, val) => val ? (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", borderBottom: `1px solid ${t.line}`, fontSize: 17 }}>
@@ -242,17 +229,7 @@ function ReservationDetail({ t, r, busy, onConfirm, onReject, onCancelReservatio
     </div>
   ) : null;
   let footer = null;
-  if (r.status === "pending") {
-    footer = (
-      <>
-        <TillButton t={t} variant="primary" size={60} icon={Check} disabled={busy} onClick={onConfirm}>Conferma</TillButton>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <TillButton t={t} icon={Pencil} disabled={busy} onClick={onEdit}>Modifica</TillButton>
-          <TillButton t={t} variant="danger" icon={X} disabled={busy} onClick={onReject}>Rifiuta</TillButton>
-        </div>
-      </>
-    );
-  } else if (r.status === "confirmed") {
+  if (isBooked(r)) {
     footer = (
       <>
         {isToday && <TillButton t={t} variant="primary" size={60} icon={Play} disabled={busy} onClick={onAvvia}>Avvia (apri il tavolo)</TillButton>}
@@ -285,7 +262,7 @@ function ReservationDetail({ t, r, busy, onConfirm, onReject, onCancelReservatio
       {row("Telefono", r.phone)}
       {row("Note", r.notes)}
       {row("Inserita da", r.createdBy?.name)}
-      {r.status === "confirmed" && !isToday && (
+      {isBooked(r) && !isToday && (
         <div style={{ fontSize: 15, color: t.inkSoft, paddingTop: 12 }}>Si potrà avviare (aprire il tavolo) il giorno della prenotazione.</div>
       )}
     </SidePanel>
@@ -294,13 +271,14 @@ function ReservationDetail({ t, r, busy, onConfirm, onReject, onCancelReservatio
 
 /* --------------------------------- screen --------------------------------- */
 
-export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
+export default function TillReservations({ t, session, initialReservation = null, onAvvia, onGoToTable }) {
   const compact = useCompactLayout();
-  const [month, setMonth] = useState(() => monthStart(new Date()));
-  const [selectedDate, setSelectedDate] = useState(dateKey());
+  const startDate = initialReservation?.date || dateKey();
+  const [month, setMonth] = useState(() => monthStart(parseKey(startDate)));
+  const [selectedDate, setSelectedDate] = useState(startDate);
   const [monthList, setMonthList] = useState([]);
   const [dayList, setDayList] = useState([]);
-  const [panel, setPanel] = useState({ mode: "none" }); // none | detail {id} | new | edit {r}
+  const [panel, setPanel] = useState(() => (initialReservation ? { mode: "detail", id: initialReservation.id } : { mode: "none" })); // none | detail {id} | new | edit {r}
   const [busy, setBusy] = useState(false);
   const [showOthers, setShowOthers] = useState(false);
 
@@ -320,19 +298,16 @@ export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
 
   const counts = {};
   monthList.forEach((r) => {
-    if (!counts[r.date]) counts[r.date] = { total: 0, covers: 0, pending: 0 };
-    if (ACTIVE.includes(r.status)) {
-      counts[r.date].total += 1;
-      counts[r.date].covers += (r.covers?.adults || 0) + (r.covers?.children || 0);
-    }
-    if (r.status === "pending") counts[r.date].pending += 1;
+    if (!isActive(r)) return;
+    if (!counts[r.date]) counts[r.date] = { total: 0, covers: 0 };
+    counts[r.date].total += 1;
+    counts[r.date].covers += (r.covers?.adults || 0) + (r.covers?.children || 0);
   });
 
   const byTime = (a, b) => (a.time || "99").localeCompare(b.time || "99");
-  const active = dayList.filter((r) => ACTIVE.includes(r.status)).sort(byTime);
-  const others = dayList.filter((r) => !ACTIVE.includes(r.status)).sort(byTime);
+  const active = dayList.filter(isActive).sort(byTime);
+  const others = dayList.filter((r) => !isActive(r)).sort(byTime);
   const dayCovers = active.reduce((s, r) => s + (r.covers?.adults || 0) + (r.covers?.children || 0), 0);
-  const dayPending = active.filter((r) => r.status === "pending").length;
   const selected = panel.mode === "detail" ? dayList.find((r) => r.id === panel.id) : null;
   const by = { uid: session.user.uid, name: session.name };
 
@@ -348,24 +323,18 @@ export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
     try { await fn(); } catch (err) { console.error("[till] Operazione sulla prenotazione fallita:", err); } finally { setBusy(false); }
   };
 
-  const save = (fields, confirmNow) => run(async () => {
+  const save = (fields) => run(async () => {
     if (panel.mode === "edit") {
       await updateReservation(panel.r.id, fields);
       selectDate(fields.date);
       setPanel({ mode: "detail", id: panel.r.id });
     } else {
       const ref = await createReservation({ ...fields, createdByUid: session.user.uid, createdByName: session.name });
-      if (confirmNow) await confirmReservation(ref.id, by);
       selectDate(fields.date);
       setPanel({ mode: "detail", id: ref.id });
     }
   });
 
-  const reject = async (r) => {
-    if (await confirmAction({ title: `Rifiutare la prenotazione di ${r.name || "senza nome"}?`, confirmLabel: "Rifiuta", danger: true })) {
-      run(() => rejectReservation(r.id, by));
-    }
-  };
   const cancel = async (r) => {
     if (await confirmAction({ title: `Annullare la prenotazione di ${r.name || "senza nome"}?`, message: "Ad esempio se il cliente ha disdetto.", confirmLabel: "Annulla prenotazione", cancelLabel: "Indietro", danger: true })) {
       run(() => cancelReservation(r.id, by));
@@ -373,7 +342,7 @@ export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
   };
 
   const rowFor = (r) => {
-    const info = STATUS_INFO[r.status] || STATUS_INFO.pending;
+    const info = statusInfo(r);
     const isSel = panel.mode === "detail" && panel.id === r.id;
     return (
       <button key={r.id} type="button" onClick={() => setPanel({ mode: "detail", id: r.id })} aria-pressed={isSel} className="mdp-btn"
@@ -403,8 +372,6 @@ export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
       defaultDate={selectedDate} busy={busy} onCancel={() => setPanel(panel.mode === "edit" ? { mode: "detail", id: panel.r.id } : { mode: "none" })} onSave={save} />;
   } else if (selected) {
     side = <ReservationDetail t={t} r={selected} busy={busy} sheet={compact} onClose={() => setPanel({ mode: "none" })}
-      onConfirm={() => run(() => confirmReservation(selected.id, by))}
-      onReject={() => reject(selected)}
       onCancelReservation={() => cancel(selected)}
       onEdit={() => setPanel({ mode: "edit", r: selected })}
       onAvvia={() => onAvvia(selected)}
@@ -435,7 +402,6 @@ export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
           </div>
           <div style={{ fontSize: 16, color: t.inkSoft, marginTop: 2 }}>
             {active.length} {active.length === 1 ? "prenotazione" : "prenotazioni"} · {dayCovers} coperti
-            {dayPending > 0 && <span style={{ color: STATUS.waiting, fontWeight: 700 }}> · {dayPending} da confermare</span>}
           </div>
         </div>
         {!compact && <TillButton t={t} variant="primary" icon={Plus} onClick={() => setPanel({ mode: "new" })}>Nuova</TillButton>}
@@ -445,7 +411,7 @@ export default function TillReservations({ t, session, onAvvia, onGoToTable }) {
       {others.length > 0 && (
         <div style={{ marginTop: 18 }}>
           <TillButton t={t} variant="ghost" onClick={() => setShowOthers((v) => !v)} aria-expanded={showOthers} style={{ paddingLeft: 0, textAlign: "left" }}>
-            {showOthers ? "Nascondi" : "Mostra"} rifiutate, annullate e non presentate ({others.length})
+            {showOthers ? "Nascondi" : "Mostra"} annullate e non presentate ({others.length})
           </TillButton>
           {showOthers && <div style={{ display: "grid", gap: 10, marginTop: 8, opacity: 0.8 }}>{others.map(rowFor)}</div>}
         </div>

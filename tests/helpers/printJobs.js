@@ -1,19 +1,11 @@
 // Accesso Node-side alla coda di stampa (printJobs, vedi src/printJobs.js)
 // sull'emulatore: semina richieste "vecchie" per il test di scadenza, legge
 // lo stato di una richiesta e pulisce quelle create dai test.
-import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, deleteDoc, Timestamp } from "firebase/firestore";
-import { TEST_WAITER } from "../test-env.js";
-import { auth, db } from "./emulatorApp.js";
-
-let signInPromise = null;
-function ensureSignedIn() {
-  if (!signInPromise) signInPromise = signInWithEmailAndPassword(auth, TEST_WAITER.email, TEST_WAITER.password);
-  return signInPromise;
-}
+import { waiterDb } from "./emulatorApp.js";
 
 export async function seedPrintJob(id, { tableLabel, createdAtMs }) {
-  await ensureSignedIn();
+  const db = await waiterDb();
   await setDoc(doc(db, "printJobs", id), {
     type: "receipt",
     orderId: null,
@@ -26,7 +18,7 @@ export async function seedPrintJob(id, { tableLabel, createdAtMs }) {
 }
 
 export async function getPrintJob(id) {
-  await ensureSignedIn();
+  const db = await waiterDb();
   const snap = await getDoc(doc(db, "printJobs", id));
   return snap.exists() ? snap.data() : null;
 }
@@ -34,7 +26,7 @@ export async function getPrintJob(id) {
 // Best-effort, come firestore-cleanup.js: non deve mai far fallire un test.
 export async function deletePrintJobsByTableLabel(tableLabel) {
   try {
-    await ensureSignedIn();
+    const db = await waiterDb();
     const snap = await getDocs(query(collection(db, "printJobs"), where("payload.tableLabel", "==", tableLabel)));
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
   } catch (err) {
@@ -46,7 +38,7 @@ export async function deletePrintJobsByTableLabel(tableLabel) {
 // le ha prese, quando, con quale esito), da allegare al report quando un
 // test fallisce.
 export async function describePrintJobsByTableLabel(tableLabel) {
-  await ensureSignedIn();
+  const db = await waiterDb();
   const snap = await getDocs(query(collection(db, "printJobs"), where("payload.tableLabel", "==", tableLabel)));
   return snap.docs.map((d) => {
     const j = d.data();
@@ -58,7 +50,7 @@ export async function describePrintJobsByTableLabel(tableLabel) {
 // Come se la cassa avesse provato a stampare e la stampante avesse dato
 // errore (nei test del telefono nessuna cassa è accesa).
 export async function failPrintJobsByTableLabel(tableLabel, error) {
-  await ensureSignedIn();
+  const db = await waiterDb();
   const snap = await getDocs(query(collection(db, "printJobs"), where("payload.tableLabel", "==", tableLabel)));
   await Promise.all(snap.docs.map((d) => updateDoc(d.ref, { status: "error", error, claimedBy: "Cassa di test" })));
   return snap.size;

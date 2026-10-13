@@ -49,9 +49,19 @@ export function coversLabel(covers) {
   return parts.length > 0 ? parts.join(", ") : "0 coperti";
 }
 
+// A reservation still waiting for its guests. Reservations are confirmed as
+// soon as they're saved; "pending" only exists on documents created before
+// the confirmation step was removed, and counts as booked like "confirmed".
+export function isBooked(reservation) {
+  return reservation?.status === "confirmed" || reservation?.status === "pending";
+}
+
 /* ============================== WRITES ============================== */
 
+// Saved directly as "confirmed" (by whoever enters it): staff only write
+// reservations they've already agreed with the customer.
 export async function createReservation({ date, time, name, phone, covers, notes, tableNumber, createdByUid, createdByName }) {
+  const by = { uid: createdByUid, name: createdByName };
   return addDoc(reservationsRef(), {
     date,
     time: time || "",
@@ -60,10 +70,10 @@ export async function createReservation({ date, time, name, phone, covers, notes
     covers: { adults: covers?.adults || 0, children: covers?.children || 0 },
     notes: notes || "",
     tableNumber: tableNumber || null,
-    status: "pending",
-    createdBy: { uid: createdByUid, name: createdByName },
+    status: "confirmed",
+    createdBy: by,
     createdAt: serverTimestamp(),
-    confirmedBy: null, confirmedAt: null,
+    confirmedBy: by, confirmedAt: serverTimestamp(),
     rejectedBy: null, rejectedAt: null,
     cancelledBy: null, cancelledAt: null,
     noShowAt: null,
@@ -72,22 +82,10 @@ export async function createReservation({ date, time, name, phone, covers, notes
   });
 }
 
-// Edits the fields of a still-active reservation (pending/confirmed): same
-// form used to create it, reused for editing.
+// Edits the fields of a booked reservation (isBooked): same form used to
+// create it, reused for editing.
 export async function updateReservation(id, fields) {
   return updateDoc(reservationRef(id), fields);
-}
-
-export async function confirmReservation(id, by) {
-  return updateDoc(reservationRef(id), {
-    status: "confirmed", confirmedBy: by, confirmedAt: serverTimestamp(),
-  });
-}
-
-export async function rejectReservation(id, by) {
-  return updateDoc(reservationRef(id), {
-    status: "rejected", rejectedBy: by, rejectedAt: serverTimestamp(), expireAt: expireAtFromNow(),
-  });
 }
 
 export async function cancelReservation(id, by) {
@@ -139,22 +137,14 @@ export function subscribeReservationsForDate(dateStr, onChange, onError) {
   return subscribeReservationsForRange(dateStr, dateStr, onChange, onError);
 }
 
-// "To confirm" count, for the badge in the Dashboard (StaffHome.jsx).
-export function subscribePendingReservations(onChange, onError) {
-  const q = query(reservationsRef(), where("status", "==", "pending"));
-  return onSnapshot(q, (snap) => {
-    onChange(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  }, onError);
-}
-
 /* ======================= "LAZY" AUTOMATIC CLEANUP ======================= */
 
 // Automatic no-show (lazy, same pattern as autoCloseStaleOrders in
-// orders.js): "confirmed" reservations whose date has already passed and
-// were never started become "no_show" the next time the calendar is loaded.
+// orders.js): booked reservations whose date has already passed and were
+// never started become "no_show" the next time the calendar is loaded.
 export async function autoFlagNoShows(reservationsInView) {
   const today = dateKey();
-  const stale = reservationsInView.filter((r) => r.status === "confirmed" && r.date < today);
+  const stale = reservationsInView.filter((r) => isBooked(r) && r.date < today);
   await Promise.all(
     stale.map((r) =>
       updateDoc(reservationRef(r.id), {

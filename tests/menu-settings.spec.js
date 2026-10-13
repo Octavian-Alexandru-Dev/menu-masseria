@@ -94,7 +94,7 @@ test("Traduzioni: un testo si corregge a mano e la lingua si elimina dopo confer
     await name.fill("La Masseria");
     await panel.getByRole("button", { name: "Salva 1 testo" }).click();
     await expect(panel.getByText("Traduzioni salvate.")).toBeVisible({ timeout: 10_000 });
-    expect((await getMenu()).translations.fr.restaurantName).toBe("La Masseria");
+    await expect.poll(async () => (await getMenu()).translations.fr.restaurantName).toBe("La Masseria");
 
     await panel.getByRole("button", { name: "Elimina traduzione FR" }).click();
     const confirm = page.getByRole("alertdialog", { name: "Eliminare la traduzione FR?" });
@@ -103,7 +103,7 @@ test("Traduzioni: un testo si corregge a mano e la lingua si elimina dopo confer
     await panel.getByRole("button", { name: "Elimina traduzione FR" }).click();
     await confirm.getByRole("button", { name: "Elimina traduzione" }).click();
     await expect(panel.getByText("Nessuna traduzione FR")).toBeVisible({ timeout: 10_000 });
-    expect((await getMenu()).translations?.fr).toBeUndefined();
+    await expect.poll(async () => (await getMenu()).translations?.fr).toBeUndefined();
   } finally {
     await removeTranslationRemotely("fr");
   }
@@ -155,7 +155,7 @@ test("Personale: si crea un account nuovo con email e password, l'admin resta de
     await expect(panel.getByRole("status")).toContainText(`entra con ${email}`, { timeout: 10_000 });
     const list = panel.getByRole("list", { name: "Persone con accesso" });
     await expect(list.getByRole("listitem").filter({ hasText: "Cameriere nuovo · Cameriere" })).toContainText(email);
-    expect(await findStaffByEmail(email)).toMatchObject({ name: "Cameriere nuovo", role: "waiter", email });
+    await expect.poll(() => findStaffByEmail(email)).toMatchObject({ name: "Cameriere nuovo", role: "waiter", email });
     // Il form si svuota per la persona successiva.
     await expect(panel.getByRole("textbox", { name: "Email della persona" })).toHaveValue("");
     // Creare l'account non fa uscire l'admin (istanza Firebase secondaria).

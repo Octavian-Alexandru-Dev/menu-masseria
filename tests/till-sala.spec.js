@@ -288,7 +288,7 @@ test("il preconto si stampa direttamente dalla barra laterale e il tavolo lo seg
   await expect(page.getByRole("button", { name: new RegExp(`^Tavolo ${tableNumber} — Preconto stampato`) })).toBeVisible({ timeout: 10_000 });
 });
 
-test("prenotazioni della cassa: si crea con orari a tocco, si conferma e si avvia aprendo il tavolo", async ({ page }) => {
+test("prenotazioni della cassa: si crea con orari a tocco, è subito valida e si avvia aprendo il tavolo", async ({ page }) => {
   await openTill(page);
   const name = `Prova Cassa ${Date.now()}`;
   usedReservations.push(name);
@@ -303,14 +303,15 @@ test("prenotazioni della cassa: si crea con orari a tocco, si conferma e si avvi
   const tableNumber = freshTableNumber();
   usedTables.push(tableNumber);
   // Il tavolo si sceglie poi all'avvio (tastierino): qui resta "da assegnare".
-  await form.getByRole("button", { name: "Salva da confermare" }).click();
+  // Un solo "Salva": la prenotazione nasce già confermata.
+  await expect(form.getByRole("button", { name: /^salva/i })).toHaveCount(1);
+  await form.getByRole("button", { name: "Salva prenotazione" }).click();
 
   const day = page.getByRole("region", { name: "Prenotazioni del giorno" });
-  const row = day.getByRole("button", { name: new RegExp(`^${name}, ore 20:30, 3 adulti, Da confermare`) });
-  await expect(row).toBeVisible({ timeout: 10_000 });
+  await expect(day.getByRole("button", { name: new RegExp(`^${name}, ore 20:30, 3 adulti, Prenotata`) })).toBeVisible({ timeout: 10_000 });
   const detail = page.getByRole("region", { name: "Dettaglio prenotazione" });
-  await detail.getByRole("button", { name: "Conferma" }).click();
-  await expect(day.getByRole("button", { name: new RegExp(`^${name}, ore 20:30, 3 adulti, Confermata`) })).toBeVisible({ timeout: 10_000 });
+  await expect(detail.getByRole("button", { name: "Conferma" })).toHaveCount(0);
+  await expect(page.getByText(/da confermare/i)).toHaveCount(0);
 
   // Avvio: chiede il numero del tavolo con il tastierino e apre la comanda.
   await detail.getByRole("button", { name: "Avvia (apri il tavolo)" }).click();
@@ -320,6 +321,53 @@ test("prenotazioni della cassa: si crea con orari a tocco, si conferma e si avvi
   // Il tavolo prende il nome della prenotazione; il numero è nell'intestazione.
   await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — ${name}`, { timeout: 10_000 });
   await expect(page.getByRole("region", { name: "Menu" })).toContainText(`Tavolo ${tableNumber}`);
+});
+
+test("Tavoli della cassa: toccando una prenotazione di oggi si apre la sua scheda in Prenotazioni, da cui si avvia; 'Avvia' resta il tasto rapido", async ({ page }) => {
+  await openTill(page);
+  const name = `Dai Tavoli ${Date.now()}`;
+  const quick = `Rapida ${Date.now()}`;
+  usedReservations.push(name, quick);
+  const sections = page.getByRole("navigation", { name: "Sezioni della sala" });
+  await sections.getByRole("button", { name: /^prenotazioni$/i }).click();
+  for (const [who, time] of [[name, "21:30"], [quick, "21:45"]]) {
+    await page.getByRole("region", { name: "Prenotazioni del giorno" }).getByRole("button", { name: "Nuova" }).click();
+    const form = page.getByRole("region", { name: "Nuova prenotazione" });
+    await form.getByRole("button", { name: time }).click();
+    await form.getByRole("textbox", { name: "Nome *" }).fill(who);
+    await form.getByRole("button", { name: "Salva prenotazione" }).click();
+    await expect(page.getByRole("region", { name: "Dettaglio prenotazione" })).toContainText(who, { timeout: 10_000 });
+  }
+
+  // Dai Tavoli, la scheda della prenotazione apre il dettaglio in Prenotazioni.
+  await sections.getByRole("button", { name: /^Tavoli( \d+)?$/ }).click();
+  const todays = page.getByRole("complementary", { name: "Prenotazioni di oggi" });
+  await todays.getByRole("button", { name: new RegExp(`^${name}, ore 21:30, 2 adulti — apri la prenotazione`) }).click();
+  const detail = page.getByRole("region", { name: "Dettaglio prenotazione" });
+  await expect(detail).toContainText(name);
+  await expect(detail).toContainText("ore 21:30");
+  await expect(page.getByRole("region", { name: "Calendario" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Prenotazioni del giorno" }).getByRole("button", { name: new RegExp(`^${name}, `) })).toHaveAttribute("aria-pressed", "true");
+
+  // Avvio dal dettaglio: tastierino e comanda aperta.
+  const tableNumber = freshTableNumber();
+  usedTables.push(tableNumber);
+  await detail.getByRole("button", { name: "Avvia (apri il tavolo)" }).click();
+  let dialog = page.getByRole("dialog", { name: `Avvia ${name}` });
+  for (const digit of String(tableNumber)) await dialog.getByRole("button", { name: `Cifra ${digit}` }).click();
+  await dialog.getByRole("button", { name: "Apri comanda" }).click();
+  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — ${name}`, { timeout: 10_000 });
+
+  // Il tasto rapido "Avvia" sulla scheda nei Tavoli funziona ancora, senza passare dal dettaglio.
+  await sections.getByRole("button", { name: /^Tavoli( \d+)?$/ }).click();
+  await expect(todays.getByRole("button", { name: new RegExp(`^${name}, `) })).toHaveCount(0, { timeout: 10_000 });
+  const quickTable = freshTableNumber();
+  usedTables.push(quickTable);
+  await todays.getByRole("button", { name: `Avvia prenotazione di ${quick}` }).click();
+  dialog = page.getByRole("dialog", { name: `Avvia ${quick}` });
+  for (const digit of String(quickTable)) await dialog.getByRole("button", { name: `Cifra ${digit}` }).click();
+  await dialog.getByRole("button", { name: "Apri comanda" }).click();
+  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — ${quick}`, { timeout: 10_000 });
 });
 
 test("il calendario della cassa riassume prenotazioni e coperti del giorno", async ({ page }) => {
@@ -332,9 +380,9 @@ test("il calendario della cassa riassume prenotazioni e coperti del giorno", asy
   await form.getByRole("button", { name: "Giorno successivo" }).click();
   await form.getByRole("button", { name: "13:00" }).click();
   await form.getByRole("textbox", { name: "Nome *" }).fill(name);
-  await form.getByRole("button", { name: "Salva e conferma" }).click();
-  // Si sposta sul giorno della prenotazione, già confermata.
-  await expect(page.getByRole("region", { name: "Prenotazioni del giorno" }).getByRole("button", { name: new RegExp(`^${name}, ore 13:00, 2 adulti, Confermata`) })).toBeVisible({ timeout: 10_000 });
+  await form.getByRole("button", { name: "Salva prenotazione" }).click();
+  // Si sposta sul giorno della prenotazione.
+  await expect(page.getByRole("region", { name: "Prenotazioni del giorno" }).getByRole("button", { name: new RegExp(`^${name}, ore 13:00, 2 adulti, Prenotata`) })).toBeVisible({ timeout: 10_000 });
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const cellLabel = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric" }).format(tomorrow);
@@ -565,7 +613,7 @@ test("alla cassa le impostazioni del menù stanno nella barra laterale e valgono
     expect((await getMenu()).coperto.children).toBe(original); // non ancora salvato
     await panel.getByRole("button", { name: "Salva" }).click();
     await expect(panel.getByRole("status")).toHaveText("Salvato.", { timeout: 10_000 });
-    expect((await getMenu()).coperto.children).toBe("1,50");
+    await expect.poll(async () => (await getMenu()).coperto.children).toBe("1,50");
   } finally {
     await panel.getByRole("button", { name: "Cambia coperto bambini" }).click();
     for (const k of original.replace(",", "").replace(/^0+/, "")) await panel.getByRole("button", { name: `Cifra ${k}` }).click();
@@ -591,7 +639,8 @@ test("alla cassa l'admin crea l'account di una persona nuova dal Personale, senz
     await panel.getByRole("group", { name: "Ruolo" }).getByRole("button", { name: "Amministratore" }).click();
     await panel.getByRole("button", { name: "Crea account" }).click();
     await expect(panel.getByRole("list", { name: "Persone con accesso" }).getByRole("listitem").filter({ hasText: "Responsabile di sala · Amministratore" })).toContainText(email, { timeout: 10_000 });
-    expect(await findStaffByEmail(email)).toMatchObject({ role: "admin", email });
+    // L'elenco si aggiorna già con la scrittura locale: sul server si aspetta che arrivi.
+    await expect.poll(() => findStaffByEmail(email)).toMatchObject({ role: "admin", email });
     // La cassa resta collegata come prima.
     await expect(nav).toBeVisible();
   } finally {

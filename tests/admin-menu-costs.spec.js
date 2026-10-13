@@ -1,12 +1,15 @@
 import { test, expect } from "@playwright/test";
 import { TEST_ADMIN } from "./test-env";
 import { PHONE, navTo, sheet } from "./helpers/phone";
+import { addMenuItemRemotely, removeMenuItemsByNamePrefix, removeMenuCostRemotely } from "./helpers/menuDoc";
 
 // Costo interno di un piatto (src/menuCosts.js, documento separato da
 // menu/data, mai letto dal menù pubblico): si imposta nella scheda del
 // piatto della gestione menù (TillMenu.jsx) dal tastierino e si salva con
 // "Salva" insieme al resto. Questo spec scrive davvero su menuCosts/data
-// nell'emulatore e ripristina il valore seedato.
+// nell'emulatore, ma solo per un piatto nascosto creato apposta: i costi
+// seedati (letti dalle statistiche e dagli altri test in parallelo) non si
+// toccano mai.
 test.use(PHONE);
 
 async function openDish(page, name) {
@@ -43,24 +46,19 @@ test.describe("Costo interno dei piatti", () => {
   });
 
   test("il costo cambiato dal tastierino resta dopo un ricaricamento", async ({ page }) => {
-    let editor = await openDish(page, "Caprese");
-    // Seed: 2,50 (scripts/seed-emulator.js, DEMO_COSTS); si aspetta che arrivi.
-    await expect(editor.getByTestId("till-dish-cost")).toHaveText(/€/, { timeout: 10_000 });
-    const original = (await editor.getByTestId("till-dish-cost").innerText()).replace("€ ", "");
+    const id = `cost-test-${Date.now()}`;
+    const name = `Costo test ${Date.now()}`;
+    await addMenuItemRemotely("cat-antipasti", { id, name, price: "3,00", visible: false, staffOnly: false, kitchenTicket: true });
     try {
+      let editor = await openDish(page, name);
+      await expect(editor.getByTestId("till-dish-cost")).toHaveText("non indicato");
       await setCost(editor, ["9", "9", "9"]);
       await page.reload();
-      editor = await openDish(page, "Caprese");
-      await expect(editor.getByTestId("till-dish-cost")).toHaveText("€ 9,99", { timeout: 10_000 });
+      editor = await openDish(page, name);
+      await expect(editor.getByTestId("till-dish-cost")).toHaveText("€ 9,99");
     } finally {
-      // Ripristino del valore seedato (le statistiche di altri test lo usano).
-      if (!(await editor.isVisible())) editor = await openDish(page, "Caprese");
-      if (original === "non indicato") {
-        await editor.getByRole("button", { name: "Nessun costo" }).click();
-        await editor.getByRole("button", { name: "Salva" }).click();
-      } else {
-        await setCost(editor, original.replace(",", "").replace(/^0+/, "").split(""));
-      }
+      await removeMenuItemsByNamePrefix(name);
+      await removeMenuCostRemotely(id);
     }
   });
 });

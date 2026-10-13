@@ -1,13 +1,15 @@
 // Pieces of a table's order screen shared by the till (TillSala.jsx) and the
 // phone (Waiter.jsx): the line editor, the covers control, the dish tile,
-// the ticket line and the receipt page (also used by Storico). Same controls and labels on both, so a waiter who has
+// the ticket line, the receipt page (also used by Storico) and the card of
+// one of today's reservations in Tavoli. Same controls and labels on both, so a waiter who has
 // used one can use the other; the phone just shows the editor as a
 // full-screen page (`sheet`) instead of in the till's side panel.
 import React, { useState } from "react";
-import { Users, Gift, Percent, RotateCcw, Trash2, Check, Keyboard, Printer } from "lucide-react";
+import { Users, Gift, Percent, RotateCcw, Trash2, Check, Keyboard, Printer, Play, ChevronRight } from "lucide-react";
 import { formatCentsAsPrice, parsePriceToCents, BackButton, tableIdentity } from "./shared";
 import { updateCovers, orderTotalCents, copertoTotalCents, markReceiptPrinted, confirmFinalReceipt } from "./orders";
 import { formatTime } from "./sala-shared";
+import { coversLabel } from "./reservationsData";
 import { usePrintJob } from "./usePrintJob";
 import { confirmAction } from "./confirmDialog";
 import { getDesktopBridge } from "./desktop";
@@ -15,6 +17,40 @@ import { optimizedImageUrl } from "./cloudinary";
 import { TOUCH, FONT, STATUS, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine, DishThumb } from "./TillUi";
 
 const DISCOUNTS = [10, 20, 50];
+
+// One of today's reservations in Tavoli: tapping the card opens it in
+// Prenotazioni (details, edit, start); "Avvia" stays as the shortcut that
+// opens the table right away. `stacked` puts "Avvia" under the details (the
+// till's narrow side column) instead of beside them (phone).
+export function ReservationCard({ t, reservation: r, onOpen, onAvvia, stacked = false }) {
+  const name = r.name || "Senza nome";
+  const details = `${coversLabel(r.covers)}${r.tableNumber ? ` · Tavolo ${r.tableNumber}` : ""}`;
+  return (
+    <div style={{
+      display: "flex", flexDirection: stacked ? "column" : "row", alignItems: stacked ? "stretch" : "center", gap: stacked ? 8 : 10,
+      padding: stacked ? 10 : "6px 10px 6px 6px", borderRadius: 14, border: `1.5px solid ${t.line}`, background: stacked ? t.bg : t.card,
+    }}>
+      <button type="button" onClick={() => onOpen(r)} className="mdp-btn"
+        aria-label={`${name}${r.time ? `, ore ${r.time}` : ""}, ${details} — apri la prenotazione`}
+        style={{
+          flex: 1, minWidth: 0, minHeight: TOUCH, display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 10,
+          border: "none", background: "transparent", color: t.ink, textAlign: "left", cursor: "pointer", fontFamily: FONT,
+        }}>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: 17, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {name}{r.time ? ` · ${r.time}` : ""}
+          </span>
+          <span style={{ display: "block", fontSize: 14, color: t.inkSoft, marginTop: 2 }}>{details}</span>
+        </span>
+        <ChevronRight size={20} color={t.inkSoft} aria-hidden="true" style={{ flexShrink: 0 }} />
+      </button>
+      <TillButton t={t} variant="primary" size={TOUCH} icon={Play} onClick={() => onAvvia(r)} aria-label={`Avvia prenotazione di ${r.name || "senza nome"}`}
+        style={stacked ? { width: "100%" } : { flexShrink: 0 }}>
+        Avvia
+      </TillButton>
+    </div>
+  );
+}
 
 // Editor of one ticket line. Works on a local copy: nothing changes until
 // "Salva" (a stray tap costs nothing). Price options follow what POS systems

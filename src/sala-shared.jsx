@@ -11,7 +11,7 @@ import {
   subscribeOpenOrders, subscribeShiftClosedOrders, openOrder, buildOrderLine, closeOrder,
   autoCloseStaleOrders, orderTotalCents, updateOrderLine, removeOrderLine,
 } from "./orders";
-import { subscribeReservationsForDate, dateKey, startReservation, runDailyExpiredReservationsCleanup } from "./reservationsData";
+import { subscribeReservationsForDate, dateKey, isBooked, startReservation, runDailyExpiredReservationsCleanup } from "./reservationsData";
 import { subscribeMenuCosts } from "./menuCosts";
 import { sendOrderLinesWithKitchenTicket, subscribeUnfinishedKitchenJobs, kitchenJobProblem } from "./printJobs";
 import { useOrderKitchenTickets } from "./usePrintJob";
@@ -85,7 +85,7 @@ export function distinctSearchTags(menu) {
 }
 
 // Everything the Sala screen listens to: open tables, tables closed during
-// the shift, today's confirmed reservations, dish costs — plus opening a
+// the shift, today's booked reservations, dish costs — plus opening a
 // table (directly or from a reservation).
 export function useSalaData({ menu, session }) {
   const [orders, setOrders] = useState([]);
@@ -145,11 +145,11 @@ export function useSalaData({ menu, session }) {
     if (kitchenJobProblem(job, clock)) kitchenProblemsByOrder[job.orderId] = (kitchenProblemsByOrder[job.orderId] || 0) + 1;
   }
 
-  // Confirmed reservations for today: they show up as soon as the shift
+  // Today's booked reservations, by time: they show up as soon as the shift
   // starts, so the waiter can "start" them without retyping table/covers.
   useEffect(() => {
     const unsubscribe = subscribeReservationsForDate(dateKey(), (list) => {
-      setTodaysReservations(list.filter((r) => r.status === "confirmed"));
+      setTodaysReservations(list.filter(isBooked).sort((a, b) => (a.time || "99").localeCompare(b.time || "99")));
     }, (err) => console.error("[waiter] Errore lettura prenotazioni:", err));
     return unsubscribe;
   }, []);

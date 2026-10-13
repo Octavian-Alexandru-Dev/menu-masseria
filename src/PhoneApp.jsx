@@ -8,8 +8,8 @@
 // apps (Material navigation bar: 3–5 destinations, icon + visible label).
 //
 //  - top bar: the section's name, who is signed in and the shift, "Esci";
-//  - bottom bar: the sections, with live counts (open tables, reservations
-//    to confirm) as badges;
+//  - bottom bar: the sections, with the number of open tables as a badge
+//    on Tavoli;
 //  - task screens (a table's order, a new table, a dish being edited, the
 //    full menu editor) take the whole screen, without the two bars, and
 //    have their own "back" at the top left (`setImmersive`).
@@ -18,10 +18,9 @@
 // Back button and a reload stay where they were.
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import { LayoutGrid, CalendarDays, History, BookOpen, BarChart3, LogOut } from "lucide-react";
-import { THEMES, GlobalStyle, currentShiftLabel, useUrlState } from "./shared";
+import { THEMES, GlobalStyle, currentShiftLabel, useUrlState, scrollBehavior } from "./shared";
 import { staffLogout, logoutHiddenAtTill } from "./staff-shared";
 import { subscribeOpenOrders } from "./orders";
-import { subscribePendingReservations } from "./reservationsData";
 import { FONT, TOUCH, useCompactLayout } from "./TillUi";
 
 const WaiterPanel = lazy(() => import("./Waiter").then((m) => ({ default: m.WaiterPanel })));
@@ -103,7 +102,7 @@ function BottomNav({ t, sections, current, onChoose }) {
                 {s.badge > 0 && (
                   <span aria-hidden="true" style={{
                     position: "absolute", top: -4, right: 6, minWidth: 20, height: 20, borderRadius: 10, padding: "0 5px",
-                    background: s.badgeColor || t.primary, color: "#fff", fontSize: 12, fontWeight: 700,
+                    background: t.primary, color: "#fff", fontSize: 12, fontWeight: 700,
                     display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${t.card}`,
                   }}>{s.badge}</span>
                 )}
@@ -128,8 +127,9 @@ export default function PhoneApp({ menu, session, admin = null, initialSection =
   const [immersive, setImmersive] = useState(false);
   // From Prenotazioni to Tavoli: { type: "avvia", reservation } or { type: "open", orderId }.
   const [tableRequest, setTableRequest] = useState(null);
+  // The other way: a reservation of today tapped in Tavoli, opened in Prenotazioni.
+  const [reservationToOpen, setReservationToOpen] = useState(null);
   const [openTables, setOpenTables] = useState(0);
-  const [pendingReservations, setPendingReservations] = useState(0);
   const compact = useCompactLayout();
   useStaffAppMeta(t);
 
@@ -137,14 +137,10 @@ export default function PhoneApp({ menu, session, admin = null, initialSection =
     (list) => setOpenTables(list.length),
     (err) => console.error("[app] Errore lettura tavoli aperti:", err),
   ), []);
-  useEffect(() => subscribePendingReservations(
-    (list) => setPendingReservations(list.length),
-    (err) => console.error("[app] Errore lettura prenotazioni da confermare:", err),
-  ), []);
 
   const sections = [
     { key: "waiter", label: "Tavoli", title: "Tavoli", icon: LayoutGrid, badge: openTables },
-    { key: "reservations", label: "Prenotazioni", title: "Prenotazioni", icon: CalendarDays, badge: pendingReservations, badgeColor: "#c77700" },
+    { key: "reservations", label: "Prenotazioni", title: "Prenotazioni", icon: CalendarDays },
     { key: "history", label: "Storico", title: "Storico", icon: History },
     ...(admin ? [{ key: "admin", label: "Menù", title: "Menù", icon: BookOpen }] : []),
     ...(isAdmin ? [{ key: "stats", label: "Statistiche", title: "Statistiche", icon: BarChart3 }] : []),
@@ -152,9 +148,16 @@ export default function PhoneApp({ menu, session, admin = null, initialSection =
   const current = sections.find((s) => s.key === section) || sections[0];
 
   const choose = (key) => {
-    if (key === current.key) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (key === current.key) { window.scrollTo({ top: 0, behavior: scrollBehavior() }); return; }
     setImmersive(false);
+    setReservationToOpen(null);
     setSection(key);
+    window.scrollTo(0, 0);
+  };
+  const openReservation = (reservation) => {
+    setImmersive(false);
+    setReservationToOpen(reservation);
+    setSection("reservations");
     window.scrollTo(0, 0);
   };
   const goToTables = (request) => {
@@ -167,7 +170,7 @@ export default function PhoneApp({ menu, session, admin = null, initialSection =
 
   let content;
   if (current.key === "reservations") {
-    content = <TillReservations t={t} session={session} onAvvia={(reservation) => goToTables({ type: "avvia", reservation })} onGoToTable={(orderId) => goToTables({ type: "open", orderId })} />;
+    content = <TillReservations t={t} session={session} initialReservation={reservationToOpen} onAvvia={(reservation) => goToTables({ type: "avvia", reservation })} onGoToTable={(orderId) => goToTables({ type: "open", orderId })} />;
   } else if (current.key === "history") {
     content = <TillHistory t={t} menu={menu} isAdmin={isAdmin} />;
   } else if (current.key === "admin") {
@@ -175,7 +178,7 @@ export default function PhoneApp({ menu, session, admin = null, initialSection =
   } else if (current.key === "stats") {
     content = <TillStats t={t} />;
   } else {
-    content = <WaiterPanel menu={menu} session={session} setImmersive={setImmersive} request={tableRequest} onRequestHandled={() => setTableRequest(null)} />;
+    content = <WaiterPanel menu={menu} session={session} setImmersive={setImmersive} request={tableRequest} onRequestHandled={() => setTableRequest(null)} onOpenReservation={openReservation} />;
   }
   // Wider screens (a tablet, a computer) get the till's layout of these
   // sections (list + side panel), which needs a fixed height between the

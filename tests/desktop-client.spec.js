@@ -10,6 +10,7 @@ import { TEST_WAITER, TEST_ADMIN } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
 import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
 import { deletePrintJobsByTableLabel } from "./helpers/printJobs";
+import { APP_URL } from "./helpers/appUrl";
 
 // Smoke test del vero client Windows della cassa (desktop-client/, Electron):
 // lo avvia puntato sul sito locale (emulatore) e su una finta stampante TCP
@@ -48,7 +49,7 @@ test.beforeAll(async () => {
   printer = await startFakePrinter();
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "masseria-cassa-test-"));
   fs.writeFileSync(path.join(userDataDir, "settings.json"), JSON.stringify({
-    appUrl: "http://localhost:5173/cameriere",
+    appUrl: `${APP_URL}/cameriere`,
     printer: { host: "127.0.0.1", port: printer.port },
     stationName: "Cassa smoke test",
     startFullscreen: false,

@@ -4,24 +4,14 @@
 // sarebbe troppo lento per un singolo test e comunque non aggiungerebbe
 // copertura oltre a quella già data dal flusso completo testato altrove
 // (waiter-order.spec.js).
-import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc, collection, query, where, getDocs, deleteDoc, Timestamp } from "firebase/firestore";
-import { TEST_WAITER } from "../test-env.js";
-import { auth, db } from "./emulatorApp.js";
-
-let signInPromise = null;
-function ensureSignedIn() {
-  if (!signInPromise) {
-    signInPromise = signInWithEmailAndPassword(auth, TEST_WAITER.email, TEST_WAITER.password);
-  }
-  return signInPromise;
-}
+import { waiterDb } from "./emulatorApp.js";
 
 // `marker` identifica il batch (usato sia come waiterName sia come prefisso
 // id) così la pulizia può trovare ed eliminare esattamente questi documenti,
 // senza toccare comande reali o di altri test.
 export async function seedClosedOrders(count, marker) {
-  await ensureSignedIn();
+  const db = await waiterDb();
   const base = 20000 + Math.floor(Math.random() * 1000);
   const now = Date.now();
   await Promise.all(Array.from({ length: count }).map((_, i) => {
@@ -45,7 +35,7 @@ export async function seedClosedOrders(count, marker) {
 }
 
 export async function deleteOrdersByWaiterName(marker) {
-  await ensureSignedIn();
+  const db = await waiterDb();
   const q = query(collection(db, "orders"), where("waiterName", "==", marker));
   const snap = await getDocs(q);
   await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));

@@ -120,8 +120,10 @@ sub-object, the 24h auto-close). Key points not to duplicate here:
 ## `reservations/{id}`
 
 One document per table reservation. See `docs/prenotazioni.md` §3 for the
-full field list and status lifecycle (`pending → confirmed → started`, or
-`rejected`/`cancelled`/`no_show`). Key point: `date` is stored as a local
+full field list and status lifecycle (`confirmed → started`, or
+`cancelled`/`no_show`; a reservation is saved already `confirmed`, and
+`pending`/`rejected` only survive on older documents — `pending` counts as
+`confirmed`, see `isBooked()`). Key point: `date` is stored as a local
 `"YYYY-MM-DD"` string, not a Firestore `Timestamp` — see the note in
 `reservationsData.js`'s `dateKey()` for why (avoids UTC/local timezone bugs
 for date-range queries).

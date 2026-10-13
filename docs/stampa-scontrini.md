@@ -327,7 +327,9 @@ comande, preconto, chiusura.
 - **Tavoli:** griglia che riempie lo schermo, ordinata per numero. Ogni
   riquadro mostra numero, nome, coperti, tempo, totale e lo stato **scritto**
   su un colore fisso (vedi *Stato dei tavoli senza cucina* sotto). A destra
-  ci sono le prenotazioni di oggi con "Avvia".
+  ci sono le prenotazioni di oggi (`ReservationCard`, `OrderUi.jsx`):
+  toccando la scheda si apre la prenotazione in Prenotazioni (dettagli,
+  modifica, avvio), "Avvia" apre subito il tavolo.
 - **Nuovo tavolo:** tastierino numerico a schermo (la cassa non ha
   tastiera), coperti con +/−, nome e note facoltativi. Se il tavolo è già
   aperto lo segnala e offre "Vai al tavolo".
@@ -359,11 +361,12 @@ comande, preconto, chiusura.
   nella barra laterale con **Ristampa preconto** (e, per l'admin, elimina
   dallo storico con conferma).
 - **Prenotazioni:** calendario grande a sinistra (per ogni giorno
-  prenotazioni e coperti, pallino arancione = da confermare), prenotazioni
-  del giorno al centro con lo stato scritto, scheda o modulo nella barra
+  prenotazioni e coperti), prenotazioni del giorno al centro con lo stato
+  scritto (*Prenotata*, *Al tavolo*, *Annullata*…), scheda o modulo nella barra
   laterale. Nel modulo gli orari si scelgono a tocco (gli stessi del modulo
   di prenotazione del sito: pranzo 12:30–14:30, cena 20:00–22:30), coperti e
-  tavolo con +/−; azioni Conferma / Rifiuta / Modifica / Annulla e **Avvia**
+  tavolo con +/−; un solo **Salva prenotazione** (nasce già confermata, non
+  c'è più "da confermare"); azioni Modifica / Annulla e **Avvia**
   (il giorno stesso: apre il tavolo, chiedendo il numero col tastierino se
   manca).
 - **Menù** (solo admin, `src/TillMenu.jsx`): stesso schema della comanda.
@@ -459,15 +462,17 @@ l'uso a una mano su uno schermo da 6":
 - **Niente Dashboard:** dopo l'accesso si apre subito **Tavoli**. Le sezioni
   stanno nella **barra in basso** (Tavoli · Prenotazioni · Storico e, per
   gli admin, Menù · Statistiche), con icona ed etichetta sempre visibili; i
-  numeri che prima mostrava la Dashboard (tavoli aperti, prenotazioni da
-  confermare) sono badge sulla barra. In alto: nome della sezione, chi è
+  tavoli aperti sono il badge su Tavoli. In alto: nome della sezione, chi è
   collegato, il turno ed "Esci". La sezione resta nell'URL (`?sezione=…`):
   il tasto Indietro e un ricaricamento restano lì.
 - **Tavoli:** riquadri a due colonne (numero, nome, coperti, tempo, totale,
   stato scritto su colore fisso come alla cassa); **Nuovo tavolo** è il
   pulsante flottante in basso a destra. Il modulo del nuovo tavolo è a
   schermo intero (numero dalla tastiera numerica del telefono, coperti con
-  +/−, avviso se il tavolo è già aperto con "Vai al tavolo").
+  +/−, avviso se il tavolo è già aperto con "Vai al tavolo"). In cima, le
+  prenotazioni di oggi (stessa `ReservationCard` della cassa): toccando la
+  scheda si apre la prenotazione in Prenotazioni, "Avvia" apre subito il
+  tavolo.
 - **Comanda:** schermata intera senza le barre dell'app. In alto il tavolo e
   i coperti; sotto, la ricerca e, già all'apertura, le **categorie in una
   griglia** (nome, quanti piatti, quanti "da inviare"): tutte visibili a
@@ -494,7 +499,10 @@ l'uso a una mano su uno schermo da 6":
 - **Prenotazioni, Storico, Statistiche**: le stesse schermate della cassa
   (`TillReservations.jsx`, `TillHistory.jsx`, `TillStats.jsx`) in una
   colonna, con la scheda o il modulo a pagina intera. "Avvia" di una
-  prenotazione porta ai Tavoli e apre la comanda. Lo Storico apre ogni
+  prenotazione porta ai Tavoli e apre la comanda; al contrario, toccando una
+  delle prenotazioni di oggi nei Tavoli si apre la sua scheda in
+  Prenotazioni (tornando poi a Prenotazioni dalla barra si riparte
+  dall'elenco). Lo Storico apre ogni
   comanda come preconto (ristampa, "Stampa dal browser", per l'admin
   eliminazione e "Svuota storico", sempre con conferma). Le Statistiche
   hanno periodi a tocco o date libere, confronto con il periodo precedente
@@ -600,7 +608,8 @@ campi (niente zoom automatico su iOS); nessuno scorrimento laterale a
 | Cassa: nessuno stato "uscita"; riquadro "Comanda inviata" / "Preconto stampato" | `tests/till-sala.spec.js` |
 | Cassa: preconto stampato direttamente dalla barra laterale, avviso se ci sono piatti non inviati | `tests/till-sala.spec.js` |
 | Cassa: Storico con dettaglio e ristampa preconto | `tests/till-sala.spec.js` |
-| Cassa: Prenotazioni — nuova con orari a tocco, conferma, avvio con tastierino che apre il tavolo; calendario con prenotazioni e coperti del giorno | `tests/till-sala.spec.js` |
+| Cassa: Prenotazioni — nuova con orari a tocco e un solo "Salva prenotazione" (subito valida, niente "da confermare"), avvio con tastierino che apre il tavolo; calendario con prenotazioni e coperti del giorno | `tests/till-sala.spec.js` |
+| Cassa: Tavoli — toccando una prenotazione di oggi si apre la sua scheda in Prenotazioni (giorno e riga selezionati) e da lì si avvia; il tasto rapido "Avvia" sulla scheda apre subito il tavolo | `tests/till-sala.spec.js` |
 | Comanda per la cucina: solo piatti "In comanda", ordine del menù, piatti tolti dal menù stampati, AGGIUNTA solo se c'erano già piatti per la cucina, niente da stampare con sole bevande | `tests/escpos.spec.js` |
 | Comanda stampata: tavolo a dimensione tripla, piatti a doppia (≤ 21 colonne), note e AGGIUNTA in negativo, grassetto, niente prezzi/logo, taglio subito | `tests/escpos.spec.js` |
 | Piatto nuovo: "In comanda" ereditato dalla categoria | `tests/escpos.spec.js`, `tests/till-sala.spec.js` |
@@ -632,7 +641,8 @@ campi (niente zoom automatico su iOS); nessuno scorrimento laterale a
 | Impostazioni del menù (telefono): stampa del menù — errore senza categorie, anteprima in una nuova scheda; backup scaricato, file non valido, ripristino che chiede conferma; "Vedi il menù dei clienti" | `tests/menu-settings.spec.js` |
 | Costo interno del piatto dal tastierino nella scheda del piatto, salvato e mantenuto dopo il ricaricamento; scheda aperta prima dell'arrivo dei costi (bug corretto) | `tests/admin-menu-costs.spec.js` |
 | Storico (telefono): "Carica altre", comanda come preconto in sola lettura con ristampa, cameriere senza eliminazione, admin elimina con conferma (persistente), "Svuota storico" con conferma | `tests/order-history.spec.js` |
-| Prenotazioni (telefono): crea/conferma/rifiuta/annulla con conferma, modulo con nome obbligatorio e "Salva" in basso, orario e data liberi, tutti i campi ritrovati in modifica, calendario con mesi e riepilogo per giorno, "Avvia" da Prenotazioni e dai Tavoli | `tests/reservations.spec.js` |
+| Prenotazioni (telefono): crea (subito valida, senza Conferma/Rifiuta né "da confermare") e annulla con conferma, vecchie prenotazioni "da confermare" mostrate come le altre (anche nei Tavoli), modulo con un solo "Salva prenotazione" obbligato dal nome e in basso, orario e data liberi, tutti i campi ritrovati in modifica, calendario con mesi e riepilogo per giorno, "Avvia" da Prenotazioni e dai Tavoli | `tests/reservations.spec.js` |
+| Telefono: Tavoli — toccando una prenotazione di oggi (≥ 48px, nessuno scorrimento laterale) si apre la sua scheda in Prenotazioni, da cui si modifica e si avvia; tornando a Prenotazioni dalla barra si riparte dall'elenco | `tests/reservations.spec.js` |
 | Statistiche (telefono): numeri e classifiche, importi esatti di "Ieri", esclusione delle chiusure automatiche, periodo personalizzato vuoto, margine senza costi noti, incasso per ora e per giorno in euro, confronto con il periodo precedente e con un altro periodo | `tests/stats-dashboard.spec.js` |
 | Telefono: preconto a pagina intera; riga inviata tolta dalla modifica riga, preconto confermato che blocca le righe | `tests/waiter-order.spec.js` |
 | Cassa (admin): sezioni Menù e Statistiche nella barra; un cameriere non le vede | `tests/till-sala.spec.js`, `tests/till-client.spec.js` |

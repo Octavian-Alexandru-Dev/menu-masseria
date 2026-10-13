@@ -51,6 +51,6 @@ export default [
     languageOptions: { ecmaVersion: 2022, sourceType: "script", globals: globals.browser },
   },
   {
-    ignores: ["dist/**", "node_modules/**", "seed-data/**", "desktop-client/dist/**", "desktop-client/node_modules/**"],
+    ignores: ["dist/**", ".e2e-dist/**", "node_modules/**", "seed-data/**", "desktop-client/dist/**", "desktop-client/node_modules/**"],
   },
 ];

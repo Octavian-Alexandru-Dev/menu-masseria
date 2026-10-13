@@ -25,6 +25,9 @@ audiences:
 - [`docs/comande-camerieri.md`](docs/comande-camerieri.md) and
   [`docs/prenotazioni.md`](docs/prenotazioni.md) (Italian) — detailed design
   docs for the order-taking and reservations features.
+- [`docs/testing.md`](docs/testing.md) (Italian) — running the E2E tests
+  (only the touched part while developing, the full suite at the end) and
+  the rules that keep them deterministic.
 
 ## Live demo
 
@@ -177,6 +180,7 @@ instead of copying `.env.example` by hand.
 | `npm run lint` | ESLint (see `eslint.config.js`). |
 | `npm run test:e2e` | Full Playwright suite — self-contained, starts/seeds/tears down the emulator automatically. Requires Docker. |
 | `npm run test:e2e:ui` | Playwright in interactive UI mode. |
+| `npm run test:e2e:changed` | Only the E2E specs covering the files changed since the last commit (or `-- <spec names>`, `-- --list`). For day-to-day development; finish with the full suite. See [`docs/testing.md`](docs/testing.md). |
 | `npm run emulators:up` / `emulators:down` | Start/stop the emulator container directly. |
 | `npm run seed:emulator` | (Re-)seed the running emulator with demo data — idempotent. |
 | `cd desktop-client && npm install && npx install-electron` | Install the till client's dependencies (also enables `tests/desktop-client.spec.js`). |

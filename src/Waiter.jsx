@@ -21,15 +21,15 @@
 //    till's side panel: tap a line to change quantity, price (offered,
 //    discount, custom), note, or to remove it — applied only on "Salva".
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Minus, X, Utensils, Search, Play, Send, Receipt, Lock, Trash2, Printer, ChevronUp, ChevronDown, Users, Clock, LayoutGrid } from "lucide-react";
-import { THEMES, formatCentsAsPrice, parsePriceToCents, tableIdentity, currentShiftLabel, BackButton } from "./shared";
+import { Plus, Minus, X, Utensils, Search, Send, Receipt, Lock, Trash2, Printer, ChevronUp, ChevronDown, Users, Clock, LayoutGrid } from "lucide-react";
+import { THEMES, formatCentsAsPrice, parsePriceToCents, tableIdentity, currentShiftLabel, BackButton, scrollBehavior } from "./shared";
 import { orderTotalCents, copertoTotalCents } from "./orders";
 import { coversLabel } from "./reservationsData";
 import { confirmAction } from "./confirmDialog";
 import {
   formatTime, elapsedLabel, SyncBadge, useSalaData, useOrderDraft, tableStatus,
 } from "./sala-shared";
-import { LineEditor, CoversControl, DishTile, TicketLine, ReceiptPanel } from "./OrderUi";
+import { LineEditor, CoversControl, DishTile, TicketLine, ReceiptPanel, ReservationCard } from "./OrderUi";
 import { ClosedOrderRow } from "./TillHistory";
 import {
   TOUCH, FONT, STATUS, TillButton, Stepper, SidePanel, SectionTitle, StatusPill, Field, tillInputStyle, CategoryGrid,
@@ -37,30 +37,13 @@ import {
 
 /* ---------------------------------- tables ---------------------------------- */
 
-function TodaysReservations({ t, reservations, onAvvia }) {
+function TodaysReservations({ t, reservations, onOpen, onAvvia }) {
   if (reservations.length === 0) return null;
   return (
     <section aria-label="Prenotazioni di oggi" style={{ marginBottom: 22 }}>
       <SectionTitle t={t} color={t.secondary} style={{ marginBottom: 10 }}>Prenotazioni di oggi · {reservations.length}</SectionTitle>
       <div style={{ display: "grid", gap: 8 }}>
-        {reservations.map((r) => (
-          <div key={r.id} style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
-            padding: "10px 10px 10px 14px", borderRadius: 14, border: `1.5px solid ${t.line}`, background: t.card,
-          }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 17, fontWeight: 700, color: t.ink }}>
-                {r.name || "Senza nome"}{r.time ? ` · ${r.time}` : ""}
-              </div>
-              <div style={{ fontSize: 14, color: t.inkSoft, marginTop: 2 }}>
-                {coversLabel(r.covers)}{r.tableNumber ? ` · Tavolo ${r.tableNumber}` : ""}
-              </div>
-            </div>
-            <TillButton t={t} variant="primary" size={TOUCH} icon={Play} onClick={() => onAvvia(r)} aria-label={`Avvia prenotazione di ${r.name || "senza nome"}`} style={{ flexShrink: 0 }}>
-              Avvia
-            </TillButton>
-          </div>
-        ))}
+        {reservations.map((r) => <ReservationCard key={r.id} t={t} reservation={r} onOpen={onOpen} onAvvia={onAvvia} />)}
       </div>
     </section>
   );
@@ -99,13 +82,13 @@ function TableCard({ t, order, kitchenProblems, onOpen }) {
   );
 }
 
-function TableList({ t, menu, orders, kitchenProblemsByOrder = {}, shiftClosedOrders, onOpenNew, onOpenOrder, todaysReservations, onAvviaReservation }) {
+function TableList({ t, menu, orders, kitchenProblemsByOrder = {}, shiftClosedOrders, onOpenNew, onOpenOrder, todaysReservations, onOpenReservation, onAvviaReservation }) {
   const [closedOrderId, setClosedOrderId] = useState(null);
   const closedOrder = shiftClosedOrders.find((o) => o.id === closedOrderId);
   const sorted = [...orders].sort((a, b) => (a.tableNumber || 0) - (b.tableNumber || 0));
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "16px 16px 104px", fontFamily: FONT, color: t.ink }}>
-      <TodaysReservations t={t} reservations={todaysReservations} onAvvia={onAvviaReservation} />
+      <TodaysReservations t={t} reservations={todaysReservations} onOpen={onOpenReservation} onAvvia={onAvviaReservation} />
 
       <SectionTitle t={t} color={t.secondary} style={{ marginBottom: 10 }}>Tavoli aperti · {sorted.length}</SectionTitle>
       {sorted.length === 0 && (
@@ -388,7 +371,7 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
     chosenRef.current = true;
     setPickerOpen(false);
     setActiveCat(sectionId);
-    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    sectionRefs.current[sectionId]?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   };
 
   useEffect(() => {
@@ -676,7 +659,9 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
 // the app's bars while a task screen (a table, a new table) is open.
 // request: sent from Prenotazioni — { type: "avvia", reservation } starts a
 // booked table, { type: "open", orderId } opens one already started.
-export function WaiterPanel({ menu, session, setImmersive = () => {}, request = null, onRequestHandled = () => {} }) {
+// onOpenReservation: the other way, a reservation of today opened in
+// Prenotazioni.
+export function WaiterPanel({ menu, session, setImmersive = () => {}, request = null, onRequestHandled = () => {}, onOpenReservation = () => {} }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
   const { orders, ordersReady, shiftClosedOrders, todaysReservations, menuCosts, kitchenProblemsByOrder, createTable: openTable, startFromReservation } = useSalaData({ menu, session });
   const [view, setView] = useState({ mode: "list" }); // list | new (reservation?) | detail
@@ -747,6 +732,7 @@ export function WaiterPanel({ menu, session, setImmersive = () => {}, request = 
       onOpenNew={() => setView({ mode: "new" })}
       onOpenOrder={(id) => setView({ mode: "detail", orderId: id })}
       todaysReservations={todaysReservations}
+      onOpenReservation={onOpenReservation}
       onAvviaReservation={handleAvviaReservation}
     />
   );

@@ -6,7 +6,7 @@ import { X, Expand, ShoppingBag, Search } from "lucide-react";
 import {
   THEMES, ital, LANGUAGES, UI_STRINGS, TRANSLATION_LANG_KEY,
   applyTranslation, TYPE, SPACE, itemMatchesSearch,
-  GlobalStyle, BranchDivider, Logo,
+  GlobalStyle, BranchDivider, Logo, scrollBehavior,
 } from "./shared";
 import { optimizedImageUrl } from "./cloudinary";
 import { recordMenuView } from "./menuViews";
@@ -197,7 +197,7 @@ export default function ClientView({ menu, onGoStaff }) {
 
   const scrollTo = (id) => {
     setActive(id);
-    refs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    refs.current[id]?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   };
 
   // Scroll-spy: as the user scrolls the page, figures out which section is
@@ -239,7 +239,7 @@ export default function ClientView({ menu, onGoStaff }) {
     const btnRect = btn.getBoundingClientRect();
     if (btnRect.left < navRect.left || btnRect.right > navRect.right) {
       const target = btn.offsetLeft - nav.clientWidth / 2 + btn.offsetWidth / 2;
-      nav.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+      nav.scrollTo({ left: Math.max(0, target), behavior: scrollBehavior() });
     }
   }, [active]);
 

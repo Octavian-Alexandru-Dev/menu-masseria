@@ -28,7 +28,7 @@
 import React, { useState, useEffect, Suspense, lazy } from "react";
 import {
   Plus, X, Users, Clock, Search, Utensils, CalendarDays, History, LayoutGrid, BookOpen, BarChart3,
-  Play, Send, Lock, Printer, LogOut,
+  Send, Lock, Printer, LogOut,
 } from "lucide-react";
 import {
   THEMES, GlobalStyle, Logo, formatCentsAsPrice, tableIdentity, currentShiftLabel, BackButton,
@@ -38,7 +38,7 @@ import { coversLabel } from "./reservationsData";
 import { confirmAction } from "./confirmDialog";
 import { staffLogout, logoutHiddenAtTill } from "./staff-shared";
 import { formatTime, elapsedLabel, SyncBadge, useSalaData, useOrderDraft, tableStatus } from "./sala-shared";
-import { LineEditor, CoversControl, DishTile, TicketLine } from "./OrderUi";
+import { LineEditor, CoversControl, DishTile, TicketLine, ReservationCard } from "./OrderUi";
 import { usePrintJob } from "./usePrintJob";
 import {
   TOUCH, FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine, CategoryGrid,
@@ -162,7 +162,7 @@ function TableTile({ t, order, kitchenProblems, onOpen }) {
   );
 }
 
-function FloorView({ t, orders, kitchenProblemsByOrder, todaysReservations, onNew, onOpen, onAvvia }) {
+function FloorView({ t, orders, kitchenProblemsByOrder, todaysReservations, onNew, onOpen, onOpenReservation, onAvvia }) {
   const sorted = [...orders].sort((a, b) => (a.tableNumber || 0) - (b.tableNumber || 0));
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
@@ -185,17 +185,7 @@ function FloorView({ t, orders, kitchenProblemsByOrder, todaysReservations, onNe
         }}>
           <SectionTitle t={t} color={t.secondary} style={{ marginBottom: 12 }}>Prenotazioni di oggi · {todaysReservations.length}</SectionTitle>
           <div style={{ display: "grid", gap: 10 }}>
-            {todaysReservations.map((r) => (
-              <div key={r.id} style={{ padding: 12, borderRadius: 12, border: `1px solid ${t.line}`, background: t.bg }}>
-                <div style={{ fontSize: 17, fontWeight: 700, color: t.ink }}>{r.name || "Senza nome"}{r.time ? ` · ${r.time}` : ""}</div>
-                <div style={{ fontSize: 14, color: t.inkSoft, margin: "2px 0 10px" }}>
-                  {coversLabel(r.covers)}{r.tableNumber ? ` · Tavolo ${r.tableNumber}` : ""}
-                </div>
-                <TillButton t={t} variant="primary" size={TOUCH} icon={Play} onClick={() => onAvvia(r)} aria-label={`Avvia prenotazione di ${r.name || "senza nome"}`} style={{ width: "100%" }}>
-                  Avvia
-                </TillButton>
-              </div>
-            ))}
+            {todaysReservations.map((r) => <ReservationCard key={r.id} t={t} reservation={r} onOpen={onOpenReservation} onAvvia={onAvvia} stacked />)}
           </div>
         </aside>
       )}
@@ -519,6 +509,8 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
   const [tab, setTab] = useState(() => (!withAdmin && (initialTab === "menu" || initialTab === "stats") ? "floor" : initialTab)); // floor | reservations | history | menu | stats
   const [openOrderId, setOpenOrderId] = useState(null);
   const [dialog, setDialog] = useState(null); // { reservation? }
+  // A reservation of today tapped in Tavoli: Prenotazioni opens on it.
+  const [reservationToOpen, setReservationToOpen] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const currentOrder = openOrderId ? sala.orders.find((o) => o.id === openOrderId) : null;
@@ -544,6 +536,11 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
   const goTab = (key) => {
     setTab(key);
     setOpenOrderId(null);
+    setReservationToOpen(null);
+  };
+  const openReservation = (reservation) => {
+    goTab("reservations");
+    setReservationToOpen(reservation);
   };
   const loading = <div style={{ padding: 40, color: t.inkSoft, fontSize: 18, fontFamily: FONT }}>Caricamento…</div>;
 
@@ -572,7 +569,7 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
 
       {tab === "reservations" && (
         <Suspense fallback={loading}>
-          <TillReservations t={t} session={session} onAvvia={onAvvia} onGoToTable={goToOrder} />
+          <TillReservations t={t} session={session} initialReservation={reservationToOpen} onAvvia={onAvvia} onGoToTable={goToOrder} />
         </Suspense>
       )}
 
@@ -594,7 +591,7 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
       {tab === "floor" && sala.ordersReady && !openOrderId && (
         <FloorView
           t={t} orders={sala.orders} kitchenProblemsByOrder={sala.kitchenProblemsByOrder} todaysReservations={sala.todaysReservations}
-          onNew={() => setDialog({})} onOpen={setOpenOrderId} onAvvia={onAvvia}
+          onNew={() => setDialog({})} onOpen={setOpenOrderId} onOpenReservation={openReservation} onAvvia={onAvvia}
         />
       )}
 

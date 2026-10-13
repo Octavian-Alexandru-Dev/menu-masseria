@@ -5,11 +5,16 @@ This project uses Playwright for end-to-end contract tests, run against a **loca
 After implementing or changing a UI feature (`ClientView.jsx`, `PrintMenu.jsx`, `PrintStation.jsx`, `StaffHome.jsx`, `PhoneApp.jsx`, `Waiter.jsx`, `OrderUi.jsx`, `MenuSettings.jsx`, `shared.jsx`, `staff-shared.jsx`, `sala-shared.jsx`, `MenuApp.jsx`, the staff screens `Till*.jsx`, or the till client in `desktop-client/`), verify it yourself before considering the task done:
 
 ```
-npm run test:e2e       # headless run — self-contained, starts/seeds/tears down the emulator automatically
-npm run test:e2e:ui    # interactive UI mode, useful while iterating
+npm run test:e2e:changed            # while developing: only the specs covering the files you changed (vs HEAD)
+npm run test:e2e:changed -- reservations till-sala   # specific specs, in the right stage order
+npm run test:e2e:changed -- --list  # show which specs would run and why, without running
+npm run test:e2e                    # the full suite — run it once at the end, to validate the whole job
+npm run test:e2e:ui                 # interactive UI mode, useful while investigating
 ```
 
-Requires Docker running (`docker` CLI available). `playwright.config.js`'s `globalSetup`/`globalTeardown` start the emulator container, seed it with demo data (`scripts/seed-emulator.js`), and start `npm run dev` against it (`webServer` with `VITE_USE_FIREBASE_EMULATOR=true`) — no `.env` or real Firebase credentials needed to run the suite.
+Use `test:e2e:changed` while iterating (faster, less output); always finish with the full `npm run test:e2e` before considering the task done, and say in the summary which runs you did. The file → spec map is `tests/spec-map.js`: **when you add a file in `src/` or a new spec, add it there** (an unmapped file makes the runner fall back to the full suite, with a warning). Don't run a single till spec with `npx playwright test tests/till-sala.spec.js`: project dependencies make Playwright run the whole `chromium` stage first — use `test:e2e:changed`. Details, and the rules that keep the tests deterministic (no fixed waits, `expect.poll` for server reads, per-test data and cleanup, never `afterAll` cleanup): `docs/testing.md`. A test that fails once and passes on rerun is a bug in the test to fix, not something to retry.
+
+Requires Docker running (`docker` CLI available). `playwright.config.js`'s `globalSetup`/`globalTeardown` start the emulator container and seed it with demo data (`scripts/seed-emulator.js`); `webServer` builds the app for production with `VITE_USE_FIREBASE_EMULATOR=true` and serves it with `vite preview` on port 4173 (never the dev server, never reused) — no `.env` or real Firebase credentials needed to run the suite.
 
 For manual local development against the same emulator (e.g. to try the app without a real Firebase project — useful for a portfolio demo), use `npm run dev:local` instead of `npm run dev`.
 
@@ -49,7 +54,7 @@ Prenotazioni, Storico, Menù e Statistiche sono **la stessa schermata** sui due 
 
 # Contract testing E2E — regola obbligatoria
 
-> 1. Prima di considerare completata qualsiasi implementazione che tocchi l'interfaccia utente, esegui l'intera suite di test E2E Playwright — o quantomeno i test relativi alle funzionalità toccate, se la suite è molto ampia e serve un'esecuzione mirata per motivi di tempo. In tal caso specifica quali test sono stati eseguiti e perché non l'intera suite.
+> 1. Durante lo sviluppo esegui i test della parte toccata (`npm run test:e2e:changed`); prima di considerare completata qualsiasi implementazione che tocchi l'interfaccia utente, esegui l'intera suite E2E (`npm run test:e2e`). Se per un motivo eccezionale non la esegui, specifica quali test sono stati eseguiti e perché non l'intera suite.
 > 2. Se un test fallisce dopo una modifica:
 >    - **(a)** Analizza se il fallimento è dovuto a un cambiamento intenzionale dell'interfaccia/comportamento (la modifica richiesta ha legittimamente cambiato il contratto). In questo caso aggiorna il test, spiegando esplicitamente cosa è cambiato e perché, mostrando il diff minimo necessario.
 >    - **(b)** Se invece il fallimento rivela una regressione o un bug introdotto dall'implementazione appena fatta, **non modificare il test per farlo passare**. Segnala il problema, fermati e chiedi conferma su come procedere prima di continuare.

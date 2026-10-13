@@ -1,10 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
+import { APP_PORT, APP_URL } from "./tests/helpers/appUrl.js";
+import { STAGES } from "./tests/stages.js";
 
 // L'intera suite gira contro gli emulatori Firebase locali (Docker), mai
 // contro il progetto reale: globalSetup li avvia e li popola con dati demo
 // (tests/global-setup.js), globalTeardown li spegne (tests/global-teardown.js),
-// e il server Vite qui sotto viene avviato con VITE_USE_FIREBASE_EMULATOR=true
-// così l'app si collega all'emulatore invece che a ".env".
+// e l'app qui sotto viene costruita con VITE_USE_FIREBASE_EMULATOR=true così
+// si collega all'emulatore invece che a ".env".
+//
+// Determinismo (vedi docs/testing.md): build di produzione invece del server
+// di sviluppo (che compila ogni modulo al primo accesso, lento e variabile
+// con più worker insieme), movimento ridotto (niente animazioni né
+// scorrimenti "smooth" a metà quando si misura o si clicca), tempi larghi.
 export default defineConfig({
   testDir: "./tests",
   globalSetup: "./tests/global-setup.js",
@@ -13,55 +20,28 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: "list",
-  timeout: 15_000,
+  timeout: 30_000,
+  expect: { timeout: 10_000 },
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: APP_URL,
+    contextOptions: { reducedMotion: "reduce" },
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  // Le spec con una stazione di stampa attiva (una "cassa", simulata o il
-  // vero client Electron) stampano TUTTE le richieste in coda, come la cassa
-  // vera: se girassero in parallelo tra loro, una si prenderebbe le stampe
-  // dell'altra. Per questo stanno in progetti propri, eseguiti in sequenza
-  // (dependencies) dopo il resto della suite.
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-      testIgnore: [/receipt-printing\.spec\.js/, /till-client\.spec\.js/, /till-sala\.spec\.js/, /desktop-client\.spec\.js/],
-    },
-    {
-      name: "print-queue",
-      use: { ...devices["Desktop Chrome"] },
-      testMatch: /receipt-printing\.spec\.js/,
-      dependencies: ["chromium"],
-    },
-    {
-      name: "till-client",
-      use: { ...devices["Desktop Chrome"] },
-      testMatch: /till-client\.spec\.js/,
-      dependencies: ["print-queue"],
-    },
-    {
-      // Prints from the till: sequential, and after the other "till" specs,
-      // so no other till page (print station) can claim its print jobs.
-      name: "till-sala",
-      use: { ...devices["Desktop Chrome"] },
-      testMatch: /till-sala\.spec\.js/,
-      dependencies: ["till-client"],
-    },
-    {
-      name: "desktop-client",
-      use: { ...devices["Desktop Chrome"] },
-      testMatch: /desktop-client\.spec\.js/,
-      dependencies: ["till-sala"],
-    },
-  ],
+  // Una fase dopo l'altra (tests/stages.js): prima le spec del telefono e
+  // del browser, in parallelo; poi, in sequenza, quelle con una cassa
+  // (stazione di stampa) accesa.
+  projects: STAGES.map((stage, i) => ({
+    name: stage.name,
+    use: { ...devices["Desktop Chrome"] },
+    ...(stage.spec ? { testMatch: stage.spec } : { testIgnore: STAGES.filter((s) => s.spec).map((s) => s.spec) }),
+    ...(i > 0 ? { dependencies: [STAGES[i - 1].name] } : {}),
+  })),
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:5173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    command: `npx vite build --outDir .e2e-dist --emptyOutDir --logLevel warn && npx vite preview --outDir .e2e-dist --port ${APP_PORT} --strictPort`,
+    url: APP_URL,
+    reuseExistingServer: false,
+    timeout: 120_000,
     env: {
       VITE_USE_FIREBASE_EMULATOR: "true",
       VITE_FIREBASE_API_KEY: "demo-key",

@@ -15,12 +15,15 @@ test.use(PHONE);
 const MENU_PREFIX = "Telefono test";
 const tableNumber = () => 11000 + Math.floor(Math.random() * 500);
 const opened = [];
+const createdDishes = [];
 
+// Ogni test pulisce solo ciò che ha creato lui. Niente afterAll con il solo
+// prefisso: con fullyParallel gira in OGNI worker che ha eseguito un test di
+// questo file, e cancellava il piatto di un test ancora in corso in un altro
+// worker (bug dei test corretto).
 test.afterEach(async () => {
   await Promise.all(opened.splice(0).map((n) => deleteTestOrderByTableNumber(n)));
-});
-test.afterAll(async () => {
-  await removeMenuItemsByNamePrefix(MENU_PREFIX);
+  await Promise.all(createdDishes.splice(0).map((name) => removeMenuItemsByNamePrefix(name)));
 });
 
 async function openTable(page) {
@@ -53,7 +56,8 @@ test("su uno smartphone da 6\" nessuna schermata scorre di lato e la barra in ba
     await expect(page.getByRole("heading", { name })).toBeVisible();
     // L'etichetta si legge per intero (niente "Prenotazi…").
     expect(await button.evaluate((b) => [...b.querySelectorAll("span")].every((s) => s.scrollWidth <= s.clientWidth))).toBe(true);
-    await page.waitForTimeout(800); // contenuto della sezione caricato (Firestore non va mai "idle")
+    // Contenuto della sezione caricato (Firestore non va mai "idle": si aspetta che sparisca il segnaposto).
+    await expect(page.getByText(/^Caricamento/)).toHaveCount(0);
     await expectNoSideScroll(page, name);
   }
 
@@ -137,8 +141,8 @@ test("tutte le categorie si vedono subito in una griglia, senza scorrere di lato
   const picker = page.getByRole("button", { name: /^Categorie:/ });
   await expect(picker).toBeInViewport();
   // L'ultima categoria non può salire fino in cima: resta comunque quella
-  // evidenziata (bug corretto: si evidenziava quella prima).
-  await page.waitForTimeout(1200);
+  // evidenziata (bug corretto: si evidenziava quella prima). Con il movimento
+  // ridotto dei test lo scorrimento è immediato, niente attese a tempo.
   await expect(picker).toHaveAccessibleName("Categorie: Bevande");
   await expect(grid.getByRole("tab", { name: /^Bevande/ })).toHaveAttribute("aria-selected", "true");
 
@@ -194,6 +198,7 @@ test("gestione menù da telefono: categorie in griglia e piatti con la loro foto
 
 test("gestione menù da telefono: piatto nuovo e modifica a schermo intero, con Salva sempre in basso", async ({ page }) => {
   const name = `${MENU_PREFIX} ${Date.now()}`;
+  createdDishes.push(name);
   await page.goto("/?area=staff");
   await staffLogin(page, TEST_ADMIN);
   await page.getByRole("navigation", { name: "Sezioni" }).getByRole("button", { name: "Menù", exact: true }).click();
@@ -208,6 +213,7 @@ test("gestione menù da telefono: piatto nuovo e modifica a schermo intero, con 
   await editor.getByRole("button", { name: "Usa € 4,50" }).click();
 
   const add = editor.getByRole("button", { name: "Aggiungi piatto" });
+  await expect(add).toBeInViewport({ ratio: 1 });
   const addBox = await add.boundingBox();
   expect(addBox.y + addBox.height).toBeLessThanOrEqual(851);
   expect(addBox.height).toBeGreaterThanOrEqual(56);

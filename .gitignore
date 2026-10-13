@@ -12,3 +12,4 @@ menu-????-??-??.json
 .bws-token
 scratch/
 demo/.recordings
+.e2e-dist

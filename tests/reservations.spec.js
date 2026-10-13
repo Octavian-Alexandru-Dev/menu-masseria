@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { TEST_WAITER } from "./test-env";
 import { deleteTestReservationByName, deleteTestOrderByTableNumber } from "./firestore-cleanup";
 import { PHONE, navTo, sheet } from "./helpers/phone";
+import { seedLegacyPendingReservation } from "./helpers/reservations";
 
 // Prenotazioni dal telefono (TillReservations.jsx, la stessa schermata della
 // cassa in una colonna): calendario del mese con prenotazioni e coperti per
@@ -21,14 +22,14 @@ async function login(page) {
   await expect(page.getByRole("region", { name: "Calendario" })).toBeVisible({ timeout: 10_000 });
 }
 
-// Nuova prenotazione per oggi (o `nextDay`), lasciata da confermare o confermata.
-async function createReservation(page, name, { time = "20:30", confirm = false, nextDay = false } = {}) {
+// Nuova prenotazione per oggi (o `nextDay`): nasce già confermata.
+async function createReservation(page, name, { time = "20:30", nextDay = false } = {}) {
   await page.getByRole("button", { name: "Nuova prenotazione" }).click();
   const form = sheet(page, "Nuova prenotazione");
   if (nextDay) await form.getByRole("button", { name: "Giorno successivo" }).click();
   await form.getByRole("button", { name: time, exact: true }).click();
   await form.getByRole("textbox", { name: "Nome *" }).fill(name);
-  await form.getByRole("button", { name: confirm ? "Salva e conferma" : "Salva da confermare" }).click();
+  await form.getByRole("button", { name: "Salva prenotazione" }).click();
   const detail = sheet(page, "Dettaglio prenotazione");
   await expect(detail).toContainText(name, { timeout: 10_000 });
   return detail;
@@ -59,39 +60,51 @@ test.describe("Prenotazioni", () => {
     await expect(page.getByRole("region", { name: "Prenotazioni del giorno" })).toContainText(/^Oggi/);
   });
 
-  test("crea una prenotazione da confermare e la conferma: compare 'Avvia'", async ({ page }) => {
+  test("una nuova prenotazione è subito valida: nessun passaggio di conferma, si può avviare", async ({ page }) => {
     await login(page);
     const name = randomName();
     createdNames.push(name);
     const detail = await createReservation(page, name);
-    await expect(detail).toContainText("Da confermare");
-    await detail.getByRole("button", { name: "Conferma" }).click();
-    await expect(detail).toContainText("Confermata", { timeout: 10_000 });
+    await expect(detail).toContainText("Prenotata");
+    await expect(detail).not.toContainText(/confermar/i);
+    await expect(detail.getByRole("button", { name: "Conferma" })).toHaveCount(0);
+    await expect(detail.getByRole("button", { name: "Rifiuta" })).toHaveCount(0);
     await expect(detail.getByRole("button", { name: "Avvia (apri il tavolo)" })).toBeVisible();
 
     await detail.getByRole("button", { name: "Prenotazioni", exact: true }).click();
-    await expect(page.getByRole("region", { name: "Prenotazioni del giorno" }).getByRole("button", { name: new RegExp(`^${name}, ore 20:30, 2 adulti, Confermata`) })).toBeVisible();
+    const day = page.getByRole("region", { name: "Prenotazioni del giorno" });
+    await expect(day.getByRole("button", { name: new RegExp(`^${name}, ore 20:30, 2 adulti, Prenotata`) })).toBeVisible();
+    await expect(day).not.toContainText(/da confermare/i);
+    await expect(page.getByRole("region", { name: "Calendario" })).not.toContainText(/da confermare/i);
   });
 
-  test("rifiuta una prenotazione dopo una conferma", async ({ page }) => {
-    await login(page);
+  test("una vecchia prenotazione 'da confermare' compare come le altre (Prenotazioni e Tavoli)", async ({ page }) => {
     const name = randomName();
     createdNames.push(name);
-    const detail = await createReservation(page, name);
-    await detail.getByRole("button", { name: "Rifiuta" }).click();
-    await page.getByRole("alertdialog", { name: `Rifiutare la prenotazione di ${name}?` }).getByRole("button", { name: "Rifiuta" }).click();
-    await expect(detail).toContainText("Rifiutata", { timeout: 10_000 });
+    await seedLegacyPendingReservation(name);
+    await login(page);
+    const row = page.getByRole("region", { name: "Prenotazioni del giorno" }).getByRole("button", { name: new RegExp(`^${name}, ore 21:00, 2 adulti, Prenotata`) });
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.click();
+    await expect(sheet(page, "Dettaglio prenotazione").getByRole("button", { name: "Avvia (apri il tavolo)" })).toBeVisible();
+    await sheet(page, "Dettaglio prenotazione").getByRole("button", { name: "Prenotazioni", exact: true }).click();
+
+    await navTo(page, "Tavoli");
+    await expect(page.getByRole("button", { name: `Avvia prenotazione di ${name}` })).toBeVisible({ timeout: 10_000 });
   });
 
   test("il modulo richiede il nome prima di poter salvare", async ({ page }) => {
     await login(page);
     await page.getByRole("button", { name: "Nuova prenotazione" }).click();
     const form = sheet(page, "Nuova prenotazione");
-    const save = form.getByRole("button", { name: "Salva e conferma" });
+    const save = form.getByRole("button", { name: "Salva prenotazione" });
+    // Un solo modo di salvare: niente più "da confermare".
+    await expect(form.getByRole("button", { name: /^salva/i })).toHaveCount(1);
     await expect(save).toBeDisabled();
     await form.getByRole("textbox", { name: "Nome *" }).fill("Prova Validazione");
     await expect(save).toBeEnabled();
-    // "Salva" resta in fondo allo schermo, nella zona del pollice.
+    // "Salva" resta in fondo allo schermo, nella zona del pollice (misurato a pagina ferma).
+    await expect(save).toBeInViewport({ ratio: 1 });
     const box = await save.boundingBox();
     expect(box.y + box.height).toBeLessThanOrEqual(851);
     expect(box.y).toBeGreaterThan(851 * 0.7);
@@ -110,7 +123,7 @@ test.describe("Prenotazioni", () => {
     await form.getByRole("button", { name: "Aumenta bambini" }).click(); // 1
     for (let i = 0; i < 3; i++) await form.getByRole("button", { name: "Aumenta tavolo" }).click(); // 3
     await form.getByRole("textbox", { name: "Note (allergie, richieste…)" }).fill("Vicino alla finestra");
-    await form.getByRole("button", { name: "Salva da confermare" }).click();
+    await form.getByRole("button", { name: "Salva prenotazione" }).click();
 
     const detail = sheet(page, "Dettaglio prenotazione");
     await expect(detail).toContainText("ore 19:40", { timeout: 10_000 });
@@ -128,18 +141,18 @@ test.describe("Prenotazioni", () => {
     await expect(sheet(page, "Dettaglio prenotazione")).toContainText("3339876543", { timeout: 10_000 });
   });
 
-  test("una prenotazione confermata si annulla con conferma e finisce tra le annullate", async ({ page }) => {
+  test("una prenotazione si annulla con conferma e finisce tra le annullate", async ({ page }) => {
     await login(page);
     const name = randomName();
     createdNames.push(name);
-    const detail = await createReservation(page, name, { confirm: true });
-    await expect(detail).toContainText("Confermata", { timeout: 10_000 });
+    const detail = await createReservation(page, name);
+    await expect(detail).toContainText("Prenotata", { timeout: 10_000 });
     await detail.getByRole("button", { name: "Annulla", exact: true }).click();
     await page.getByRole("alertdialog", { name: `Annullare la prenotazione di ${name}?` }).getByRole("button", { name: "Annulla prenotazione" }).click();
     await expect(detail).toContainText("Annullata", { timeout: 10_000 });
 
     await detail.getByRole("button", { name: "Prenotazioni", exact: true }).click();
-    await page.getByRole("button", { name: /mostra rifiutate, annullate e non presentate/i }).click();
+    await page.getByRole("button", { name: /mostra annullate e non presentate/i }).click();
     await expect(page.getByRole("button", { name: new RegExp(`^${name},.*Annullata`) })).toBeVisible();
   });
 
@@ -154,7 +167,7 @@ test.describe("Prenotazioni", () => {
 
     const name = randomName();
     createdNames.push(name);
-    const detail = await createReservation(page, name, { nextDay: true, time: "13:00", confirm: true });
+    const detail = await createReservation(page, name, { nextDay: true, time: "13:00" });
     await detail.getByRole("button", { name: "Prenotazioni", exact: true }).click();
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -167,7 +180,7 @@ test.describe("Prenotazioni", () => {
     createdNames.push(name);
     const tableNumber = 9500 + Math.floor(Math.random() * 400);
     tables.push(tableNumber);
-    const detail = await createReservation(page, name, { confirm: true });
+    const detail = await createReservation(page, name);
     await detail.getByRole("button", { name: "Avvia (apri il tavolo)" }).click();
 
     // Nessun tavolo assegnato: si chiede il numero.
@@ -178,14 +191,13 @@ test.describe("Prenotazioni", () => {
     await expect(page.getByText(name).first()).toBeVisible();
   });
 
-  test("le prenotazioni di oggi confermate si avviano anche dai Tavoli", async ({ page }) => {
+  test("le prenotazioni di oggi si avviano anche dai Tavoli, col tasto rapido 'Avvia'", async ({ page }) => {
     await login(page);
     const name = randomName();
     createdNames.push(name);
     const tableNumber = 9900 + Math.floor(Math.random() * 90);
     tables.push(tableNumber);
-    const detail = await createReservation(page, name, { confirm: true });
-    await expect(detail).toContainText("Confermata", { timeout: 10_000 });
+    const detail = await createReservation(page, name);
     await detail.getByRole("button", { name: "Prenotazioni", exact: true }).click();
 
     await navTo(page, "Tavoli");
@@ -194,5 +206,60 @@ test.describe("Prenotazioni", () => {
     await sheet(page, `Avvia ${name}`).getByRole("spinbutton", { name: "Numero tavolo" }).fill(String(tableNumber));
     await sheet(page, `Avvia ${name}`).getByRole("button", { name: "Apri comanda" }).click();
     await expect(page.getByText(`Tavolo ${tableNumber}`).first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("toccando una prenotazione di oggi nei Tavoli si apre la sua scheda, da cui si modifica e si avvia", async ({ page }) => {
+    await login(page);
+    const name = randomName();
+    createdNames.push(name);
+    const tableNumber = 9990 + Math.floor(Math.random() * 9);
+    tables.push(tableNumber);
+    const detail = await createReservation(page, name, { time: "21:15" });
+    await detail.getByRole("button", { name: "Prenotazioni", exact: true }).click();
+
+    await navTo(page, "Tavoli");
+    const card = page.getByRole("region", { name: "Prenotazioni di oggi" }).getByRole("button", { name: new RegExp(`^${name}, ore 21:15, 2 adulti — apri la prenotazione`) });
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    // Bersaglio touch pieno e nessuno scorrimento laterale a 393px.
+    expect((await card.boundingBox()).height).toBeGreaterThanOrEqual(48);
+    expect(await page.evaluate(() => globalThis.document.documentElement.scrollWidth)).toBeLessThanOrEqual(393);
+    await card.click();
+
+    // Siamo in Prenotazioni, sulla scheda di quella prenotazione.
+    await expect(page.getByRole("navigation", { name: "Sezioni" }).getByRole("button", { name: "Prenotazioni", exact: true })).toHaveAttribute("aria-current", "page");
+    const opened = sheet(page, "Dettaglio prenotazione");
+    await expect(opened).toContainText(name);
+    await expect(opened).toContainText("ore 21:15");
+
+    // Da qui si modifica…
+    await opened.getByRole("button", { name: "Modifica" }).click();
+    const edit = sheet(page, "Modifica prenotazione");
+    await edit.getByRole("textbox", { name: "Note (allergie, richieste…)" }).fill("Seggiolone");
+    await edit.getByRole("button", { name: "Salva modifiche" }).click();
+    await expect(sheet(page, "Dettaglio prenotazione")).toContainText("Seggiolone", { timeout: 10_000 });
+
+    // …e si avvia: si torna ai Tavoli con la comanda aperta.
+    await sheet(page, "Dettaglio prenotazione").getByRole("button", { name: "Avvia (apri il tavolo)" }).click();
+    const start = sheet(page, `Avvia ${name}`);
+    await start.getByRole("spinbutton", { name: "Numero tavolo" }).fill(String(tableNumber));
+    await start.getByRole("button", { name: "Apri comanda" }).click();
+    await expect(page.getByText(`Tavolo ${tableNumber}`).first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("uscendo da Prenotazioni e tornandoci si riparte dall'elenco, non dalla prenotazione aperta dai Tavoli", async ({ page }) => {
+    await login(page);
+    const name = randomName();
+    createdNames.push(name);
+    const detail = await createReservation(page, name, { time: "22:00" });
+    await detail.getByRole("button", { name: "Prenotazioni", exact: true }).click();
+
+    await navTo(page, "Tavoli");
+    await page.getByRole("button", { name: new RegExp(`^${name}, ore 22:00.*apri la prenotazione`) }).click();
+    await expect(sheet(page, "Dettaglio prenotazione")).toContainText(name);
+    await sheet(page, "Dettaglio prenotazione").getByRole("button", { name: "Prenotazioni", exact: true }).click();
+    await navTo(page, "Storico");
+    await navTo(page, "Prenotazioni");
+    await expect(page.getByRole("region", { name: "Prenotazioni del giorno" })).toContainText(name);
+    await expect(page.getByRole("dialog", { name: "Dettaglio prenotazione" })).toHaveCount(0);
   });
 });

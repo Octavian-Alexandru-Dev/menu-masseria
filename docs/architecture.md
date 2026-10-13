@@ -120,7 +120,7 @@ functions and no UI:
 | Module | Collection(s) | Consumed by |
 |---|---|---|
 | `orders.js` | `orders/{orderId}` | Sala (Waiter/TillSala), TillHistory, statistics (via `statsData.js`) |
-| `reservationsData.js` | `reservations/{id}` | TillReservations, Sala (today's reservations), PhoneApp (pending count) |
+| `reservationsData.js` | `reservations/{id}` | TillReservations, Sala (today's reservations) |
 | `statsData.js` | reads `orders` via `orders.js`, no writes | TillStats |
 | `menuCosts.js` | `menuCosts/data` | TillMenu (editing), Sala (snapshotting cost onto order lines), statistics (margin) |
 | `staffData.js` | `staff/{uid}` (+ creates the Auth account, `firebase-auth.js`) | MenuSettings (Personale) |
