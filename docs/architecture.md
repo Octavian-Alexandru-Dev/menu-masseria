@@ -123,7 +123,8 @@ functions and no UI:
 | `reservationsData.js` | `reservations/{id}` | TillReservations, Sala (today's reservations), PhoneApp (pending count) |
 | `statsData.js` | reads `orders` via `orders.js`, no writes | TillStats |
 | `menuCosts.js` | `menuCosts/data` | TillMenu (editing), Sala (snapshotting cost onto order lines), statistics (margin) |
-| `staffData.js` | `staff/{uid}` | MenuSettings (Personale) |
+| `staffData.js` | `staff/{uid}` (+ creates the Auth account, `firebase-auth.js`) | MenuSettings (Personale) |
+| `menuViews.js` | `menuViews/{day}` (public +1 on open; reads for stats) | ClientView (records), TillStats (reads) |
 | `printJobs.js` (+ `kitchenTicket.js`, `escpos.js`) | `printJobs/{id}` | receipt page (`OrderUi.jsx`), TillSala, Sala send (kitchen ticket), PrintStation |
 
 `menu/data` itself is read by `MenuApp.jsx` (live, `onSnapshot`) and

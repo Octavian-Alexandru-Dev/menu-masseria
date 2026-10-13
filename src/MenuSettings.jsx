@@ -7,7 +7,8 @@
 //  - Link e social: review buttons and social/shop links in the footer;
 //  - Traduzioni: automatic translation of the missing texts, every text
 //    correctable by hand, a language removed;
-//  - Personale: who can sign in to the staff area, and with which role;
+//  - Personale: who can sign in to the staff area, and with which role
+//    (new accounts are created right here, see staffData.js);
 //  - Stampa del menù: printable version (PDF from the browser's print);
 //  - Backup: download the whole menu as JSON, restore it.
 //
@@ -17,13 +18,13 @@
 import React, { useState, useEffect } from "react";
 import {
   Store, Coins, Link2, Languages, Users, Printer, DatabaseBackup, Eye, ChevronRight, Check, Keyboard,
-  Download, Upload, Trash2, Sparkles, Plus, UserRound,
+  Download, Upload, Trash2, Sparkles, Plus, UserRound, EyeOff,
 } from "lucide-react";
 import { THEMES, LANGUAGES, BackButton, Logo, GlobalStyle, formatCentsAsPrice, parsePriceToCents, countMissingTranslations, generateMissingTranslations } from "./shared";
 import { menuEdits, combineEdits } from "./menuEdit";
 import { parseMenuJsonFile, downloadMenuJson } from "./menuBackup";
 import { DEFAULT_PRINT_OPTIONS, buildPrintPayload, openPrintPreview } from "./menuPrint";
-import { STAFF_ROLES, staffRoleLabel, subscribeStaff, saveStaffMember, removeStaffMember } from "./staffData";
+import { STAFF_ROLES, MIN_PASSWORD_LENGTH, staffRoleLabel, subscribeStaff, saveStaffMember, createStaffMember, removeStaffMember, staffAccountErrorMessage } from "./staffData";
 import { auth } from "./firebase-auth";
 import { confirmAction } from "./confirmDialog";
 import {
@@ -461,33 +462,58 @@ function TranslationsPanel({ t, menu, onPatch, onBack, sheet }) {
 
 /* --------------------------------- personale --------------------------------- */
 
+// "Nuovo account": the person's login (email + password) is created here,
+// no Firebase console needed. "Account esistente": a role for an account
+// that already exists (e.g. created earlier in the console), by its UID.
+const ACCOUNT_MODES = [
+  { value: "new", label: "Nuovo account" },
+  { value: "existing", label: "Account esistente" },
+];
+
 function StaffPanel({ t, onBack, sheet }) {
   const [staff, setStaff] = useState(null);
+  const [mode, setMode] = useState("new");
   const [uidValue, setUidValue] = useState("");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState("waiter");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const input = tillInputStyle(t);
+  const myUid = auth.currentUser?.uid;
 
   useEffect(() => subscribeStaff(setStaff, (err) => {
     console.error("[menu] Lettura personale fallita:", err);
     setNotice({ tone: "error", text: "Impossibile leggere l'elenco del personale." });
   }), []);
 
+  const isNew = mode === "new";
+  const ready = name.trim() && (isNew ? email.trim() && password.length >= MIN_PASSWORD_LENGTH : uidValue.trim());
+
   const add = async () => {
-    if (!uidValue.trim() || !name.trim()) return;
+    if (!ready) return;
     setBusy(true);
     setNotice(null);
     try {
-      await saveStaffMember(uidValue, { name, role });
-      setNotice({ tone: "ok", text: `${name.trim()} aggiunto come ${staffRoleLabel(role).toLowerCase()}.` });
+      if (isNew) await createStaffMember({ email, password, name, role });
+      else await saveStaffMember(uidValue, { name, role });
+      setNotice({
+        tone: "ok",
+        text: isNew
+          ? `${name.trim()} aggiunto come ${staffRoleLabel(role).toLowerCase()}: entra con ${email.trim().toLowerCase()} e la password scelta.`
+          : `${name.trim()} aggiunto come ${staffRoleLabel(role).toLowerCase()}.`,
+      });
       setUidValue("");
       setName("");
+      setEmail("");
+      setPassword("");
+      setShowPassword(false);
       setRole("waiter");
     } catch (err) {
       console.error("[menu] Salvataggio personale fallito:", err);
-      setNotice({ tone: "error", text: "Salvataggio non riuscito. Verifica la connessione e riprova." });
+      setNotice({ tone: "error", text: staffAccountErrorMessage(err) });
     } finally {
       setBusy(false);
     }
@@ -495,7 +521,7 @@ function StaffPanel({ t, onBack, sheet }) {
   const remove = async (member) => {
     const confirmed = await confirmAction({
       title: `Togliere l'accesso a ${member.name || member.uid}?`,
-      message: "Non potrà più entrare nell'area riservata. L'account resta in Firebase: si può riaggiungere.",
+      message: "Non potrà più entrare nell'area riservata. Il suo account resta: si può riaggiungere da «Account esistente».",
       confirmLabel: "Togli accesso",
       danger: true,
     });
@@ -507,13 +533,6 @@ function StaffPanel({ t, onBack, sheet }) {
       setNotice({ tone: "error", text: "Eliminazione non riuscita. Riprova." });
     }
   };
-  const useMine = () => {
-    const me = auth.currentUser;
-    if (!me) return;
-    setUidValue(me.uid);
-    setName((n) => n || me.email?.split("@")[0] || "Amministratore");
-    setRole("admin");
-  };
 
   return (
     <SidePanel t={t} sheet={sheet} label="Personale"
@@ -521,8 +540,8 @@ function StaffPanel({ t, onBack, sheet }) {
       footer={(
         <>
           <Notice notice={notice} />
-          <TillButton t={t} variant="primary" size={60} icon={Plus} disabled={busy || !uidValue.trim() || !name.trim()} onClick={add}>
-            {busy ? "Salvataggio…" : "Aggiungi persona"}
+          <TillButton t={t} variant="primary" size={60} icon={Plus} disabled={busy || !ready} onClick={add}>
+            {busy ? "Salvataggio…" : isNew ? "Crea account" : "Aggiungi persona"}
           </TillButton>
         </>
       )}>
@@ -535,21 +554,40 @@ function StaffPanel({ t, onBack, sheet }) {
               <UserRound size={22} color={t.inkSoft} style={{ flexShrink: 0 }} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", fontSize: 17, fontWeight: 600 }}>{m.name || "Senza nome"} <span style={{ fontWeight: 500, color: t.inkSoft, fontSize: 15 }}>· {staffRoleLabel(m.role)}</span></span>
-                <span style={{ display: "block", fontSize: 12, color: t.inkSoft, fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis" }}>{m.uid}</span>
+                <span style={{ display: "block", fontSize: m.email ? 14 : 12, color: t.inkSoft, fontFamily: m.email ? FONT : "monospace", overflow: "hidden", textOverflow: "ellipsis" }}>{m.email || m.uid}</span>
               </span>
-              <TillButton t={t} size={TOUCH} variant="danger" icon={Trash2} onClick={() => remove(m)} aria-label={`Togli accesso a ${m.name || m.uid}`} style={{ padding: "0 12px" }}>Togli</TillButton>
+              {/* Your own access can't be removed from here: it would lock you out (maybe the last admin). */}
+              {m.uid === myUid
+                ? <span style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft, padding: "0 12px" }}>Tu</span>
+                : <TillButton t={t} size={TOUCH} variant="danger" icon={Trash2} onClick={() => remove(m)} aria-label={`Togli accesso a ${m.name || m.uid}`} style={{ padding: "0 12px" }}>Togli</TillButton>}
             </div>
           ))}
         </div>
 
         <SectionTitle t={t} style={{ marginTop: 6 }}>Aggiungi una persona</SectionTitle>
+        <Segmented t={t} label="Tipo di account" value={mode} onChange={(v) => { setMode(v); setNotice(null); }} options={ACCOUNT_MODES} />
         <div style={{ fontSize: 14, color: t.inkSoft, lineHeight: 1.45 }}>
-          Crea prima il suo account in Firebase Console (Authentication → Aggiungi utente), poi incolla qui il suo UID.
-          Cameriere: Tavoli e Prenotazioni. Amministratore: tutto.
+          {isNew
+            ? "Crea il suo accesso: scegli email e password e comunicale alla persona. Potrà entrare subito, da telefono o dalla cassa."
+            : "Per un account che esiste già (es. creato in Firebase Console o a cui era stato tolto l'accesso): incolla il suo UID."}
+          {" "}Cameriere: Tavoli e Prenotazioni. Amministratore: tutto.
         </div>
-        {auth.currentUser && <TillButton t={t} size={TOUCH} variant="ghost" icon={UserRound} onClick={useMine} style={{ justifySelf: "start", paddingLeft: 0 }}>Usa il mio account</TillButton>}
-        <Field t={t} label="UID (da Firebase Console)"><input aria-label="UID" style={input} value={uidValue} onChange={(e) => setUidValue(e.target.value)} placeholder="es. aBc123…" autoCapitalize="off" autoCorrect="off" /></Field>
         <Field t={t} label="Nome"><input aria-label="Nome della persona" style={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="es. Marco" /></Field>
+        {isNew ? (
+          <>
+            <Field t={t} label="Email"><input aria-label="Email della persona" type="email" style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="es. marco@esempio.it" autoCapitalize="off" autoCorrect="off" autoComplete="off" /></Field>
+            <Field t={t} label="Password" hint={`Almeno ${MIN_PASSWORD_LENGTH} caratteri.`}>
+              <span style={{ display: "flex", gap: 8 }}>
+                <input aria-label="Password della persona" type={showPassword ? "text" : "password"} style={{ ...input, flex: 1, minWidth: 0 }} value={password} onChange={(e) => setPassword(e.target.value)} autoCapitalize="off" autoCorrect="off" autoComplete="new-password" />
+                <TillButton t={t} size={TOUCH} variant="secondary" icon={showPassword ? EyeOff : Eye} aria-pressed={showPassword} onClick={(e) => { e.preventDefault(); setShowPassword((s) => !s); }} style={{ padding: "0 12px", flexShrink: 0 }}>
+                  {showPassword ? "Nascondi" : "Mostra"}
+                </TillButton>
+              </span>
+            </Field>
+          </>
+        ) : (
+          <Field t={t} label="UID (da Firebase Console)"><input aria-label="UID" style={input} value={uidValue} onChange={(e) => setUidValue(e.target.value)} placeholder="es. aBc123…" autoCapitalize="off" autoCorrect="off" /></Field>
+        )}
         <div style={{ display: "grid", gap: 6 }}>
           <span style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft }}>Ruolo</span>
           <Segmented t={t} label="Ruolo" value={role} onChange={setRole} options={STAFF_ROLES} />

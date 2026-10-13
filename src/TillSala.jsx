@@ -14,7 +14,8 @@
 //    screen — number, name, covers, elapsed time, running total, status
 //    written on a fixed colour;
 //  - order screen split like common restaurant POS: menu tiles on the left
-//    (category tabs + search), the ticket in the side panel on the right.
+//    (every category at once in a grid + search; dish tiles with their
+//    photo), the ticket in the side panel on the right.
 //    Tapping a ticket line opens its editor right there (quantity, price —
 //    offered, discounted, custom — note, removal): editing in context, the
 //    total stays in view; changes apply only on "Salva";
@@ -40,7 +41,7 @@ import { formatTime, elapsedLabel, SyncBadge, useSalaData, useOrderDraft, tableS
 import { LineEditor, CoversControl, DishTile, TicketLine } from "./OrderUi";
 import { usePrintJob } from "./usePrintJob";
 import {
-  TOUCH, FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine,
+  TOUCH, FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine, CategoryGrid,
 } from "./TillUi";
 
 const TillHistory = lazy(() => import("./TillHistory"));
@@ -320,6 +321,17 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
     tiles = (cat?.items || []).map((item) => ({ item, categoryId: cat.id, categoryName: cat.name, offMenu: false }));
   }
   const draftQty = (itemId) => d.draft.filter((l) => l.menuItemId === itemId).reduce((s, l) => s + l.quantity, 0);
+  // Every category at once (CategoryGrid): how many dishes, how many already
+  // picked and not sent yet.
+  const categoryCards = tabs.map((tb) => {
+    const items = tb.id === "__offmenu__" ? d.offMenuItems : d.normalItems.find((c) => c.id === tb.id)?.items || [];
+    const inDraft = items.reduce((n, item) => n + draftQty(item.id), 0);
+    return {
+      id: tb.id, name: tb.name, highlight: inDraft > 0,
+      detail: `${items.length} ${items.length === 1 ? "piatto" : "piatti"}${inDraft > 0 ? ` · ${inDraft} da inviare` : ""}`,
+      ...(tb.id === "__offmenu__" ? { accent: STATUS.waiting, icon: <Utensils size={16} /> } : null),
+    };
+  });
 
   const sentLines = order.items || [];
   const editingLine = editing
@@ -363,10 +375,6 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
     if (confirmed && await d.closeTable()) onBack();
   };
 
-  const chip = (active) => ({
-    flexShrink: 0, minHeight: 52, padding: "0 20px", borderRadius: 12, fontSize: 17, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
-    border: `1.5px solid ${active ? t.primary : t.line}`, background: active ? t.primary : t.card, color: active ? t.bg : t.ink,
-  });
   const coperto = copertoTotalCents(order);
 
   const ticket = (
@@ -445,18 +453,10 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
           <div style={{ marginLeft: "auto" }}><CoversControl t={t} order={order} /></div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 20px 0" }}>
-          <div role="tablist" aria-label="Categorie del menù" style={{ display: "flex", gap: 8, overflowX: "auto", flex: 1, minWidth: 0, paddingBottom: 4 }}>
-            {tabs.map((tb) => {
-              const active = !d.isItemSearching && tb.id === activeTab;
-              return (
-                <button key={tb.id} type="button" role="tab" aria-selected={active}
-                  onClick={() => { d.setItemSearch(""); setCategoryId(tb.id); }}
-                  className="mdp-btn" style={{ ...chip(active), ...(tb.id === "__offmenu__" && !active ? { color: STATUS.waiting, borderColor: STATUS.waiting } : null) }}>
-                  {tb.id === "__offmenu__" && <Utensils size={16} style={{ marginRight: 6, verticalAlign: "-2px" }} />}{tb.name}
-                </button>
-              );
-            })}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 20px 0" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <CategoryGrid t={t} label="Categorie del menù" minWidth={150} categories={categoryCards}
+              activeId={d.isItemSearching ? null : activeTab} onSelect={(cid) => { d.setItemSearch(""); setCategoryId(cid); }} />
           </div>
           {d.searchEnabled && (
             <div style={{ position: "relative", width: 260, flexShrink: 0 }}>

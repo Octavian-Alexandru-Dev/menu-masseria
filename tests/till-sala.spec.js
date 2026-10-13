@@ -3,7 +3,7 @@ import { TEST_WAITER, TEST_ADMIN } from "./test-env";
 import { deleteTestOrderByTableNumber, deleteTestReservationByName } from "./firestore-cleanup";
 import { installDesktopBridgeMock, printedTexts } from "./helpers/desktopBridge";
 import { deletePrintJobsByTableLabel } from "./helpers/printJobs";
-import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix } from "./helpers/menuDoc";
+import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix, findStaffByEmail, removeStaffByEmailRemotely } from "./helpers/menuDoc";
 
 // Sala della cassa (TillSala.jsx): l'interfaccia a tutto schermo in stile
 // cassa POS mostrata solo dentro il client Windows (window.mdpDesktop,
@@ -176,6 +176,31 @@ test("dalla barra laterale si modificano quantità e prezzo di una riga: offerto
   expect(receipt).toContain("Orecchiette (sconto 20%)");
   expect(receipt).toContain("Caprese (prezzo modificato)");
   expect(receipt).toContain("30,50");
+});
+
+test("alla cassa tutte le categorie stanno in una griglia sempre visibile, con i piatti e quelli da inviare; i piatti mostrano la foto", async ({ page }) => {
+  await page.route(/placehold\.co/, (route) => route.fulfill({ status: 200, contentType: "image/png",
+    body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64") }));
+  await openTill(page);
+  await openTableWithKeypad(page);
+  const grid = page.getByRole("tablist", { name: "Categorie del menù" });
+  for (const name of ["Antipasti", "Primi", "Dolci", "Bevande"]) {
+    const tab = grid.getByRole("tab", { name: new RegExp(`^${name}`) });
+    await expect(tab).toBeInViewport({ ratio: 1 });
+    await expect(tab).toContainText(/\d+ piatt[oi]/);
+    expect((await tab.boundingBox()).height).toBeGreaterThanOrEqual(48);
+  }
+  // Nessuna categoria nascosta oltre il bordo: la griglia non scorre di lato.
+  expect(await grid.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+
+  await grid.getByRole("tab", { name: /^Antipasti/ }).click();
+  await page.getByRole("button", { name: /^Aggiungi Bruschetta/ }).click();
+  await expect(grid.getByRole("tab", { name: /^Antipasti/ })).toContainText("1 da inviare");
+  await expect(page.getByRole("button", { name: /^Aggiungi Bruschetta/ }).locator("img")).toHaveCount(0);
+
+  await grid.getByRole("tab", { name: /^Dolci/ }).click();
+  await expect(grid.getByRole("tab", { name: /^Dolci/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: /^Aggiungi Tiramisù/ }).locator("img")).toBeVisible();
 });
 
 test("una riga già inviata si può rimuovere dall'editor, con conferma", async ({ page }) => {
@@ -552,6 +577,41 @@ test("alla cassa le impostazioni del menù stanno nella barra laterale e valgono
   await expect(hub.getByRole("button", { name: /^Personale/ })).toBeVisible();
 });
 
+test("alla cassa l'admin crea l'account di una persona nuova dal Personale, senza uscire", async ({ page }) => {
+  const email = `cassa-${Date.now()}@test.local`;
+  try {
+    const nav = await openTillAsAdmin(page);
+    await nav.getByRole("button", { name: /^menù$/i }).click();
+    await page.getByRole("button", { name: "Impostazioni", exact: true }).click();
+    await page.getByRole("region", { name: "Impostazioni del menù" }).getByRole("button", { name: /^Personale/ }).click();
+    const panel = page.getByRole("region", { name: "Personale" });
+    await panel.getByRole("textbox", { name: "Nome della persona" }).fill("Responsabile di sala");
+    await panel.getByRole("textbox", { name: "Email della persona" }).fill(email);
+    await panel.getByLabel("Password della persona").fill("Prova123!");
+    await panel.getByRole("group", { name: "Ruolo" }).getByRole("button", { name: "Amministratore" }).click();
+    await panel.getByRole("button", { name: "Crea account" }).click();
+    await expect(panel.getByRole("list", { name: "Persone con accesso" }).getByRole("listitem").filter({ hasText: "Responsabile di sala · Amministratore" })).toContainText(email, { timeout: 10_000 });
+    expect(await findStaffByEmail(email)).toMatchObject({ role: "admin", email });
+    // La cassa resta collegata come prima.
+    await expect(nav).toBeVisible();
+  } finally {
+    await removeStaffByEmailRemotely(email);
+  }
+});
+
+test("alla cassa il Menù mostra le categorie in griglia e i piatti con la loro foto", async ({ page }) => {
+  await page.route(/placehold\.co/, (route) => route.fulfill({ status: 200, contentType: "image/png",
+    body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64") }));
+  const nav = await openTillAsAdmin(page);
+  await nav.getByRole("button", { name: /^menù$/i }).click();
+  const grid = page.getByRole("tablist", { name: "Categorie del menù" });
+  for (const name of ["Antipasti", "Primi", "Dolci", "Bevande"]) {
+    await expect(grid.getByRole("tab", { name: new RegExp(`^${name}`) })).toBeInViewport({ ratio: 1 });
+  }
+  await grid.getByRole("tab", { name: /^Dolci/ }).click();
+  await expect(page.getByRole("button", { name: "Modifica Tiramisù" }).locator("img")).toBeVisible();
+});
+
 test("alla cassa la categoria manda in comanda tutti i suoi piatti o nessuno, con un tocco", async ({ page }) => {
   const nav = await openTillAsAdmin(page);
   await nav.getByRole("button", { name: /^menù$/i }).click();
@@ -591,4 +651,10 @@ test("statistiche della cassa: periodo a tocco, numeri grandi, confronto e class
   await expect(compare).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("region", { name: "Dettagli delle statistiche" })).toContainText(/rispetto a/);
   await expect(page.getByRole("region", { name: "Statistiche", exact: true })).toContainText(/%|invariato|nuovo/, { timeout: 10_000 });
+
+  // Visite al menù (seed: ieri 12) nella colonna principale, sotto le vendite.
+  const views = page.getByRole("region", { name: "Visite al menù" });
+  await expect(views.getByTestId("kpi-views")).toHaveText("12", { timeout: 10_000 });
+  await periods.getByRole("button", { name: "Ultimi 7 giorni" }).click();
+  await expect(views.getByRole("group", { name: "Visite al menù nel tempo" }).getByRole("button")).toHaveCount(7, { timeout: 10_000 });
 });

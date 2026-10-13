@@ -11,7 +11,9 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
-const app = getApps()[0] || initializeApp({ apiKey: "demo-key", projectId: "demo-masseria-test" });
+// L'app di default, non una qualsiasi: tests/firestore-rules.spec.js crea app
+// con un nome proprio (una per account) nello stesso processo.
+const app = getApps().find((a) => a.name === "[DEFAULT]") || initializeApp({ apiKey: "demo-key", projectId: "demo-masseria-test" });
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 

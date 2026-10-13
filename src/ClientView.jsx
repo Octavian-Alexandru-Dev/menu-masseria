@@ -9,6 +9,7 @@ import {
   GlobalStyle, BranchDivider, Logo,
 } from "./shared";
 import { optimizedImageUrl } from "./cloudinary";
+import { recordMenuView } from "./menuViews";
 
 // Google logo (multicolor "G") recreated as a vector SVG: no image to
 // download, and the button text stays real HTML (translatable), not pixels
@@ -109,6 +110,9 @@ function LinkButton({ href, icon, bg, children }) {
 
 export default function ClientView({ menu, onGoStaff }) {
   const t = THEMES[menu.theme] || THEMES.minimal;
+
+  // One visit a day per device, for Statistiche (menuViews.js).
+  useEffect(() => { recordMenuView(); }, []);
 
   // Language chosen by the customer, remembered across visits.
   const [lang, setLang] = useState(() => {

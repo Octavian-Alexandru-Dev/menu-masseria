@@ -69,14 +69,34 @@ the margin instead of treating them as zero cost.
 ## `staff/{uid}` (one document per staff member)
 
 Role assignment for a Firebase Auth user. The `uid` is the Firebase Auth
-uid (accounts themselves are created by hand in the Firebase console — see
-`docs/comande-camerieri.md` §3). Authenticated read/write (any signed-in
-user can read/write any `staff` doc — see "Trust boundary" below).
+uid. Accounts are created from the app (Menù → Impostazioni → Personale →
+"Nuovo account", `staffData.js` > `createStaffMember`: a secondary Firebase
+app creates the Auth account so the admin stays signed in, then the admin
+writes this doc; if that write fails the new account is deleted again). A
+role can also be given to an existing account by uid. Each user reads their
+own doc, staff read all of them, **only an admin writes** (see "Trust
+boundary" below). The very first admin of a new project is created by hand
+in the Firebase console (GUIDA.md).
 
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | Display name, shown as "Ciao, {name}" etc. |
+| `email` | string? | Login email, set when the account was created from the app (shown in the Personale list instead of the uid). Missing for accounts added by uid. |
 | `role` | string | `"admin"` or `"waiter"`. `"kitchen"` is an old role: the kitchen area was removed (the kitchen works from printed tickets), such accounts get a message asking for a role change. Any other value (or a missing doc) is a valid state the UI handles explicitly (`useStaffSession` in `staff-shared.jsx`: `"no-role"` / an unrecognized role → "Accesso non consentito"). |
+
+## `menuViews/{YYYY-MM-DD}` (one document per day)
+
+Visits to the public menu, for Statistiche (`src/menuViews.js`,
+`TillStats.jsx`). The document id is the visitor's local calendar day.
+
+| Field | Type | Notes |
+|---|---|---|
+| `count` | number | Devices that opened the public menu that day. A device counts once a day (marker `mdp.menuViewDay` in its localStorage); staff devices (`mdp.lastStaffAccount` present) and the till client are never counted. |
+
+No personal data. Written by anyone without an account, but the rules only
+allow creating a day at `1` or adding exactly `1`, with no other field and
+no delete; read by staff only. A determined visitor could still inflate it
+one at a time: an indicator, not an accounting figure.
 
 ## `orders/{orderId}`
 
@@ -138,16 +158,22 @@ the till client at startup — no TTL policy or scheduled job.
 
 ## Trust boundary (`firestore.rules`)
 
-Every collection above except `menu/data` reads requires
-`request.auth != null` for both read and write; `menu/data` allows public
-read. There is **no per-role enforcement in the rules** — any authenticated
-user (i.e. any staff account) can read/write any collection, including
-`staff/{uid}` itself. Role-based restrictions (a waiter can't access Stats,
-etc.) are enforced only in the UI. This is a deliberate, documented
-trade-off (see `firestore.rules`'s inline comments and `ROADMAP.md`'s
-"Sicurezza account admin" note): staff accounts are created by hand by the
-admin, not self-registered, so the threat model treats any authenticated
-account as trusted personnel.
+Being signed in is **not** enough: with email/password enabled anyone who
+has the (public) web API key can create a Firebase Auth account — that's
+also how the app creates staff accounts. So every collection requires
+`isStaff()`: a `staff/{uid}` doc with a role in use (`admin` / `waiter`;
+the old `kitchen` role and unknown roles are out). `menu/data` is publicly
+readable. `staff/{uid}`: own doc readable by its owner (even when missing:
+that's how the UI detects "no role"), all docs readable by staff, writes by
+`isAdmin()` only. Cost: one extra read of the caller's `staff` doc per
+request.
+
+Beyond that there is no per-role enforcement in the rules: a waiter can
+technically write anything an admin can except `staff/`; the finer
+restrictions (a waiter can't access Stats or edit the menu) are enforced in
+the UI only — a deliberate trade-off, all staff are trusted personnel.
+`menuViews/{day}` is the one collection the public writes to (see above).
+Covered by `tests/firestore-rules.spec.js`.
 
 ## Entity relationships
 

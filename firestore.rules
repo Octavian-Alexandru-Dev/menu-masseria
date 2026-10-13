@@ -3,12 +3,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Personale = account con un documento staff/{uid} e un ruolo in uso
+    // (admin/waiter). Non basta essere autenticati: con l'email/password
+    // abilitata chiunque conosca la chiave web pubblica può crearsi un
+    // account Firebase Auth (è anche così che l'app crea gli account dalle
+    // Impostazioni > Personale, vedi src/firebase-auth.js), quindi i dati
+    // dello staff si aprono solo a chi un amministratore ha dato un ruolo.
+    // Costo: una lettura in più di staff/{uid} per richiesta (Firestore la
+    // conta una sola volta anche se più regole la usano).
+    function staffRole() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role;
+    }
+    function isStaff() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/staff/$(request.auth.uid))
+        && staffRole() in ['admin', 'waiter'];
+    }
+    function isAdmin() {
+      return isStaff() && staffRole() == 'admin';
+    }
+
     // Il menù è pubblico in lettura (lo vedono i clienti),
-    // ma può essere modificato solo da un utente autenticato
-    // (l'account admin creato in Firebase Authentication).
+    // ma può essere modificato solo dal personale.
     match /menu/data {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isStaff();
     }
 
     // Costi interni dei piatti (per il margine nella Dashboard statistiche):
@@ -17,40 +36,54 @@ service cloud.firestore {
     // menu/data, chiunque visitasse il menù senza autenticarsi lo vedrebbe
     // nella risposta di rete anche a UI nascosta.
     match /menuCosts/data {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
     }
 
-    // Ruoli del personale (admin/waiter/kitchen). Stesso confine di fiducia
-    // già usato per menu/data in questo progetto: qualunque account
-    // autenticato è personale fidato (gli account vengono creati a mano
-    // dall'amministratore, non con autoregistrazione pubblica), quindi non
-    // serve una gerarchia di permessi più fine qui.
+    // Ruoli del personale (admin/waiter). Ognuno legge il proprio documento
+    // (anche se non esiste: è così che l'app scopre "nessun ruolo" dopo il
+    // login, staff-shared.jsx); l'elenco lo legge il personale; solo un
+    // amministratore assegna o toglie ruoli (Impostazioni > Personale). Il
+    // primo amministratore di un progetto nuovo si crea a mano in Firebase
+    // Console (vedi GUIDA.md).
     match /staff/{uid} {
-      allow read, write: if request.auth != null;
+      allow read: if (request.auth != null && request.auth.uid == uid) || isStaff();
+      allow write: if isAdmin();
     }
 
-    // Comande dei tavoli, visibili/modificabili da cameriere e cucina.
-    // Stesso confine di fiducia di cui sopra: la distinzione dei ruoli
-    // (cameriere vs cucina) è imposta dall'interfaccia, non da regole
-    // separate per campo.
+    // Comande dei tavoli. La distinzione dei ruoli (cameriere vs
+    // amministratore) è imposta dall'interfaccia, non da regole separate per
+    // campo: qui basta essere personale.
     match /orders/{orderId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
     }
 
     // Prenotazioni tavoli, inserite manualmente da cameriere/amministrazione
-    // (vedi docs/prenotazioni.md). Stesso confine di fiducia delle collection
-    // sopra: nessuna distinzione di ruolo imposta dalle regole, solo
-    // dall'interfaccia (waiter+admin).
+    // (vedi docs/prenotazioni.md). Stesso confine delle comande.
     match /reservations/{reservationId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
     }
 
     // Coda di stampa dei preconti verso la stampante termica della cassa
     // (vedi docs/stampa-scontrini.md): qualunque dispositivo dello staff
     // accoda una stampa, il client Windows della cassa la prende in carico e
-    // ne aggiorna lo stato. Stesso confine di fiducia delle collection sopra.
+    // ne aggiorna lo stato. Stesso confine delle comande.
     match /printJobs/{jobId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isStaff();
+    }
+
+    // Visite al menù pubblico, un contatore per giorno (src/menuViews.js,
+    // mostrato in Statistiche). Il menù lo apre chiunque senza account, quindi
+    // la scrittura è pubblica ma ridotta al minimo: si può solo far partire
+    // un giorno da 1 o aggiungergli 1, nessun altro campo; lo legge solo il
+    // personale.
+    match /menuViews/{day} {
+      allow read: if isStaff();
+      allow create: if day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count == 1;
+      allow update: if request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count == resource.data.count + 1;
+      allow delete: if false;
     }
 
     // Tutto il resto è bloccato per sicurezza.

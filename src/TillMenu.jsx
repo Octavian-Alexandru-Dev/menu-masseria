@@ -1,6 +1,7 @@
 // Gestione menù for the till (a "Menù" section of TillSala.jsx, admin
 // accounts only) — the same layout as the order screen, so it needs no
-// training: categories as tabs and dishes as tiles on the left, the selected
+// training: every category at once in a grid (CategoryGrid) and dishes as
+// tiles with their photo on the left, the selected
 // thing edited in the side panel on the right.
 //
 //  - tap a dish → its editor in the side panel: name, price from the keypad
@@ -33,7 +34,7 @@ import { uploadMenuImage, optimizedImageUrl } from "./cloudinary";
 import { confirmAction } from "./confirmDialog";
 import {
   TOUCH, FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, SidePanel, SectionTitle, StatusPill,
-  Field, SwitchRow, PriceKeypad, Notice, tillInputStyle, useCompactLayout,
+  Field, SwitchRow, PriceKeypad, Notice, tillInputStyle, useCompactLayout, CategoryGrid, DishThumb,
 } from "./TillUi";
 
 const isOnRequest = (price) => /richiesta/i.test(price || "");
@@ -52,8 +53,13 @@ function DishAdminTile({ t, item, selected, onSelect }) {
       border: `${selected ? 2.5 : 1.5}px solid ${selected ? t.primary : t.line}`, background: selected ? `${t.primary}12` : t.card,
       opacity: hidden ? 0.7 : 1,
     }}>
-      <span style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.25 }}>{item.name || "Senza nome"}</span>
-      <span style={{ fontSize: 16, color: t.inkSoft }}>{priceLabel(item.price)}</span>
+      <span style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+        <DishThumb t={t} src={item.image ? optimizedImageUrl(item.image, { width: 96 }) : ""} size={48} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: 17, fontWeight: 600, lineHeight: 1.25, overflowWrap: "anywhere" }}>{item.name || "Senza nome"}</span>
+          <span style={{ display: "block", fontSize: 16, color: t.inkSoft, marginTop: 4 }}>{priceLabel(item.price)}</span>
+        </span>
+      </span>
       <span style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: "auto" }}>
         {!kitchen && <StatusPill color={STATUS.idle}>Non in comanda</StatusPill>}
         {hidden && <StatusPill color={STATUS.danger}>Nascosto</StatusPill>}
@@ -470,13 +476,6 @@ export default function TillMenu({ t, menu, admin }) {
     }
   }
 
-  const chip = (active) => ({
-    flexShrink: 0, minHeight: compact ? 44 : 52, padding: compact ? "0 16px" : "0 20px", borderRadius: compact ? 22 : 12,
-    fontSize: compact ? 15 : 17, fontWeight: 600, cursor: "pointer", fontFamily: FONT, whiteSpace: "nowrap",
-    border: `1.5px solid ${active ? t.primary : t.line}`, background: active ? t.primary : t.card, color: active ? t.bg : t.ink,
-    display: "inline-flex", alignItems: "center", gap: 6,
-  });
-
   const newDish = () => {
     if (!activeCat) return;
     setSelection({
@@ -527,17 +526,14 @@ export default function TillMenu({ t, menu, admin }) {
     </div>
   );
   const categoryTabs = (
-    <div role="tablist" aria-label="Categorie del menù" style={{ display: "flex", gap: 8, overflowX: "auto", padding: compact ? "10px 16px" : "12px 20px 4px", flexShrink: 0, scrollbarWidth: compact ? "none" : undefined }}>
-      {categories.map((c) => {
-        const active = activeCat?.id === c.id;
-        return (
-          <button key={c.id} type="button" role="tab" aria-selected={active}
-            onClick={() => { setCategoryId(c.id); setSelection(null); }} className="mdp-btn" style={chip(active)}>
-            {c.visible === false && <EyeOff size={16} aria-label="nascosta" />}
-            {c.name || "Senza nome"}
-          </button>
-        );
-      })}
+    <div style={{ padding: compact ? "10px 16px" : "12px 20px 4px", flexShrink: 0 }}>
+      <CategoryGrid t={t} label="Categorie del menù" minWidth={compact ? 110 : 150} activeId={activeCat?.id}
+        onSelect={(id) => { setCategoryId(id); setSelection(null); }}
+        categories={categories.map((c) => ({
+          id: c.id, name: c.name || "Senza nome",
+          icon: c.visible === false ? <EyeOff size={16} aria-label="nascosta" /> : null,
+          detail: `${c.items.length} ${c.items.length === 1 ? "piatto" : "piatti"}${c.visible === false ? " · nascosta" : ""}`,
+        }))} />
     </div>
   );
 
@@ -549,7 +545,7 @@ export default function TillMenu({ t, menu, admin }) {
           <TillButton t={t} size={TOUCH} icon={FolderPlus} onClick={() => setSelection({ type: "newCategory" })} style={{ padding: "0 10px", fontSize: 16 }}>Nuova categoria</TillButton>
           <TillButton t={t} size={TOUCH} icon={Settings2} onClick={() => setSelection({ type: "settings", page: null })} style={{ padding: "0 10px", fontSize: 16 }}>Impostazioni</TillButton>
         </div>
-        <div style={{ position: "sticky", top: "var(--mdp-top-bar, 0px)", zIndex: 20, background: t.bg, borderBottom: `1px solid ${t.line}` }}>
+        <div style={{ borderBottom: `1px solid ${t.line}` }}>
           {categoryTabs}
         </div>
         {activeCat && (

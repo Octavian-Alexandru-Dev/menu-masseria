@@ -4,7 +4,7 @@
 // test. Le scritture sono transazioni sul documento com'è ora, come fa la
 // cassa (MenuApp.jsx > handlePatch), così non si cancellano a vicenda.
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { doc, getDoc, runTransaction, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, runTransaction, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { TEST_ADMIN } from "../test-env.js";
 import { auth, db } from "./emulatorApp.js";
 
@@ -96,11 +96,38 @@ export async function setMenuFieldsRemotely(fields) {
 }
 
 // Best-effort: una persona aggiunta dal test al personale (staff/{uid}).
+// staff/ lo scrive solo un amministratore (firestore.rules): si rientra
+// esplicitamente come admin, perché nello stesso processo altri helper
+// (firestore-cleanup.js) usano la stessa sessione come cameriere.
 export async function removeStaffRemotely(uid) {
   try {
-    await ensureSignedIn();
+    await signInWithEmailAndPassword(auth, TEST_ADMIN.email, TEST_ADMIN.password);
     await deleteDoc(doc(db, "staff", uid));
   } catch (err) {
     console.error(`[test cleanup] Pulizia personale "${uid}" fallita:`, err.message || err);
   }
+}
+
+// Il documento staff/{uid} di un account creato dall'app (Personale >
+// Nuovo account), cercato per email; null se non c'è.
+export async function findStaffByEmail(email) {
+  await signInWithEmailAndPassword(auth, TEST_ADMIN.email, TEST_ADMIN.password);
+  const snap = await getDocs(query(collection(db, "staff"), where("email", "==", email)));
+  return snap.empty ? null : { uid: snap.docs[0].id, ...snap.docs[0].data() };
+}
+
+export async function removeStaffByEmailRemotely(email) {
+  try {
+    const member = await findStaffByEmail(email);
+    if (member) await removeStaffRemotely(member.uid);
+  } catch (err) {
+    console.error(`[test cleanup] Pulizia personale "${email}" fallita:`, err.message || err);
+  }
+}
+
+// Visite al menù di un giorno (menuViews/{YYYY-MM-DD}, src/menuViews.js); 0 se nessuna.
+export async function getMenuViewsCount(day) {
+  await signInWithEmailAndPassword(auth, TEST_ADMIN.email, TEST_ADMIN.password);
+  const snap = await getDoc(doc(db, "menuViews", day));
+  return snap.exists() ? snap.data().count : 0;
 }

@@ -10,15 +10,18 @@
 //  - tables as tiles (number, name, covers, time, total, status written on
 //    a fixed colour), "Nuovo tavolo" as a floating button in thumb reach;
 //  - a table's order on its own full screen: dishes as tiles in two
-//    columns (one tap = one more, the count on the tile), categories as
-//    chips that stay at the top and jump to their section, and one bar at
+//    columns (one tap = one more, the count on the tile, the dish's photo),
+//    every category at a glance in a grid at the top (tap → its section);
+//    once the grid has scrolled away, a "Categorie" button appears under the
+//    search, shows the category in view and reopens the grid from anywhere;
+//    and one bar at
 //    the bottom that never moves — "Comanda" (the ticket) on the left,
 //    "Invia comanda" (or "Preconto") on the right;
 //  - the ticket and a line's editor open as full-screen pages, like the
 //    till's side panel: tap a line to change quantity, price (offered,
 //    discount, custom), note, or to remove it — applied only on "Salva".
 import React, { useState, useEffect, useRef } from "react";
-import { Plus, Minus, X, Utensils, Search, Play, Send, Receipt, Lock, Trash2, Printer, ChevronUp, Users, Clock } from "lucide-react";
+import { Plus, Minus, X, Utensils, Search, Play, Send, Receipt, Lock, Trash2, Printer, ChevronUp, ChevronDown, Users, Clock, LayoutGrid } from "lucide-react";
 import { THEMES, formatCentsAsPrice, parsePriceToCents, tableIdentity, currentShiftLabel, BackButton } from "./shared";
 import { orderTotalCents, copertoTotalCents } from "./orders";
 import { coversLabel } from "./reservationsData";
@@ -29,7 +32,7 @@ import {
 import { LineEditor, CoversControl, DishTile, TicketLine, ReceiptPanel } from "./OrderUi";
 import { ClosedOrderRow } from "./TillHistory";
 import {
-  TOUCH, FONT, STATUS, TillButton, Stepper, SidePanel, SectionTitle, StatusPill, Field, tillInputStyle,
+  TOUCH, FONT, STATUS, TillButton, Stepper, SidePanel, SectionTitle, StatusPill, Field, tillInputStyle, CategoryGrid,
 } from "./TillUi";
 
 /* ---------------------------------- tables ---------------------------------- */
@@ -291,13 +294,23 @@ function DraftLineRow({ t, line, onEdit, onChangeQty, onRemove }) {
 }
 
 const HEADER_HEIGHT = 64;
+// The "Categorie" button floating under the sticky bar (48px + 8px below, tucked under the search).
+const PICKER_HEIGHT = 48;
 
 function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
   const d = useOrderDraft({ menu, menuCosts, order, senderName });
   // null (the dishes) | { type: "ticket" } | { type: "line", lineId, sent } | { type: "receipt", from }
   const [panel, setPanel] = useState(null);
   const [activeCat, setActiveCat] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const sectionRefs = useRef({});
+  // Height of the bars stuck at the top (header + search + "Categorie"):
+  // where a section lands when jumped to, and which one counts as "in view".
+  const stickyRef = useRef(null);
+  const [stickyBottom, setStickyBottom] = useState(200);
+  // The grid at the top is in view (no need for the "Categorie" button).
+  const gridRef = useRef(null);
+  const [gridInView, setGridInView] = useState(true);
   const id = tableIdentity(order);
   const locked = Boolean(order.receipt?.confirmedAt);
   const sentLines = order.items || [];
@@ -310,6 +323,26 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
       : []),
   ];
   const draftQty = (itemId) => d.draft.filter((l) => l.menuItemId === itemId).reduce((s, l) => s + l.quantity, 0);
+  const categoryCards = sections.map((s) => {
+    const inDraft = s.items.reduce((n, { item }) => n + draftQty(item.id), 0);
+    return {
+      id: s.id, name: s.name, highlight: inDraft > 0,
+      detail: `${s.items.length} ${s.items.length === 1 ? "piatto" : "piatti"}${inDraft > 0 ? ` · ${inDraft} da inviare` : ""}`,
+      ...(s.offMenu ? { accent: STATUS.waiting, icon: <Utensils size={15} /> } : null),
+    };
+  });
+  const currentId = activeCat && sections.some((s) => s.id === activeCat) ? activeCat : sections[0]?.id;
+  const currentName = sections.find((s) => s.id === currentId)?.name;
+
+  useEffect(() => {
+    const el = stickyRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const measure = () => setStickyBottom(Math.round(el.getBoundingClientRect().height + HEADER_HEIGHT + 1));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // The category chip follows the scroll (the section under the sticky
   // bars) — except right after a chip was tapped: the last sections can't
@@ -323,10 +356,10 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
     const follow = () => {
       if (chosenRef.current) return;
       const els = Object.values(sectionRefs.current).filter(Boolean);
-      const current = els.find((el) => el.getBoundingClientRect().bottom > 190) || els[els.length - 1];
+      const current = els.find((el) => el.getBoundingClientRect().bottom > stickyBottom + PICKER_HEIGHT + 10) || els[els.length - 1];
       if (current) setActiveCat(current.dataset.sectionId);
     };
-    const observer = new IntersectionObserver(follow, { rootMargin: "-170px 0px -55% 0px" });
+    const observer = new IntersectionObserver(follow, { rootMargin: `-${stickyBottom}px 0px -55% 0px` });
     Object.values(sectionRefs.current).forEach((el) => el && observer.observe(el));
     const release = () => { chosenRef.current = false; };
     const onScroll = () => follow();
@@ -339,19 +372,31 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
       window.removeEventListener("wheel", release);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [sectionKey]);
+  }, [sectionKey, stickyBottom]);
 
-  // The chip row scrolls sideways to keep the active chip in view.
-  const chipRefs = useRef({});
+  const showGrid = !d.isItemSearching && sections.length > 0;
   useEffect(() => {
-    chipRefs.current[activeCat]?.scrollIntoView?.({ block: "nearest", inline: "center", behavior: "smooth" });
-  }, [activeCat]);
+    const el = gridRef.current;
+    if (!showGrid || !el || typeof IntersectionObserver === "undefined") { setGridInView(showGrid); return undefined; }
+    const observer = new IntersectionObserver(([entry]) => setGridInView(entry.isIntersecting), { rootMargin: `-${stickyBottom}px 0px 0px 0px` });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showGrid, stickyBottom]);
+  const showPicker = showGrid && (!gridInView || pickerOpen);
 
   const jumpTo = (sectionId) => {
     chosenRef.current = true;
+    setPickerOpen(false);
     setActiveCat(sectionId);
     sectionRefs.current[sectionId]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  useEffect(() => {
+    if (!pickerOpen) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setPickerOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pickerOpen]);
 
   const editingLine = panel?.type === "line"
     ? (panel.sent ? sentLines : d.draft).find((l) => l.lineId === panel.lineId)
@@ -391,13 +436,6 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
       ? `${sentLines.length} ${sentLines.length === 1 ? "voce" : "voci"} · totale € ${formatCentsAsPrice(d.totalCents)}`
       : "Ancora vuota";
 
-  const chip = (active, offMenu) => ({
-    flexShrink: 0, minHeight: 44, padding: "0 16px", borderRadius: 22, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: FONT,
-    border: `1.5px solid ${active ? t.primary : offMenu ? STATUS.waiting : t.line}`,
-    background: active ? t.primary : t.card, color: active ? t.bg : offMenu ? STATUS.waiting : t.ink, whiteSpace: "nowrap",
-    display: "inline-flex", alignItems: "center", gap: 6,
-  });
-
   return (
     <div style={{ fontFamily: FONT, color: t.ink, minHeight: "100dvh", background: t.bg }}>
       {/* Top bar: back, which table, sync state. */}
@@ -428,8 +466,8 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
         </div>
       </div>
 
-      {/* Search + categories: stay at the top while scrolling the dishes. */}
-      <div style={{
+      {/* Search (+ "Categorie" once the grid has scrolled away): stay at the top while scrolling the dishes. */}
+      <div ref={stickyRef} style={{
         position: "sticky", top: `calc(${HEADER_HEIGHT + 1}px + env(safe-area-inset-top))`, zIndex: 20, background: t.bg,
         padding: "10px 0 8px", borderBottom: `1px solid ${t.line}`, marginTop: 4,
       }}>
@@ -448,23 +486,48 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
               )}
             </div>
           )}
-          {!d.isItemSearching && (
-            <div role="tablist" aria-label="Categorie del menù" style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 16px", scrollbarWidth: "none" }}>
-              {sections.map((s) => {
-                const active = (activeCat || sections[0]?.id) === s.id;
-                return (
-                  <button key={s.id} ref={(el) => { chipRefs.current[s.id] = el; }} type="button" role="tab" aria-selected={active}
-                    onClick={() => jumpTo(s.id)} className="mdp-btn" style={chip(active, s.offMenu)}>
-                    {s.offMenu && <Utensils size={15} />}{s.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
+        {/* Floats under the bar (no layout jump when it appears). */}
+        {showPicker && (
+          <div style={{ position: "absolute", left: 0, right: 0, top: "100%", background: t.bg, borderBottom: `1px solid ${t.line}`, marginTop: -9, padding: "0 0 8px" }}>
+            <div style={{ position: "relative", maxWidth: 640, margin: "0 auto", padding: "0 16px" }}>
+              <button type="button" onClick={() => setPickerOpen((o) => !o)} aria-expanded={pickerOpen} aria-controls="phone-category-picker"
+                aria-label={`Categorie: ${currentName}`} className="mdp-btn" style={{
+                  width: "100%", minHeight: 48, padding: "0 14px", borderRadius: 12, cursor: "pointer", fontFamily: FONT,
+                  border: `1.5px solid ${pickerOpen ? t.primary : t.line}`, background: t.card, color: t.ink,
+                  display: "flex", alignItems: "center", gap: 10, textAlign: "left",
+                }}>
+                <LayoutGrid size={19} color={t.inkSoft} style={{ flexShrink: 0 }} />
+                <span style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft, flexShrink: 0 }}>Categorie</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentName}</span>
+                <ChevronDown size={20} color={t.inkSoft} style={{ flexShrink: 0, transform: pickerOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+              </button>
+              {pickerOpen && (
+                <>
+                  <button type="button" aria-label="Chiudi le categorie" onClick={() => setPickerOpen(false)} tabIndex={-1} style={{
+                    position: "fixed", inset: 0, top: stickyBottom, zIndex: 1, border: "none", background: "rgba(0,0,0,0.25)", cursor: "default",
+                  }} />
+                  <div id="phone-category-picker" style={{
+                    position: "absolute", left: 16, right: 16, top: "calc(100% + 6px)", zIndex: 2, padding: 10, borderRadius: 14,
+                    background: t.bg, border: `1.5px solid ${t.line}`, boxShadow: "0 12px 28px rgba(0,0,0,0.18)",
+                    maxHeight: "60dvh", overflowY: "auto",
+                  }}>
+                    <CategoryGrid t={t} label="Scegli una categoria" categories={categoryCards} activeId={currentId} onSelect={jumpTo} />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "12px 16px calc(150px + env(safe-area-inset-bottom))" }}>
+        {showGrid && (
+          <div ref={gridRef} style={{ marginBottom: 18 }}>
+            <CategoryGrid t={t} label="Categorie del menù" categories={categoryCards} activeId={currentId} onSelect={jumpTo} />
+          </div>
+        )}
+
         {d.searchEnabled && d.searchTagChips.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
             {d.searchTagChips.map((tag) => {
@@ -485,7 +548,7 @@ function OrderDetail({ t, menu, menuCosts, order, senderName, onBack }) {
 
         {sections.map((s) => (
           <section key={s.id} ref={(el) => { sectionRefs.current[s.id] = el; }} data-section-id={s.id} aria-label={s.name}
-            style={{ marginBottom: 20, scrollMarginTop: `calc(${HEADER_HEIGHT + (d.searchEnabled ? 130 : 72)}px + env(safe-area-inset-top))` }}>
+            style={{ marginBottom: 20, scrollMarginTop: `calc(${stickyBottom + PICKER_HEIGHT + 8}px + env(safe-area-inset-top))` }}>
             <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, color: s.offMenu ? STATUS.waiting : t.ink, display: "flex", alignItems: "center", gap: 6 }}>
               {s.offMenu && <Utensils size={16} />}{s.name}
             </div>

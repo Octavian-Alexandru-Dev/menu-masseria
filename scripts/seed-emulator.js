@@ -10,7 +10,8 @@ import { initializeApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator, doc, setDoc, Timestamp } from "firebase/firestore";
 
-const app = initializeApp({ apiKey: "demo-key", projectId: "demo-masseria-test" });
+const PROJECT_ID = "demo-masseria-test";
+const app = initializeApp({ apiKey: "demo-key", projectId: PROJECT_ID });
 const auth = getAuth(app);
 const db = getFirestore(app);
 connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
@@ -219,19 +220,50 @@ async function seedTestOrders(uids) {
   }
 }
 
+// staff/{uid} lo scrive solo un amministratore (firestore.rules), e al primo
+// avvio non ce n'è ancora uno: si scrive con le credenziali "owner" della
+// REST API dell'emulatore, che ignorano le regole (solo in locale — sul
+// progetto reale il primo admin si crea a mano, vedi GUIDA.md).
+async function setDocAsOwner(path, fields) {
+  const url = `http://localhost:8080/v1/projects/${PROJECT_ID}/databases/(default)/documents/${path}`;
+  const value = (v) => (typeof v === "number" ? { integerValue: String(v) } : { stringValue: v });
+  const body = { fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, value(v)])) };
+  const res = await fetch(url, { method: "PATCH", headers: { Authorization: "Bearer owner", "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+}
+const setStaffDocAsOwner = (uid, fields) => setDocAsOwner(`staff/${uid}`, fields);
+
+// Visite al menù dei giorni passati (menuViews/{YYYY-MM-DD}, src/menuViews.js),
+// relative a oggi: la sezione "Visite al menù" delle Statistiche ha subito dei
+// numeri, e i test le confrontano (tests/stats-dashboard.spec.js). Oggi resta
+// fuori: lo incrementano i test del menù pubblico. Le regole permettono solo
+// +1 per volta, quindi anche queste si scrivono come "owner".
+const SEED_MENU_VIEWS = { 1: 12, 2: 7, 4: 20, 5: 3, 6: 9 }; // giorni fa → visite
+async function seedMenuViews() {
+  for (const [daysAgo, count] of Object.entries(SEED_MENU_VIEWS)) {
+    const d = new Date();
+    d.setDate(d.getDate() - Number(daysAgo));
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    await withRetry(() => setDocAsOwner(`menuViews/${key}`, { count }));
+  }
+}
+
 async function main() {
   const uids = {};
   for (const [key, account] of Object.entries(SEED_ACCOUNTS)) {
     const uid = await ensureUser(account);
     uids[key] = uid;
     if (account.role) {
-      await withRetry(() => setDoc(doc(db, "staff", uid), { name: account.name, role: account.role }));
+      await withRetry(() => setStaffDocAsOwner(uid, { name: account.name, role: account.role, email: account.email }));
     }
   }
+  // Il resto (menù, comande) lo scrive l'admin, come farebbe dall'app.
+  await withRetry(() => signInWithEmailAndPassword(auth, SEED_ACCOUNTS.admin.email, SEED_ACCOUNTS.admin.password));
 
   await withRetry(() => setDoc(doc(db, "menu", "data"), DEMO_MENU));
   await withRetry(() => setDoc(doc(db, "menuCosts", "data"), DEMO_COSTS));
   await seedTestOrders(uids);
+  await seedMenuViews();
 
   console.log("[seed-emulator] Fatto:", uids);
   console.log("");

@@ -114,3 +114,34 @@ test("zoom modal closes on Escape and on backdrop click", async ({ page }) => {
   await page.locator(".mdp-modal-backdrop").click({ position: { x: 5, y: 5 } });
   await expect(page.locator(".mdp-modal-card")).toHaveCount(0);
 });
+
+// Visite al menù per le Statistiche (src/menuViews.js): una al giorno per
+// dispositivo, mai dai dispositivi dello staff. Il contatore di oggi è
+// condiviso con gli altri test in parallelo: si controlla che salga, non di
+// quanto; che un dispositivo non conti si vede dal segno lasciato in localStorage.
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const seenDay = (page) => page.evaluate(() => globalThis.localStorage.getItem("mdp.menuViewDay"));
+
+test("aprire il menù conta una visita per oggi, una sola volta al giorno per dispositivo", async ({ page }) => {
+  const { getMenuViewsCount } = await import("./helpers/menuDoc.js");
+  await expect.poll(() => seenDay(page), { timeout: 10_000 }).toBe(today());
+  await expect.poll(() => getMenuViewsCount(today()), { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
+  // Ricaricando, lo stesso dispositivo non viene ricontato (il segno resta quello di oggi).
+  await page.reload();
+  await expect(page.getByRole("navigation")).toBeVisible({ timeout: 10_000 });
+  expect(await seenDay(page)).toBe(today());
+});
+
+test("un dispositivo dello staff non conta come visita al menù", async ({ browser }) => {
+  const context = await browser.newContext();
+  try {
+    await context.addInitScript(() => globalThis.localStorage.setItem("mdp.lastStaffAccount", JSON.stringify({ email: "waiter@test.local", name: "Cameriere" })));
+    const page = await context.newPage();
+    await page.goto("/");
+    await expect(page.getByRole("navigation")).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(1000);
+    expect(await seenDay(page)).toBeNull();
+  } finally {
+    await context.close();
+  }
+});

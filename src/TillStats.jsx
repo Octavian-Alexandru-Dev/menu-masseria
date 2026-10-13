@@ -7,11 +7,18 @@
 //    other period — changes written as text with an arrow, never colour alone;
 //  - rankings as plain lists with a bar (name and value readable without a
 //    tooltip, which a touch screen can't hover): dishes, categories,
-//    waiters, revenue by hour and by weekday, dishes ordered less.
+//    waiters, revenue by hour and by weekday, dishes ordered less;
+//  - visits to the public menu (menuViews.js): total, average a day, best
+//    day, and a column a day (a month for long periods) — tap a column for
+//    its number, or switch to the list to read them all as text.
+//
+// Sections in a fixed order, each with its title: Vendite, Visite al menù,
+// Piatti più venduti, then the details (side panel at the till).
 import React, { useState, useEffect, useMemo } from "react";
 import { ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 import { formatCentsAsPrice } from "./shared";
 import { PRESETS, PRESET_LABELS, resolvePresetRange, previousEquivalentRange, fetchClosedOrdersInRange, aggregateOrders, compareAggregates } from "./statsData";
+import { fetchMenuViews, groupMenuViews } from "./menuViews";
 import { FONT, STATUS, SIDE_PANEL_WIDTH, SidePanel, SectionTitle, SwitchRow, Segmented, Field, tillInputStyle, useCompactLayout } from "./TillUi";
 
 function useClosedOrders(range) {
@@ -25,6 +32,23 @@ function useClosedOrders(range) {
       .catch((err) => {
         console.error("[stats] Lettura statistiche fallita:", err);
         if (!cancelled) setState({ orders: [], loading: false, error: "Impossibile caricare le comande di questo periodo." });
+      });
+    return () => { cancelled = true; };
+  }, [range]);
+  return state;
+}
+
+function useMenuViews(range) {
+  const [state, setState] = useState({ days: [], loading: true, error: "" });
+  useEffect(() => {
+    if (!range) { setState({ days: [], loading: false, error: "" }); return; }
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: "" }));
+    fetchMenuViews(range.start, range.end)
+      .then((days) => { if (!cancelled) setState({ days, loading: false, error: "" }); })
+      .catch((err) => {
+        console.error("[stats] Lettura visite al menù fallita:", err);
+        if (!cancelled) setState({ days: [], loading: false, error: "Impossibile caricare le visite al menù." });
       });
     return () => { cancelled = true; };
   }, [range]);
@@ -71,6 +95,53 @@ function RankRow({ t, rank, name, detail, value, ratio }) {
         </span>
       </span>
       <span style={{ fontSize: 17, fontWeight: 700, whiteSpace: "nowrap" }}>{value}</span>
+    </div>
+  );
+}
+
+// Visits as columns on one baseline, one colour (a single series: its title
+// names it, no legend). Every column is a button: tap → its day and number
+// in the line above (a touch screen can't hover). Days with no visits keep
+// a thin stub, so "zero" is visibly a value, not a gap.
+const fmtBar = (bar, unit) => (unit === "month"
+  ? bar.date.toLocaleDateString("it-IT", { month: "long", year: "numeric" })
+  : bar.date.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }));
+
+function ViewsChart({ t, grouped }) {
+  const [picked, setPicked] = useState(null);
+  const { bars, unit } = grouped;
+  const max = Math.max(1, ...bars.map((b) => b.count));
+  const shown = bars.find((b) => b.key === picked) || grouped.best && bars.find((b) => b.count === max) || bars[bars.length - 1];
+  const tickEvery = Math.ceil(bars.length / 6);
+  return (
+    <div>
+      <div aria-live="polite" style={{ fontSize: 15, color: t.inkSoft, minHeight: 22 }}>
+        {shown && <><span style={{ textTransform: "capitalize" }}>{fmtBar(shown, unit)}</span>: <strong style={{ color: t.ink }}>{shown.count} {shown.count === 1 ? "visita" : "visite"}</strong></>}
+      </div>
+      <div role="group" aria-label="Visite al menù nel tempo" style={{ display: "flex", alignItems: "flex-end", gap: bars.length > 40 ? 1 : 2, height: 140, marginTop: 8, borderBottom: `1px solid ${t.line}` }}>
+        {bars.map((b) => {
+          const active = shown?.key === b.key;
+          return (
+            <button key={b.key} type="button" onClick={() => setPicked(b.key)} aria-pressed={active}
+              aria-label={`${fmtBar(b, unit)}: ${b.count} ${b.count === 1 ? "visita" : "visite"}`} title={`${fmtBar(b, unit)}: ${b.count}`}
+              style={{ flex: 1, minWidth: 0, height: "100%", padding: 0, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "flex-end" }}>
+              <span style={{
+                display: "block", width: "100%", maxWidth: 28, margin: "0 auto", borderRadius: "4px 4px 0 0",
+                height: b.count ? `${Math.max(3, (b.count / max) * 100)}%` : 2,
+                background: b.count ? t.primary : t.line, opacity: active || !picked ? 1 : 0.55,
+                outline: active ? `2px solid ${t.ink}` : "none", outlineOffset: 1,
+              }} />
+            </button>
+          );
+        })}
+      </div>
+      <div aria-hidden="true" style={{ display: "flex", gap: bars.length > 40 ? 1 : 2, marginTop: 4 }}>
+        {bars.map((b, i) => (
+          <span key={b.key} style={{ flex: 1, minWidth: 0, fontSize: 11, color: t.inkSoft, textAlign: "center", whiteSpace: "nowrap", overflow: "visible" }}>
+            {i % tickEvery === 0 ? (unit === "month" ? b.date.toLocaleDateString("it-IT", { month: "short" }) : b.date.getDate()) : ""}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -124,6 +195,9 @@ export default function TillStats({ t }) {
   }, [compareMode, compareCustom, range]);
   const current = useClosedOrders(range);
   const previous = useClosedOrders(compareRange);
+  const views = useMenuViews(range);
+  const viewsPrev = useMenuViews(compareRange);
+  const [viewsMode, setViewsMode] = useState("chart");
 
   const agg = useMemo(() => aggregateOrders(current.orders, { includeAutoClosed }), [current.orders, includeAutoClosed]);
   const aggPrev = useMemo(() => (compareRange ? aggregateOrders(previous.orders, { includeAutoClosed }) : null), [compareRange, previous.orders, includeAutoClosed]);
@@ -167,6 +241,45 @@ export default function TillStats({ t }) {
           description={`${agg.autoClosedCount} ${agg.autoClosedCount === 1 ? "tavolo dimenticato aperto e chiuso" : "tavoli dimenticati aperti e chiusi"} dopo 24 ore.`} />
       )}
     </div>
+  );
+
+  const grouped = useMemo(() => groupMenuViews(views.days), [views.days]);
+  const groupedPrev = useMemo(() => (compareRange && !viewsPrev.loading ? groupMenuViews(viewsPrev.days) : null), [compareRange, viewsPrev]);
+  const deltaOf = (a, b) => (b == null ? null : { delta: a - b, deltaPct: b === 0 ? (a === 0 ? 0 : Infinity) : (a - b) / b });
+  const viewsSection = (
+    <Section title="Visite al menù"
+      right={grouped.bars.length > 1 && <Segmented t={t} label="Mostra le visite" value={viewsMode} onChange={setViewsMode}
+        options={[{ value: "chart", label: "Grafico" }, { value: "list", label: "Elenco" }]} />}>
+      {views.loading && <div style={{ fontSize: 16, color: t.inkSoft, padding: "8px 0" }}>Caricamento…</div>}
+      {views.error && <div role="alert" style={{ fontSize: 16, color: STATUS.danger }}>{views.error}</div>}
+      {!views.loading && !views.error && (
+        <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: compact ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fill, minmax(190px, 1fr))", gap: compact ? 10 : 12 }}>
+            <Kpi t={t} compact={compact} id="views" label="Visite" value={grouped.total} delta={deltaOf(grouped.total, groupedPrev?.total)} />
+            {grouped.bars.length > 1 && <Kpi t={t} compact={compact} id="views-avg" label="Media al giorno" value={grouped.avgPerDay.toLocaleString("it-IT", { maximumFractionDigits: 1 })} />}
+            {grouped.bars.length > 1 && grouped.best && (
+              <Kpi t={t} compact={compact} id="views-best" label="Giorno migliore" value={grouped.best.count}
+                note={grouped.best.date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })} />
+            )}
+          </div>
+          {grouped.total === 0 && <div style={{ fontSize: 16, color: t.inkSoft }}>Nessuna visita al menù in questo periodo.</div>}
+          {grouped.total > 0 && grouped.bars.length > 1 && (viewsMode === "chart"
+            ? <ViewsChart t={t} grouped={grouped} />
+            : (
+              <div role="list" aria-label="Visite al menù per giorno">
+                {grouped.bars.map((b) => (
+                  <div role="listitem" key={b.key}>
+                    <RankRow t={t} name={fmtBar(b, grouped.unit)} value={`${b.count}`} ratio={b.count / Math.max(1, ...grouped.bars.map((x) => x.count))} />
+                  </div>
+                ))}
+              </div>
+            ))}
+          <div style={{ fontSize: 13, color: t.inkSoft, lineHeight: 1.4 }}>
+            Una visita = un telefono che apre il menù in un giorno. Non si contano i dispositivi dello staff né la cassa.
+          </div>
+        </div>
+      )}
+    </Section>
   );
 
   const kpis = (
@@ -262,8 +375,13 @@ export default function TillStats({ t }) {
     return (
       <div style={{ padding: "16px 16px 24px", display: "grid", gap: 20, fontFamily: FONT, color: t.ink }}>
         {controls}
-        {status}
-        {hasData && kpis}
+        <Section title="Vendite">
+          <div style={{ display: "grid", gap: 12 }}>
+            {status}
+            {hasData && kpis}
+          </div>
+        </Section>
+        {viewsSection}
         {compareControls}
         {hasData && dishesSection}
         {details}
@@ -276,8 +394,13 @@ export default function TillStats({ t }) {
       <section aria-label="Statistiche" style={{ minHeight: 0, overflowY: "auto", padding: "18px 20px 96px", display: "grid", gap: 18, alignContent: "start" }}>
         <div style={{ fontSize: 24, fontWeight: 700 }}>Statistiche</div>
         {controls}
-        {status}
-        {hasData && kpis}
+        <Section title="Vendite">
+          <div style={{ display: "grid", gap: 12 }}>
+            {status}
+            {hasData && kpis}
+          </div>
+        </Section>
+        {viewsSection}
         {hasData && dishesSection}
       </section>
       <SidePanel t={t} label="Dettagli delle statistiche" header={<SectionTitle t={t}>Dettagli</SectionTitle>}>

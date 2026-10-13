@@ -227,21 +227,18 @@ non cambia mai):
 Un account dedicato, invece di quello personale di qualcuno, rende chiaro
 chi fa cosa e si può revocare senza toccare gli altri.
 
-1. [Console Firebase](https://console.firebase.google.com/) → progetto
-   `menu-masseria-della-pian` → **Authentication → Users → Aggiungi utente**.
-   Email, ad esempio `cassa@masseria-della-piana.it` (non deve esistere
-   davvero: serve solo come nome utente), e una password robusta.
-2. Copia l'**UID** dell'utente appena creato (colonna "UID utente").
-3. **Firestore Database → collection `staff` → Aggiungi documento**, con ID
-   documento = l'UID copiato e due campi stringa:
-   - `name`: `Cassa`
-   - `role`: `waiter` (vede la Sala con preconti e chiusura tavoli, oltre a
-     storico e prenotazioni). Usa `admin` se alla cassa devono servire
-     anche le sezioni **Menù** e **Statistiche** (§4.1).
+1. Da un amministratore, nell'app: **Menù → Impostazioni → Personale →
+   Nuovo account**. Nome `Cassa`, email ad esempio
+   `cassa@masseria-della-piana.it` (non deve esistere davvero: serve solo
+   come nome utente), una password robusta e il ruolo:
+   - **Cameriere** (vede la Sala con preconti e chiusura tavoli, oltre a
+     storico e prenotazioni);
+   - **Amministratore** se alla cassa devono servire anche le sezioni
+     **Menù** e **Statistiche** (§4.1).
 
-   In alternativa, dal pannello **Gestione menù** dell'app c'è la sezione
-   staff per assegnare il ruolo a un UID.
-4. Sul PC della cassa: *menu Cassa → Impostazioni stampante → Account della
+   **Crea account**: l'account esiste subito, con il suo ruolo, senza passare
+   dalla Console Firebase.
+2. Sul PC della cassa: *menu Cassa → Impostazioni stampante → Account della
    cassa* → email e password → **Salva credenziali**.
 
 La password viene cifrata con la protezione dati di Windows (DPAPI): è
@@ -334,8 +331,11 @@ comande, preconto, chiusura.
 - **Nuovo tavolo:** tastierino numerico a schermo (la cassa non ha
   tastiera), coperti con +/−, nome e note facoltativi. Se il tavolo è già
   aperto lo segnala e offre "Vai al tavolo".
-- **Comanda:** a sinistra le categorie (schede), la ricerca e i piatti a
-  riquadri (tocco = +1, con il conteggio sul riquadro); a destra, nella barra
+- **Comanda:** a sinistra **tutte le categorie in una griglia** sempre
+  visibile (nome, quanti piatti e quanti "da inviare", mai una striscia che
+  scorre di lato), la ricerca e i piatti a riquadri con la **foto in
+  miniatura** quando c'è (la stessa del menù dei clienti; tocco = +1, con il
+  conteggio sul riquadro); a destra, nella barra
   laterale, lo scontrino del tavolo ("Da inviare" e "Già inviato") e, sempre
   nello stesso posto in basso, Totale, **Invia comanda**, **Stampa
   preconto** (stampa diretta, con lo stato della stampa sotto) e **Chiudi
@@ -367,7 +367,8 @@ comande, preconto, chiusura.
   (il giorno stesso: apre il tavolo, chiedendo il numero col tastierino se
   manca).
 - **Menù** (solo admin, `src/TillMenu.jsx`): stesso schema della comanda.
-  A sinistra le categorie (schede) e i piatti a riquadri; ogni riquadro dice
+  A sinistra le categorie in griglia (con quanti piatti, "nascosta" se lo è)
+  e i piatti a riquadri con la foto in miniatura; ogni riquadro dice
   prezzo e, scritto, *Non in comanda*, *Nascosto* o *Fuori menù*.
   - **Piatto nella barra laterale**: nome, prezzo dal tastierino (in
     centesimi; parte dal prezzo attuale e la prima cifra ne inizia uno
@@ -388,8 +389,9 @@ comande, preconto, chiusura.
     (recensioni Google/TripAdvisor, Instagram, Facebook, shop: link e
     interruttore "Mostra"), *Traduzioni* (per lingua: traduzione automatica
     dei testi mancanti, ogni testo correggibile a mano, eliminazione con
-    conferma), *Personale* (UID, nome e ruolo; "Togli accesso" con
-    conferma), *Stampa del menù* (lingua, contenuto, impaginazione,
+    conferma), *Personale* (nuovo account con nome, email, password
+    e ruolo, oppure ruolo a un account esistente dal suo UID; "Togli
+    accesso" con conferma, mai sul proprio account), *Stampa del menù* (lingua, contenuto, impaginazione,
     categorie → anteprima di stampa / PDF), *Backup* (scarica il JSON;
     ripristino da file con conferma, subito su tutti i dispositivi) e *Vedi
     il menù dei clienti*. Non c'è più un editor "completo" separato (ex
@@ -411,7 +413,14 @@ comande, preconto, chiusura.
   con un altro periodo (variazione scritta con freccia), classifica dei
   piatti per quantità/incasso/margine e, nella barra laterale, piatti
   ordinati meno, incasso per categoria, per cameriere, per ora e per giorno
-  della settimana — elenchi con barre, leggibili senza grafici.
+  della settimana — elenchi con barre, leggibili senza grafici. Sezioni con
+  il titolo, sempre nello stesso ordine: **Vendite**, **Visite al menù**,
+  **Piatti più venduti**, poi i dettagli. *Visite al menù*
+  (`src/menuViews.js`): visite nel periodo (con la variazione se c'è un
+  confronto), media al giorno, giorno migliore e un grafico a colonne (una al
+  giorno, una al mese oltre i ~2 mesi; tocco su una colonna → giorno e
+  numero) oppure l'elenco. Una visita = un dispositivo che apre il menù
+  pubblico in un giorno; non contano i dispositivi dello staff né la cassa.
 - **Stampa interrotta:** se il programma della cassa si chiude mentre sta
   stampando, dopo 30 secondi chi ha chiesto la stampa vede "La stampa si è
   interrotta" e può premere **Riprova stampa**.
@@ -460,10 +469,14 @@ l'uso a una mano su uno schermo da 6":
   schermo intero (numero dalla tastiera numerica del telefono, coperti con
   +/−, avviso se il tavolo è già aperto con "Vai al tavolo").
 - **Comanda:** schermata intera senza le barre dell'app. In alto il tavolo e
-  i coperti; sotto, la ricerca e le **categorie come schede fisse** che
-  saltano alla loro sezione (e seguono lo scorrimento); i piatti a
-  **riquadri in due colonne: un tocco = uno in più**, con il conteggio sul
-  riquadro. In basso una barra che non si sposta mai: **Comanda** (quanti da
+  i coperti; sotto, la ricerca e, già all'apertura, le **categorie in una
+  griglia** (nome, quanti piatti, quanti "da inviare"): tutte visibili a
+  colpo d'occhio senza toccare nulla, un tocco porta alla sezione. Quando la
+  griglia esce dallo schermo compare sotto la ricerca il pulsante
+  **Categorie · (categoria in vista)**, che segue lo scorrimento e riapre la
+  griglia da qualunque punto; tornando in cima sparisce. I piatti a **riquadri in due
+  colonne: un tocco = uno in più**, con il conteggio sul riquadro e la foto
+  in miniatura quando c'è. In basso una barra che non si sposta mai: **Comanda** (quanti da
   inviare e totale) a sinistra, **Invia comanda (N)** — o **Preconto**
   quando non c'è nulla da inviare — a destra. Lo stato della comanda per la
   cucina (e "Ristampa"/"Ignora" se non è stata stampata) sta sopra la barra.
@@ -474,8 +487,8 @@ l'uso a una mano su uno schermo da 6":
   della cassa: quantità, nota per la cucina, prezzo (Pieno, Offerto,
   −10/−20/−50%, Altro dal tastierino), Rimuovi — tutto solo con **Salva**.
 - **Menù** (solo admin): la stessa schermata della cassa (`TillMenu.jsx`,
-  `MenuSettings.jsx`) in una colonna: schede delle categorie, riquadri dei
-  piatti, "Nuovo piatto", e in alto Nuova categoria / Impostazioni. Il
+  `MenuSettings.jsx`) in una colonna: categorie in griglia, riquadri dei
+  piatti con la foto, "Nuovo piatto", e in alto Nuova categoria / Impostazioni. Il
   piatto, la categoria e ogni impostazione si aprono a pagina intera con
   **Salva** sempre in fondo; ogni "Salva" modifica solo i campi cambiati.
 - **Prenotazioni, Storico, Statistiche**: le stesse schermate della cassa
@@ -596,17 +609,26 @@ campi (niente zoom automatico su iOS); nessuno scorrimento laterale a
 | Comanda cucina non stampata (errore): tavolo segnalato nell'elenco, ristampa riaprendo il tavolo anche dopo altri invii e mentre si aggiungono piatti, "Ignora" con conferma | `tests/till-sala.spec.js`, `tests/waiter-order.spec.js` |
 | Emoji nelle note stampate come "?", andare a capo sui caratteri stampati | `tests/escpos.spec.js` |
 | Aggiungere un piatto/una categoria due volte (riprova dopo timeout) non crea copie | `tests/menu-edit.spec.js` |
-| Telefono: comandi del tavolo (coperti, piatti, schede categorie, barra in basso, quantità, rimuovi, modifica riga, Invia comanda) ≥ 44px | `tests/waiter-order.spec.js` |
+| Telefono: comandi del tavolo (coperti, piatti, categorie, barra in basso, quantità, rimuovi, modifica riga, Invia comanda) ≥ 44px | `tests/waiter-order.spec.js` |
 | Telefono 6" (393×851): nessuna schermata scorre di lato (sezioni, comanda, comanda del tavolo, modifica riga); barra delle sezioni in fondo con etichette intere | `tests/phone-app.spec.js` |
 | Telefono: un tocco = un piatto in più col conteggio sul riquadro; "Invia comanda" nella barra in basso; riga inviata resa "Offerto" dall'editor con "Salva" | `tests/phone-app.spec.js` |
-| Telefono: le schede delle categorie restano in alto e portano alla loro sezione; l'ultima resta evidenziata anche se non può salire in cima (bug corretto), scorrendo a mano la scheda segue la sezione in vista | `tests/phone-app.spec.js` |
+| Telefono: tutte le categorie in una griglia in cima, già tutta visibile all'apertura senza toccare nulla (con piatti e "da inviare", ≥ 48px, niente scorrimento laterale), che porta alla sezione; passata la griglia compare il pulsante "Categorie: …" che segue la sezione in vista e riapre la griglia (Esc la chiude), e sparisce tornando in cima; l'ultima resta evidenziata anche se non può salire in cima (bug corretto) | `tests/phone-app.spec.js` |
+| Telefono: foto in miniatura sui piatti della comanda e della gestione menù (nessun riquadro vuoto senza foto); categorie del menù in griglia | `tests/phone-app.spec.js` |
+| Cassa: categorie in una griglia sempre visibile (nessuna oltre il bordo), con piatti e "da inviare"; foto in miniatura sui piatti della comanda e del Menù | `tests/till-sala.spec.js` |
+| Visite al menù: aprire il menù pubblico conta una visita per oggi, una sola al giorno per dispositivo; un dispositivo dello staff non conta | `tests/client-view.spec.js` |
+| Statistiche (telefono): sezione "Visite al menù" — numero del giorno, variazione col periodo precedente, totale/media/giorno migliore, una colonna al giorno toccabile, elenco, periodo senza visite; sezione "Vendite" | `tests/stats-dashboard.spec.js` |
+| Cassa: Statistiche — "Visite al menù" con il numero del giorno e una colonna al giorno | `tests/till-sala.spec.js` |
+| Regole Firestore: visite al menù — chiunque può solo iniziare un giorno da 1 o aggiungere 1 (nessun altro valore o campo, nessuna eliminazione), solo il personale le legge | `tests/firestore-rules.spec.js` |
 | Telefono: gestione menù rapida — piatto nuovo con prezzo dal tastierino, "Aggiungi piatto"/"Salva" in fondo allo schermo, "Disponibile" spento → "Nascosto" | `tests/phone-app.spec.js` |
 | Telefono: area staff installabile (manifest solo nell'area staff) | `tests/phone-app.spec.js` |
 | Telefono: niente Dashboard, sezioni nella barra in basso (Menù/Statistiche solo admin), tasto Indietro del browser tra le sezioni | `tests/staff-home.spec.js` |
 | Telefono: nota, quantità e rimozione di una riga da inviare dalla comanda del tavolo | `tests/waiter-order.spec.js` |
 | Menù pubblico: lingua scelta (`aria-pressed`) e categoria corrente (`aria-current`) leggibili dagli screen reader | `tests/client-view.spec.js` |
 | Impostazioni del menù (telefono): elenco e ritorno; Locale e link salvano solo ciò che cambia e il menù pubblico li mostra; tema evidenziato; coperto dal tastierino solo con «Usa» | `tests/menu-settings.spec.js` |
-| Impostazioni del menù (telefono): traduzione corretta a mano e lingua eliminata con conferma; personale aggiunto con ruolo e tolto con conferma | `tests/menu-settings.spec.js` |
+| Impostazioni del menù (telefono): traduzione corretta a mano e lingua eliminata con conferma; ruolo dato a un account esistente (UID) e tolto con conferma | `tests/menu-settings.spec.js` |
+| Personale (telefono): nuovo account con email e password (minimo 6 caratteri, "Mostra"), l'admin resta collegato, la persona entra subito col suo ruolo e vede i tavoli; email già usata → errore e nessuno aggiunto; il proprio accesso non si può togliere ("Tu"); niente scorrimento laterale, comandi ≥ 48px, "Crea account" in fondo | `tests/menu-settings.spec.js` |
+| Cassa: Personale — l'admin crea un account amministratore senza uscire | `tests/till-sala.spec.js` |
+| Regole Firestore: un account registrato da fuori o senza ruolo in uso (nessuno, "kitchen") non legge né scrive comande, prenotazioni, stampe, costi, menù, e non si dà un ruolo; il cameriere lavora ma non assegna ruoli; l'admin sì; menù pubblico in lettura | `tests/firestore-rules.spec.js` |
 | Impostazioni del menù (telefono): stampa del menù — errore senza categorie, anteprima in una nuova scheda; backup scaricato, file non valido, ripristino che chiede conferma; "Vedi il menù dei clienti" | `tests/menu-settings.spec.js` |
 | Costo interno del piatto dal tastierino nella scheda del piatto, salvato e mantenuto dopo il ricaricamento; scheda aperta prima dell'arrivo dei costi (bug corretto) | `tests/admin-menu-costs.spec.js` |
 | Storico (telefono): "Carica altre", comanda come preconto in sola lettura con ristampa, cameriere senza eliminazione, admin elimina con conferma (persistente), "Svuota storico" con conferma | `tests/order-history.spec.js` |

@@ -101,23 +101,95 @@ test("presa della comanda: un tocco = un piatto in più col conteggio sul riquad
   await expect(page.getByTestId("phone-order-total")).toHaveText("€ 0,00");
 });
 
-test("le categorie restano in alto mentre si scorre e portano alla loro sezione", async ({ page }) => {
+// Una foto da 1×1 px al posto di quelle vere (placehold.co nel seed): i test
+// non dipendono dalla rete.
+const PNG_1PX = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64");
+async function stubPhotos(page) {
+  await page.route(/placehold\.co/, (route) => route.fulfill({ status: 200, contentType: "image/png", body: PNG_1PX }));
+}
+
+test("tutte le categorie si vedono subito in una griglia, senza scorrere di lato, e portano alla loro sezione", async ({ page }) => {
   await page.goto("/cameriere");
   await staffLogin(page, TEST_WAITER);
   await openTable(page);
 
-  const tabs = page.getByRole("tablist", { name: "Categorie del menù" });
-  await tabs.getByRole("tab", { name: "Bevande" }).click();
+  const grid = page.getByRole("tablist", { name: "Categorie del menù" });
+  await expect(grid).toBeInViewport();
+  // Ogni categoria è visibile per intero, con quanti piatti ha (scritto, non solo a colori).
+  for (const name of ["Antipasti", "Primi", "Dolci", "Bevande"]) {
+    const tab = grid.getByRole("tab", { name: new RegExp(`^${name}`) });
+    await expect(tab).toBeInViewport({ ratio: 1 });
+    await expect(tab).toContainText(/\d+ piatt[oi]/);
+    expect((await tab.boundingBox()).height).toBeGreaterThanOrEqual(48);
+  }
+  await expectNoSideScroll(page, "griglia delle categorie");
+  // All'inizio la griglia si vede già tutta: nessun pulsante da toccare prima.
+  await expect(page.getByRole("button", { name: /^Categorie:/ })).toHaveCount(0);
+
+  // Un piatto scelto si vede anche sulla sua categoria.
+  await page.getByRole("button", { name: /^Aggiungi Bruschetta/ }).click();
+  await expect(grid.getByRole("tab", { name: /^Antipasti/ })).toContainText("1 da inviare");
+
+  await grid.getByRole("tab", { name: /^Bevande/ }).click();
   await expect(page.getByRole("region", { name: "Bevande" })).toBeInViewport();
   await expect(page.getByRole("button", { name: /acqua naturale/i })).toBeInViewport();
-  await expect(tabs).toBeInViewport();
+  // Passata la griglia, in alto compare "Categorie", con la categoria in vista.
+  const picker = page.getByRole("button", { name: /^Categorie:/ });
+  await expect(picker).toBeInViewport();
   // L'ultima categoria non può salire fino in cima: resta comunque quella
   // evidenziata (bug corretto: si evidenziava quella prima).
   await page.waitForTimeout(1200);
-  await expect(tabs.getByRole("tab", { name: "Bevande" })).toHaveAttribute("aria-selected", "true");
-  // Scorrendo a mano, la scheda torna a seguire la sezione in vista.
+  await expect(picker).toHaveAccessibleName("Categorie: Bevande");
+  await expect(grid.getByRole("tab", { name: /^Bevande/ })).toHaveAttribute("aria-selected", "true");
+
+  // Da qualunque punto, "Categorie" riapre la griglia completa e porta alla sezione.
+  await picker.click();
+  await expect(picker).toHaveAttribute("aria-expanded", "true");
+  const choose = page.getByRole("tablist", { name: "Scegli una categoria" });
+  await expect(choose.getByRole("tab")).toHaveCount(await grid.getByRole("tab").count());
+  await choose.getByRole("tab", { name: /^Primi/ }).click();
+  await expect(choose).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Primi" })).toBeInViewport();
+  await expect(picker).toHaveAccessibleName("Categorie: Primi");
+  // Esc chiude la griglia senza spostarsi.
+  await picker.click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tablist", { name: "Scegli una categoria" })).toHaveCount(0);
+
+  // Scorrendo a mano, la categoria evidenziata torna a seguire la sezione in vista.
   await page.mouse.wheel(0, -3000);
-  await expect(tabs.getByRole("tab", { name: "Antipasti" })).toHaveAttribute("aria-selected", "true", { timeout: 5_000 });
+  await expect(grid.getByRole("tab", { name: /^Antipasti/ })).toHaveAttribute("aria-selected", "true", { timeout: 5_000 });
+  // Tornati in cima, la griglia è di nuovo in vista e il pulsante sparisce.
+  await expect(page.getByRole("button", { name: /^Categorie:/ })).toHaveCount(0, { timeout: 5_000 });
+});
+
+test("nella comanda i piatti con una foto la mostrano in miniatura (la stessa del menù dei clienti)", async ({ page }) => {
+  await stubPhotos(page);
+  await page.goto("/cameriere");
+  await staffLogin(page, TEST_WAITER);
+  await openTable(page);
+  const withPhoto = page.getByRole("button", { name: /^Aggiungi Tiramisù/ });
+  const thumb = withPhoto.locator("img");
+  await expect(thumb).toBeVisible();
+  await expect(thumb).toHaveAttribute("src", /placehold\.co/);
+  // Senza foto: nessun riquadro vuoto.
+  await expect(page.getByRole("button", { name: /^Aggiungi Bruschetta/ }).locator("img")).toHaveCount(0);
+  await expectNoSideScroll(page, "piatti con foto");
+});
+
+test("gestione menù da telefono: categorie in griglia e piatti con la loro foto", async ({ page }) => {
+  await stubPhotos(page);
+  await page.goto("/?area=staff");
+  await staffLogin(page, TEST_ADMIN);
+  await page.getByRole("navigation", { name: "Sezioni" }).getByRole("button", { name: "Menù", exact: true }).click();
+  const grid = page.getByRole("tablist", { name: "Categorie del menù" });
+  for (const name of ["Antipasti", "Primi", "Dolci", "Bevande"]) {
+    await expect(grid.getByRole("tab", { name: new RegExp(`^${name}`) })).toBeInViewport({ ratio: 1 });
+  }
+  await expectNoSideScroll(page, "categorie del menù");
+  await grid.getByRole("tab", { name: /^Dolci/ }).click();
+  await expect(grid.getByRole("tab", { name: /^Dolci/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Modifica Tiramisù" }).locator("img")).toBeVisible();
 });
 
 test("gestione menù da telefono: piatto nuovo e modifica a schermo intero, con Salva sempre in basso", async ({ page }) => {

@@ -11,7 +11,8 @@ import { formatTime } from "./sala-shared";
 import { usePrintJob } from "./usePrintJob";
 import { confirmAction } from "./confirmDialog";
 import { getDesktopBridge } from "./desktop";
-import { TOUCH, FONT, STATUS, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine } from "./TillUi";
+import { optimizedImageUrl } from "./cloudinary";
+import { TOUCH, FONT, STATUS, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine, DishThumb } from "./TillUi";
 
 const DISCOUNTS = [10, 20, 50];
 
@@ -199,7 +200,9 @@ export function CoversControl({ t, order, compact = false }) {
 }
 
 // A dish to add: one tap = one more in the draft, the count on the tile.
+// With its photo (the one on the customers' menu) on the left, when it has one.
 export function DishTile({ t, item, quantityInDraft, offMenu, onAdd, compact = false }) {
+  const thumb = compact ? 48 : 56;
   return (
     <button
       type="button"
@@ -207,14 +210,17 @@ export function DishTile({ t, item, quantityInDraft, offMenu, onAdd, compact = f
       aria-label={`Aggiungi ${item.name}, € ${item.price}`}
       className="mdp-btn"
       style={{
-        position: "relative", display: "flex", flexDirection: "column", justifyContent: "space-between", textAlign: "left",
+        position: "relative", display: "flex", alignItems: "flex-start", gap: compact ? 10 : 12, textAlign: "left",
         minHeight: compact ? 84 : 104, padding: compact ? "10px 12px" : "12px 14px", borderRadius: 14, cursor: "pointer", fontFamily: FONT, color: t.ink,
         border: offMenu ? `2px dashed ${STATUS.waiting}` : `${quantityInDraft ? 2 : 1.5}px solid ${quantityInDraft ? t.primary : t.line}`,
         background: quantityInDraft ? `${t.primary}14` : t.card, WebkitTapHighlightColor: "transparent",
       }}
     >
-      <span style={{ fontSize: compact ? 16 : 17, fontWeight: 600, lineHeight: 1.25, paddingRight: quantityInDraft ? 34 : 0 }}>{item.name}</span>
-      <span style={{ fontSize: compact ? 15 : 16, color: t.inkSoft, marginTop: 6 }}>€ {item.price}</span>
+      <DishThumb t={t} src={item.image ? optimizedImageUrl(item.image, { width: thumb * 2 }) : ""} size={thumb} />
+      <span style={{ flex: 1, minWidth: 0, alignSelf: "stretch", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <span style={{ fontSize: compact ? 16 : 17, fontWeight: 600, lineHeight: 1.25, paddingRight: quantityInDraft ? 30 : 0, overflowWrap: "anywhere" }}>{item.name}</span>
+        <span style={{ fontSize: compact ? 15 : 16, color: t.inkSoft, marginTop: 6 }}>€ {item.price}</span>
+      </span>
       {quantityInDraft > 0 && (
         <span aria-hidden="true" style={{
           position: "absolute", top: 8, right: 8, minWidth: 30, height: 30, borderRadius: 15, padding: "0 8px",

@@ -290,3 +290,48 @@ export function Notice({ notice }) {
     </div>
   );
 }
+
+// Every category at a glance, as a grid of big buttons that wraps onto as
+// many rows as needed — never a strip that scrolls sideways (what's off
+// screen gets missed: Baymard measured 27% of users overlooking content
+// behind horizontal tabs). Each button: the name (wraps, never cut off) and
+// a short detail line in words, e.g. "6 piatti · 2 da inviare", so the state
+// doesn't rely on the colour. `minWidth` decides how many columns fit.
+// categories: [{ id, name, detail?, icon?, accent?, highlight? }]
+export function CategoryGrid({ t, label, categories, activeId, onSelect, minWidth = 110, buttonRef }) {
+  return (
+    <div role="tablist" aria-label={label} style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(min(${minWidth}px, 100%), 1fr))`, gap: 8 }}>
+      {categories.map((c) => {
+        const active = c.id === activeId;
+        const accent = c.accent || t.ink;
+        return (
+          <button key={c.id} ref={buttonRef ? (el) => buttonRef(c.id, el) : undefined} type="button" role="tab" aria-selected={active}
+            onClick={() => onSelect(c.id)} className="mdp-btn" style={{
+              display: "flex", flexDirection: "column", justifyContent: "center", gap: 2, minWidth: 0, minHeight: 56, padding: "8px 12px",
+              borderRadius: 12, textAlign: "left", cursor: "pointer", fontFamily: FONT,
+              border: `1.5px ${c.accent && !active ? "dashed" : "solid"} ${active ? t.primary : c.accent || t.line}`,
+              background: active ? t.primary : c.highlight ? `${t.primary}14` : t.card, color: active ? t.bg : accent,
+            }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 16, fontWeight: 700, lineHeight: 1.2, overflowWrap: "anywhere" }}>
+              {c.icon}{c.name}
+            </span>
+            {c.detail && <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.25, color: active ? t.bg : t.inkSoft, opacity: active ? 0.85 : 1 }}>{c.detail}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// A dish's photo in small (the same one the customers see on the menu), to
+// recognise it at a glance. Nothing when the dish has no photo. The URL is
+// already sized by the caller (optimizedImageUrl in cloudinary.js).
+export function DishThumb({ t, src, size = 52 }) {
+  const [failed, setFailed] = React.useState(false);
+  if (!src || failed) return null;
+  return (
+    <img src={src} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} style={{
+      width: size, height: size, flexShrink: 0, borderRadius: 10, objectFit: "cover", background: t.bgAlt || t.line, display: "block",
+    }} />
+  );
+}

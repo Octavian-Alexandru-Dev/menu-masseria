@@ -41,6 +41,11 @@ Deve mostrare un numero di versione (es. `v20.11.0`).
 4. Inserisci l'email e la password che userai TU per accedere alla gestione
    del menù (es. la tua email personale). Questa sostituisce il vecchio
    "admin / masseria2026".
+5. Copia l'**UID** dell'utente appena creato (colonna "UID utente"), poi in
+   **Build → Firestore Database → Avvia raccolta**: ID raccolta `staff`, ID
+   documento = l'UID copiato, due campi di tipo stringa: `name` (il tuo
+   nome) e `role` con valore `admin`. Serve solo per questo primo account:
+   tutti gli altri li crei poi dall'app (vedi le Domande frequenti).
 
 ### Recupera la configurazione dell'app web
 1. Nel menù a sinistra, clicca sull'icona a forma di ingranaggio → **Impostazioni progetto**
@@ -246,8 +251,12 @@ script a mano come descritto sopra.
 
 ## Domande frequenti
 
-**Posso aggiungere altri utenti che possono modificare il menù?**
-Sì: Firebase Authentication → Users → Aggiungi utente, con un'altra email.
+**Posso aggiungere altri utenti (camerieri, altri amministratori)?**
+Sì, direttamente dall'app: entra come amministratore → **Menù →
+Impostazioni → Personale → Nuovo account**, scegli nome, email, password e
+ruolo, poi **Crea account**. La persona può entrare subito. "Togli accesso"
+le toglie il ruolo (l'account resta, si può riaggiungere da "Account
+esistente").
 
 **Posso usare un mio dominio (es. menu.masseriadellapiana.it)?**
 Sì, gratis: Firebase Hosting → "Aggiungi dominio personalizzato" e segui le

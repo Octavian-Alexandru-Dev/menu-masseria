@@ -17,9 +17,9 @@ import {
 // useful for letting others try the project without their own Firebase
 // account). The VITE_FIREBASE_* values are ignored by the emulator: any
 // placeholder works (see .env.example).
-const USE_EMULATOR = import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true";
+export const USE_EMULATOR = import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,

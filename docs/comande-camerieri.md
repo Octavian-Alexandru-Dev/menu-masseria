@@ -69,7 +69,9 @@ in tempo reale tra cameriere e cucina userà i listener realtime di Firestore
 ## 3. Autenticazione e ruoli
 
 - Ogni cameriere ha un **account individuale** (Firebase Auth, email/password
-  — stesso meccanismo già usato per l'admin in `firebase-auth.js`).
+  — stesso meccanismo già usato per l'admin in `firebase-auth.js`), creato
+  dall'amministratore nell'app (Impostazioni → Personale → Nuovo account),
+  non più a mano in Firebase Console.
 - Introduciamo una collection Firestore `staff/{uid}` con il ruolo di ogni
   utente autenticato:
   ```

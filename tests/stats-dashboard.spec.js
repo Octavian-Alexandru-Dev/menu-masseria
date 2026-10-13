@@ -99,4 +99,50 @@ test.describe("Statistiche", () => {
     await expect(page.getByText(/rispetto a/)).toContainText(String(far.getFullYear()));
     await expect(page.getByText("nuovo").first()).toBeVisible({ timeout: 10_000 });
   });
+
+  // Visite al menù (menuViews, seed: ieri 12, 2 giorni fa 7, 4 giorni fa 20,
+  // 5 giorni fa 3, 6 giorni fa 9 — oggi lo incrementano i test del menù pubblico).
+  test("'Visite al menù': numero del giorno, confronto, grafico a colonne toccabili ed elenco", async ({ page }) => {
+    const views = page.getByRole("region", { name: "Visite al menù" });
+    await expect(page.getByRole("region", { name: "Vendite" })).toBeVisible();
+    await page.getByRole("button", { name: "Ieri", exact: true }).click();
+    await expect(views.getByTestId("kpi-views")).toHaveText("12", { timeout: 10_000 });
+    // Un giorno solo: niente media né grafico.
+    await expect(views.getByTestId("kpi-views-avg")).toHaveCount(0);
+    await page.getByRole("group", { name: "Confronta con" }).getByRole("button", { name: "Periodo precedente" }).click();
+    await expect(views).toContainText("+71%", { timeout: 10_000 }); // 12 contro 7, scritto (non solo a colori)
+
+    // Da 6 giorni fa a ieri: solo giorni seedati (oggi cresce con gli altri test).
+    await page.getByRole("button", { name: "Personalizzato", exact: true }).click();
+    const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d; };
+    await page.getByLabel("Periodo: dal").fill(dateValue(daysAgo(6)));
+    await page.getByLabel("Periodo: al").fill(dateValue(daysAgo(1)));
+    await expect(views.getByTestId("kpi-views")).toHaveText("51", { timeout: 10_000 });
+    await expect(views.getByTestId("kpi-views-avg")).toHaveText("8,5");
+    await expect(views.getByTestId("kpi-views-best")).toHaveText("20");
+    const chart = views.getByRole("group", { name: "Visite al menù nel tempo" });
+    await expect(chart.getByRole("button")).toHaveCount(6); // una colonna al giorno, anche quelli a zero
+    await chart.getByRole("button", { name: /: 7 visite$/ }).click();
+    await expect(views.getByText(/: 7 visite$/).first()).toBeVisible();
+    await expect(chart.getByRole("button", { name: /: 7 visite$/ })).toHaveAttribute("aria-pressed", "true");
+    // Le colonne restano toccabili sul telefono.
+    expect((await chart.getByRole("button").first().boundingBox()).width).toBeGreaterThanOrEqual(40);
+
+    await views.getByRole("group", { name: "Mostra le visite" }).getByRole("button", { name: "Elenco" }).click();
+    const list = views.getByRole("list", { name: "Visite al menù per giorno" });
+    await expect(list.getByRole("listitem")).toHaveCount(6);
+    await expect(list).toContainText("20");
+    const overflow = await page.evaluate(() => globalThis.document.documentElement.scrollWidth - globalThis.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test("'Visite al menù' senza visite nel periodo lo dice", async ({ page }) => {
+    await page.getByRole("button", { name: "Personalizzato", exact: true }).click();
+    const far = new Date(2001, 0, 10);
+    await page.getByLabel("Periodo: dal").fill(dateValue(far));
+    await page.getByLabel("Periodo: al").fill(dateValue(new Date(2001, 0, 12)));
+    const views = page.getByRole("region", { name: "Visite al menù" });
+    await expect(views.getByTestId("kpi-views")).toHaveText("0", { timeout: 10_000 });
+    await expect(views).toContainText("Nessuna visita al menù in questo periodo.");
+  });
 });
