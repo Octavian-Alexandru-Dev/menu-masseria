@@ -17,7 +17,7 @@ const CELL_DATE_LABEL = new Intl.DateTimeFormat("it-IT", { day: "numeric", month
 const MONTH_LABEL = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 
 async function login(page, account = TEST_WAITER) {
-  await page.locator('input[type="email"]').fill(account.email);
+  await page.getByRole("textbox", { name: "Nome utente", exact: true }).fill(account.email);
   await page.locator('input[type="password"]').fill(account.password);
   await page.getByRole("button", { name: /^accedi$/i }).click();
   await expect(page.getByRole("region", { name: "Calendario" })).toBeVisible({ timeout: 10_000 });
@@ -50,7 +50,7 @@ test.describe("Prenotazioni", () => {
   });
 
   test("mostra il login per l'area prenotazioni", async ({ page }) => {
-    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Nome utente", exact: true })).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
     await expect(page.getByRole("button", { name: /^accedi$/i })).toBeVisible();
   });

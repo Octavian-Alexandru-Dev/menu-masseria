@@ -41,7 +41,7 @@ test("selected language and current category are exposed to screen readers, not 
 test("footer link opens the staff login screen", async ({ page }) => {
   await page.getByRole("button", { name: /area riservata|staff area/i }).click();
   await expect(page.getByText(/area riservata|staff area/i).first()).toBeVisible();
-  await expect(page.locator('input[type="email"]')).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Nome utente", exact: true })).toBeVisible();
   await expect(page.locator('input[type="password"]')).toBeVisible();
 });
 

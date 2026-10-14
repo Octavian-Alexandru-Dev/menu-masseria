@@ -1,7 +1,7 @@
-// Staff accounts (staff/{uid}: name + role [+ email]), see
+// Staff accounts (staff/{uid}: name + role [+ username + email]), see
 // docs/comande-camerieri.md §3. Managed from the menu settings
 // (MenuSettings.jsx > Personale): a new person gets their Firebase Auth
-// account (email + password) created right there, or a role is assigned to
+// account (username + password, staffUsername.js) created right there, or a role is assigned to
 // an account that already exists (its uid).
 //
 // Hierarchy: owner (only one, config/owner) > admin > waiter. Owner and
@@ -12,6 +12,7 @@
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "firebase/firestore";
 import { db } from "./firebase-db";
 import { createAuthAccount } from "./firebase-auth";
+import { loginEmail, normalizeUsername } from "./staffUsername";
 
 // The roles that can be assigned from Personale ("owner" can't: it is
 // claimed once, then handed over — claimOwnership/transferOwnership).
@@ -64,9 +65,16 @@ export function saveStaffMember(uid, { name, role }) {
   return setDoc(doc(db, "staff", uid.trim()), { name: name.trim(), role });
 }
 
-// New account + role in one go; resolves with the new uid.
-export function createStaffMember({ email, password, name, role }) {
-  return createAuthAccount(email, password, (uid) => setDoc(doc(db, "staff", uid), { name: name.trim(), role, email: email.trim().toLowerCase() }));
+// New account + role in one go; resolves with the new uid. `email` is the
+// internal address standing for the username (how Firebase Auth knows it).
+export function createStaffMember({ username, password, name, role }) {
+  const email = loginEmail(username);
+  return createAuthAccount(email, password, (uid) => setDoc(doc(db, "staff", uid), { name: name.trim(), role, username: normalizeUsername(username), email }));
+}
+
+// What identifies a member in the lists: username, else email, else uid.
+export function staffLoginLabel(member) {
+  return member.username || member.email || member.uid;
 }
 
 export function removeStaffMember(uid) {
@@ -99,8 +107,8 @@ export function transferOwnership(myUid, newOwnerUid) {
 
 export function staffAccountErrorMessage(err) {
   switch (err?.code) {
-    case "auth/email-already-in-use": return "Esiste già un account con questa email. Se è di una persona senza accesso, aggiungila da «Account esistente».";
-    case "auth/invalid-email": return "Indirizzo email non valido.";
+    case "auth/email-already-in-use": return "Questo nome utente è già usato. Scegline un altro, o se è di una persona senza accesso aggiungila da «Account esistente».";
+    case "auth/invalid-email": return "Nome utente non valido.";
     case "auth/weak-password": return `La password deve avere almeno ${MIN_PASSWORD_LENGTH} caratteri.`;
     case "auth/operation-not-allowed":
     case "auth/admin-restricted-operation": return "La creazione di account è disattivata nel progetto Firebase (Authentication → Impostazioni).";

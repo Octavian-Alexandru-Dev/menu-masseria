@@ -70,7 +70,11 @@ the margin instead of treating them as zero cost.
 
 Role assignment for a Firebase Auth user. The `uid` is the Firebase Auth
 uid. Accounts are created from the app (Menù → Impostazioni → Personale →
-"Nuovo account", `staffData.js` > `createStaffMember`: a secondary Firebase
+"Nuovo account", `staffData.js` > `createStaffMember`) with a **username**,
+not an email: Firebase Auth needs an email, so the username stands for
+`{username}@staff.masseria.local`, an address that receives no mail and is
+never shown (`src/staffUsername.js`; the login field takes a username, or
+an email for the accounts that have a real one. Creation: a secondary Firebase
 app creates the Auth account so the admin stays signed in, then the admin
 writes this doc; if that write fails the new account is deleted again). A
 role can also be given to an existing account by uid. Each user reads their
@@ -91,7 +95,8 @@ batch with `config/owner`.
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | Display name, shown as "Ciao, {name}" etc. |
-| `email` | string? | Login email, set when the account was created from the app (shown in the Personale list instead of the uid). Missing for accounts added by uid. |
+| `username` | string? | Login username (lowercase letters, digits, `.`, `_`, `-`; 3–30), set when the account was created from the app; shown in the Personale list. Missing for older accounts and those added by uid. |
+| `email` | string? | Firebase Auth email: the internal `{username}@staff.masseria.local` for accounts created with a username, a real email for older ones (shown in the list when there's no `username`). Missing for accounts added by uid. |
 | `role` | string | `"owner"`, `"admin"` or `"waiter"`. `"kitchen"` is an old role: the kitchen area was removed (the kitchen works from printed tickets), such accounts get a message asking for a role change. Any other value (or a missing doc) is a valid state the UI handles explicitly (`useStaffSession` in `staff-shared.jsx`: `"no-role"` / an unrecognized role → "Accesso non consentito"). |
 
 ## `config/owner`

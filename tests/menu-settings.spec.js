@@ -4,7 +4,7 @@ import { TEST_ADMIN, TEST_OWNER } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
 import { PHONE, navTo, sheet } from "./helpers/phone";
 import { getTillLock, pinMatchesRemotely, resetTillLockRemotely } from "./helpers/staffRoles";
-import { getMenu, setTranslationRemotely, removeTranslationRemotely, setMenuFieldsRemotely, removeStaffRemotely, findStaffByEmail, removeStaffByEmailRemotely } from "./helpers/menuDoc";
+import { getMenu, setTranslationRemotely, removeTranslationRemotely, setMenuFieldsRemotely, removeStaffRemotely, findStaffByEmail, removeStaffByEmailRemotely, usernameEmail } from "./helpers/menuDoc";
 
 // Impostazioni del menù (MenuSettings.jsx) dal telefono: Menù → Impostazioni,
 // ogni voce una pagina intera con "Salva" in fondo. Sostituiscono l'editor
@@ -131,20 +131,30 @@ test("Personale: il proprietario dà a un account esistente il ruolo di amminist
   }
 });
 
-test("Personale: si crea un account nuovo con email e password, l'admin resta dentro e la persona entra subito", async ({ page, browser }) => {
+test("Personale: si crea un account nuovo con nome utente e password, l'admin resta dentro e la persona entra con il nome utente", async ({ page, browser }) => {
   test.setTimeout(45_000); // due accessi (admin + persona nuova) e un ricaricamento
-  const email = `nuovo-${Date.now()}@test.local`;
+  const username = `nuovo-${Date.now()}`;
+  const email = usernameEmail(username);
   const password = "Prova123!";
   try {
     const panel = await openSettings(page, "Personale");
     // "Nuovo account" è la scelta di partenza: niente più UID da Firebase Console.
     await expect(panel.getByRole("group", { name: "Tipo di account" }).getByRole("button", { name: "Nuovo account" })).toHaveAttribute("aria-pressed", "true");
     await expect(panel.getByRole("textbox", { name: "UID" })).toHaveCount(0);
+    // Solo un nome utente: nessun campo email.
+    await expect(panel.getByRole("textbox", { name: /email/i })).toHaveCount(0);
     const create = panel.getByRole("button", { name: "Crea account" });
     await expect(create).toBeDisabled();
 
     await panel.getByRole("textbox", { name: "Nome della persona" }).fill("Cameriere nuovo");
-    await panel.getByRole("textbox", { name: "Email della persona" }).fill(email);
+    const user = panel.getByRole("textbox", { name: "Nome utente della persona" });
+    // Un'email (o spazi, «@») non è un nome utente: errore visibile, niente creazione.
+    await user.fill("marco@esempio.it");
+    await expect(panel.getByRole("alert")).toContainText("Nome utente non valido");
+    await expect(create).toBeDisabled();
+    await user.fill(username.toUpperCase()); // le maiuscole diventano minuscole
+    await expect(user).toHaveValue(username);
+    await expect(panel.getByRole("alert")).toHaveCount(0);
     const pwd = panel.getByLabel("Password della persona");
     await pwd.fill("12345"); // sotto il minimo di Firebase (6)
     await expect(create).toBeDisabled();
@@ -154,27 +164,32 @@ test("Personale: si crea un account nuovo con email e password, l'admin resta de
     await expect(pwd).toHaveAttribute("type", "text"); // l'admin la legge per comunicarla
     await create.click();
 
-    await expect(panel.getByRole("status")).toContainText(`entra con ${email}`, { timeout: 10_000 });
+    await expect(panel.getByRole("status")).toContainText(`entra con il nome utente ${username}`, { timeout: 10_000 });
     const list = panel.getByRole("list", { name: "Persone con accesso" });
-    await expect(list.getByRole("listitem").filter({ hasText: "Cameriere nuovo · Cameriere" })).toContainText(email);
-    await expect.poll(() => findStaffByEmail(email)).toMatchObject({ name: "Cameriere nuovo", role: "waiter", email });
+    const row = list.getByRole("listitem").filter({ hasText: "Cameriere nuovo · Cameriere" });
+    await expect(row).toContainText(username);
+    await expect(row).not.toContainText("@"); // l'indirizzo interno non si vede
+    await expect.poll(() => findStaffByEmail(email)).toMatchObject({ name: "Cameriere nuovo", role: "waiter", username });
     // Il form si svuota per la persona successiva.
-    await expect(panel.getByRole("textbox", { name: "Email della persona" })).toHaveValue("");
+    await expect(user).toHaveValue("");
     // Creare l'account non fa uscire l'admin (istanza Firebase secondaria).
     await page.reload();
     await expect(page.getByRole("navigation", { name: "Sezioni" }).getByRole("button", { name: "Menù", exact: true })).toBeVisible({ timeout: 10_000 });
 
-    // La persona entra con le credenziali appena create, su un altro telefono.
+    // La persona entra con il nome utente appena creato, su un altro telefono.
     const other = await browser.newContext(PHONE);
     try {
       const phone = await other.newPage();
       await phone.goto("/?area=staff");
-      await staffLogin(phone, { email, password });
+      await staffLogin(phone, { email: username, password });
       const nav = phone.getByRole("navigation", { name: "Sezioni" });
       await expect(nav.getByRole("button", { name: "Tavoli", exact: true })).toBeVisible({ timeout: 10_000 });
       await expect(nav.getByRole("button", { name: "Menù", exact: true })).toHaveCount(0); // cameriere, non admin
       // Il ruolo appena assegnato apre i dati (firestore.rules): i tavoli si caricano.
       await expect(phone.getByText("Caricamento tavoli…")).toHaveCount(0, { timeout: 15_000 });
+      // Dopo l'uscita "Rientra come …" mostra il nome utente, non l'indirizzo interno.
+      await phone.getByRole("button", { name: /^esci$/i }).click();
+      await expect(phone.getByRole("button", { name: `Rientra come Cameriere nuovo (${username})` })).toBeVisible({ timeout: 10_000 });
     } finally {
       await other.close();
     }
@@ -183,26 +198,40 @@ test("Personale: si crea un account nuovo con email e password, l'admin resta de
   }
 });
 
-test("Personale: un'email già usata dà errore e non aggiunge nessuno; il proprio accesso non si può togliere", async ({ page }) => {
-  const panel = await openSettings(page, "Personale");
-  const list = panel.getByRole("list", { name: "Persone con accesso" });
-  await expect(list).toContainText("Admin di test", { timeout: 10_000 });
+test("Personale: un nome utente già usato dà errore e non aggiunge nessuno; il proprio accesso non si può togliere", async ({ page }) => {
+  const username = `doppio-${Date.now()}`;
+  try {
+    const panel = await openSettings(page, "Personale");
+    const list = panel.getByRole("list", { name: "Persone con accesso" });
+    await expect(list).toContainText("Admin di test", { timeout: 10_000 });
 
-  await panel.getByRole("textbox", { name: "Nome della persona" }).fill("Doppione");
-  await panel.getByRole("textbox", { name: "Email della persona" }).fill(TEST_ADMIN.email);
-  await panel.getByLabel("Password della persona").fill("Prova123!");
-  await panel.getByRole("button", { name: "Crea account" }).click();
-  await expect(panel.getByRole("alert")).toContainText("Esiste già un account con questa email", { timeout: 10_000 });
-  // (Niente conteggio delle righe: altri test in parallelo aggiungono/tolgono persone.)
-  await expect(list).not.toContainText("Doppione");
-  // I dati restano nel form, per correggere l'email.
-  await expect(panel.getByRole("textbox", { name: "Nome della persona" })).toHaveValue("Doppione");
+    const add = async (name) => {
+      await panel.getByRole("textbox", { name: "Nome della persona" }).fill(name);
+      await panel.getByRole("textbox", { name: "Nome utente della persona" }).fill(username);
+      await panel.getByLabel("Password della persona").fill("Prova123!");
+      await panel.getByRole("button", { name: "Crea account" }).click();
+    };
+    await add("Originale");
+    // Il messaggio arriva quando il form si è svuotato (l'elenco si aggiorna
+    // prima, con la scrittura locale): solo allora si riempie di nuovo.
+    await expect(panel.getByRole("status")).toContainText("Originale aggiunto", { timeout: 10_000 });
+    await expect(list).toContainText("Originale · Cameriere");
+    await add("Doppione");
+    await expect(panel.getByRole("alert")).toContainText("Questo nome utente è già usato", { timeout: 10_000 });
+    // (Niente conteggio delle righe: altri test in parallelo aggiungono/tolgono persone.)
+    await expect(list).not.toContainText("Doppione");
+    // I dati restano nel form, per correggere il nome utente.
+    await expect(panel.getByRole("textbox", { name: "Nome della persona" })).toHaveValue("Doppione");
+    await expect(panel.getByRole("textbox", { name: "Nome utente della persona" })).toHaveValue(username);
 
-  // Riga dell'admin collegato: "Tu" invece di "Togli" (non ci si chiude fuori da soli).
-  const me = list.getByRole("listitem").filter({ hasText: "Admin di test" });
-  await expect(me).toContainText("Tu");
-  await expect(me.getByRole("button", { name: /Togli accesso/ })).toHaveCount(0);
-  await expect(list.getByRole("button", { name: "Togli accesso a Cameriere di test" })).toBeVisible();
+    // Riga dell'admin collegato: "Tu" invece di "Togli" (non ci si chiude fuori da soli).
+    const me = list.getByRole("listitem").filter({ hasText: "Admin di test" });
+    await expect(me).toContainText("Tu");
+    await expect(me.getByRole("button", { name: /Togli accesso/ })).toHaveCount(0);
+    await expect(list.getByRole("button", { name: "Togli accesso a Cameriere di test" })).toBeVisible();
+  } finally {
+    await removeStaffByEmailRemotely(usernameEmail(username));
+  }
 });
 
 test("Personale: un amministratore aggiunge solo camerieri e non tocca il proprietario né gli altri amministratori", async ({ page }) => {

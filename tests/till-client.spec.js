@@ -153,7 +153,7 @@ test("dopo il riavvio con una nuova versione del programma il banner conferma l'
   await expect(banner).toContainText("Programma aggiornato alla versione 1.2.0.", { timeout: 10_000 });
   // Solo la prima volta: ricaricando non si ripete.
   await page.reload();
-  await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("textbox", { name: "Nome utente", exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(banner).toHaveCount(0);
 });
 
@@ -182,7 +182,7 @@ test("con un client 1.1–1.3 'Esci' resta (non c'è il logout nelle impostazion
   await dialog.getByRole("button", { name: "Esci" }).click();
   const oneTap = page.getByRole("button", { name: `Accedi come ${TEST_WAITER.email}` });
   await expect(oneTap).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('input[type="email"]')).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Nome utente", exact: true })).toBeVisible();
   await page.waitForTimeout(1000);
   await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toHaveCount(0);
   await oneTap.click();
@@ -257,7 +257,7 @@ test("un account con il vecchio ruolo cucina non ha più un'area: un messaggio s
 test("credenziali della cassa sbagliate mostrano un errore comprensibile", async ({ page }) => {
   await installDesktopBridgeMock(page, { savedLogin: { email: TEST_WAITER.email, password: "sbagliata" } });
   await page.goto("/cameriere");
-  await expect(page.getByText(/accesso automatico non riuscito.*email o password non corretti/i)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/accesso automatico non riuscito.*nome utente o password non corretti/i)).toBeVisible({ timeout: 10_000 });
 });
 
 test("nel browser normale 'Esci' esce subito, senza conferma", async ({ page }) => {
@@ -265,6 +265,6 @@ test("nel browser normale 'Esci' esce subito, senza conferma", async ({ page }) 
   await staffLogin(page, TEST_WAITER);
   await expectSignedInAsWaiter(page);
   await page.getByRole("button", { name: /^esci$/i }).click();
-  await expect(page.locator('input[type="email"]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("textbox", { name: "Nome utente", exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
 });

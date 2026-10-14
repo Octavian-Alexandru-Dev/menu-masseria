@@ -11,6 +11,7 @@ import { THEMES, GlobalStyle, Logo, FALLBACK_STYLE } from "./shared";
 import { FONT, STATUS, TOUCH, TillButton, Field, tillInputStyle } from "./TillUi";
 import { getDesktopBridge } from "./desktop";
 import { confirmAction } from "./confirmDialog";
+import { loginEmail, loginName } from "./staffUsername";
 import { getLastStaffAccount, rememberStaffAccount, forgetLastStaffAccount, rememberStaffPassword, loadStaffPassword, forgetStaffPassword } from "./lastStaffAccount";
 
 // Set by a deliberate, confirmed logout at the till: the login screen then
@@ -47,24 +48,24 @@ export function useStaffSession() {
   if (fbUser === null) return { status: "signed-out" };
   if (staffDoc === undefined) return { status: "loading" };
   if (!staffDoc || !staffDoc.role) return { status: "no-role", user: fbUser };
-  return { status: "ready", user: fbUser, role: staffDoc.role, name: staffDoc.name || fbUser.email };
+  return { status: "ready", user: fbUser, role: staffDoc.role, name: staffDoc.name || loginName(fbUser.email) };
 }
 
 const WRONG_CREDENTIALS = new Set(["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"]);
 
 export function signInErrorMessage(code) {
-  if (WRONG_CREDENTIALS.has(code)) return "Email o password non corretti.";
-  if (code === "auth/invalid-email") return "Indirizzo email non valido.";
+  if (WRONG_CREDENTIALS.has(code)) return "Nome utente o password non corretti.";
+  if (code === "auth/invalid-email") return "Nome utente non valido.";
   if (code === "auth/too-many-requests") return "Troppi tentativi. Riprova tra qualche minuto.";
   return "Accesso non riuscito. Riprova.";
 }
 
 // Sign-in used by both login screens (StaffLoginScreen, Admin.jsx's
-// AdminLogin). Returns null on success, the Firebase error code otherwise
+// AdminLogin), with a username or an email (staffUsername.js). Returns null on success, the Firebase error code otherwise
 // (the message is already shown). remember: keep the account (and the
 // password, encrypted — lastStaffAccount.js) for "Rientra come …".
 export async function staffSignIn(email, password, { remember = true } = {}) {
-  const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+  const cred = await signInWithEmailAndPassword(auth, loginEmail(email), password);
   if (remember) {
     rememberStaffAccount(cred.user.email);
     await rememberStaffPassword(cred.user.email, password);
@@ -74,7 +75,7 @@ export async function staffSignIn(email, password, { remember = true } = {}) {
 
 // "Rientra come …" on a login screen: the last account that signed in on
 // this device. use() signs straight back in with the remembered password;
-// without one (never stored, or it changed since) it fills in the email and
+// without one (never stored, or it changed since) it fills in the username and
 // moves to the password field.
 export function useLastStaffAccount({ signIn, setEmail, setError, passRef }) {
   const [account, setAccount] = useState(getLastStaffAccount);
@@ -89,7 +90,7 @@ export function useLastStaffAccount({ signIn, setEmail, setError, passRef }) {
     } else {
       setError("");
     }
-    setEmail(account.email);
+    setEmail(loginName(account.email));
     passRef.current?.focus();
   };
   const forget = async () => {
@@ -164,7 +165,7 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
         {savedLogin && (
           <>
             <TillButton t={t} variant="primary" size={60} icon={LogIn} onClick={signInSaved} disabled={busy}>
-              {busy ? "Accesso…" : `Accedi come ${savedLogin.email}`}
+              {busy ? "Accesso…" : `Accedi come ${loginName(savedLogin.email)}`}
             </TillButton>
             <div style={{ textAlign: "center", fontSize: 15, color: t.inkSoft }}>oppure con un altro account:</div>
           </>
@@ -174,10 +175,10 @@ export function StaffLoginScreen({ title, subtitle, theme }) {
           <LastAccountSuggestion t={t} account={lastAccount} busy={busy} onUse={last.use} onForget={last.forget} />
         )}
 
-        <Field t={t} label="Email">
+        <Field t={t} label="Nome utente">
           <input
-            type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus={!showLastAccount}
-            autoComplete="username" aria-label="Email" inputMode="email" autoCapitalize="off" style={input}
+            type="text" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus={!showLastAccount}
+            autoComplete="username" aria-label="Nome utente" autoCapitalize="off" autoCorrect="off" spellCheck={false} style={input}
           />
         </Field>
         <Field t={t} label="Password">
@@ -224,15 +225,16 @@ function CardTitle({ t, title, subtitle }) {
   );
 }
 
-// "Rientra come …" above the email/password fields (StaffLoginScreen and
+// "Rientra come …" above the username/password fields (StaffLoginScreen and
 // Gestione menù's login in Admin.jsx): the last account that signed in on
-// this device. A tap fills in its email and moves to the password; "Non sei
+// this device. A tap fills in its username and moves to the password; "Non sei
 // tu?" removes the suggestion (a shared phone or laptop).
 export function LastAccountSuggestion({ t, account, busy, onUse, onForget }) {
-  const who = account.name && account.name !== account.email ? account.name : account.email;
+  const login = loginName(account.email);
+  const who = account.name && account.name !== account.email ? account.name : login;
   return (
     <div role="group" aria-label="Ultimo account usato" style={{ display: "grid", gap: 4 }}>
-      <button type="button" onClick={onUse} disabled={busy} autoFocus className="mdp-btn" aria-label={`Rientra come ${who} (${account.email})`} style={{
+      <button type="button" onClick={onUse} disabled={busy} autoFocus className="mdp-btn" aria-label={`Rientra come ${who} (${login})`} style={{
         width: "100%", minHeight: 64, padding: "10px 14px", background: `${t.primary}10`, color: t.ink,
         border: `1.5px solid ${t.primary}`, borderRadius: 12, cursor: "pointer", fontFamily: FONT,
         display: "flex", alignItems: "center", gap: 12, textAlign: "left",
@@ -240,9 +242,9 @@ export function LastAccountSuggestion({ t, account, busy, onUse, onForget }) {
         <UserRound size={24} color={t.primary} aria-hidden="true" style={{ flexShrink: 0 }} />
         <span style={{ minWidth: 0 }}>
           <span style={{ display: "block", fontSize: 17, fontWeight: 700 }}>{busy ? "Accesso…" : `Rientra come ${who}`}</span>
-          {who !== account.email && (
+          {who !== login && (
             <span style={{ display: "block", fontSize: 14, color: t.inkSoft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {account.email}
+              {login}
             </span>
           )}
         </span>

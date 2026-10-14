@@ -121,7 +121,7 @@ $("btn-save").addEventListener("click", (e) => busy(e.target, async () => {
 $("btn-login-save").addEventListener("click", (e) => busy(e.target, async () => {
   const email = $("loginEmail").value.trim();
   const password = $("loginPassword").value;
-  if (!email || !password) return show("login-msg", "Inserisci email e password.", "error");
+  if (!email || !password) return show("login-msg", "Inserisci nome utente e password.", "error");
   const res = await window.cassa.credentials("save", email, password);
   if (!res.ok) return show("login-msg", res.error, "error");
   $("loginPassword").value = "";

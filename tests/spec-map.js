@@ -23,7 +23,7 @@ export const FULL_SUITE = [
   "tests/stages.js", "tests/spec-map.js", "tests/global-setup.js", "tests/global-teardown.js", "tests/test-env.js",
   "tests/helpers/emulatorApp.js", "tests/helpers/appUrl.js",
   "src/main.jsx", "src/MenuApp.jsx", "src/shared.jsx", "src/TillUi.jsx", "src/confirmDialog.jsx",
-  "src/firebase-db.js", "src/firebase-auth.js", "src/staff-shared.jsx", "src/StaffHome.jsx",
+  "src/firebase-db.js", "src/firebase-auth.js", "src/staff-shared.jsx", "src/staffUsername.js", "src/StaffHome.jsx",
 ];
 
 const PHONE_STAFF = ["phone-app", "staff-home", "waiter-order", "reservations", "order-history", "stats-dashboard", "menu-settings", "admin-menu-costs"];

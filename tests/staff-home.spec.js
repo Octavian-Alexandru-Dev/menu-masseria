@@ -8,7 +8,7 @@ test.describe("Area riservata (StaffHome)", () => {
   });
 
   test("mostra il login per l'area riservata", async ({ page }) => {
-    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Nome utente", exact: true })).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
   });
 
@@ -85,7 +85,7 @@ test.describe("Area riservata (StaffHome)", () => {
     }));
     await again.click();
     await expect(page.getByText(/la password di questo account è cambiata/i)).toBeVisible({ timeout: 10_000 });
-    const email = page.locator('input[type="email"]');
+    const email = page.getByRole("textbox", { name: "Nome utente", exact: true });
     const password = page.locator('input[type="password"]');
     await expect(email).toHaveValue(TEST_WAITER.email);
     await expect(password).toBeFocused();

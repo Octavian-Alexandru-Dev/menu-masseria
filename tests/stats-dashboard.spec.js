@@ -15,7 +15,7 @@ const dateValue = (d) => [d.getFullYear(), String(d.getMonth() + 1).padStart(2, 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /area riservata|staff area/i }).click();
-  await page.locator('input[type="email"]').fill(TEST_ADMIN.email);
+  await page.getByRole("textbox", { name: "Nome utente", exact: true }).fill(TEST_ADMIN.email);
   await page.locator('input[type="password"]').fill(TEST_ADMIN.password);
   await page.getByRole("button", { name: /^accedi$/i }).click();
   await navTo(page, "Statistiche");

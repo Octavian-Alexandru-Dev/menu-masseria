@@ -107,6 +107,10 @@ export async function findStaffByEmail(email) {
   return snap.empty ? null : { uid: snap.docs[0].id, ...snap.docs[0].data() };
 }
 
+// Account creato con un nome utente (src/staffUsername.js): Firebase Auth lo
+// conosce con questo indirizzo interno, salvato anche in staff/{uid}.email.
+export const usernameEmail = (username) => `${username}@staff.masseria.local`;
+
 export async function removeStaffByEmailRemotely(email) {
   try {
     const member = await findStaffByEmail(email);

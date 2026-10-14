@@ -6,7 +6,7 @@ import { deletePrintJobsByTableLabel } from "./helpers/printJobs";
 import { swipeLeft } from "./helpers/swipe";
 import { setTillLockRemotely, resetTillLockRemotely } from "./helpers/staffRoles";
 import { findReservationByName } from "./helpers/reservations";
-import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix, findStaffByEmail, removeStaffByEmailRemotely } from "./helpers/menuDoc";
+import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix, findStaffByEmail, removeStaffByEmailRemotely, usernameEmail } from "./helpers/menuDoc";
 
 // Sala della cassa (TillSala.jsx): l'interfaccia a tutto schermo in stile
 // cassa POS mostrata solo dentro il client Windows (window.mdpDesktop,
@@ -718,7 +718,8 @@ test("alla cassa le impostazioni del menù stanno nella barra laterale e valgono
 });
 
 test("alla cassa l'admin crea l'account di una persona nuova dal Personale, senza uscire", async ({ page }) => {
-  const email = `cassa-${Date.now()}@test.local`;
+  const username = `cassa-${Date.now()}`;
+  const email = usernameEmail(username);
   try {
     const nav = await openTillAsAdmin(page);
     await nav.getByRole("button", { name: /^menù$/i }).click();
@@ -726,14 +727,14 @@ test("alla cassa l'admin crea l'account di una persona nuova dal Personale, senz
     await page.getByRole("region", { name: "Impostazioni del menù" }).getByRole("button", { name: /^Personale/ }).click();
     const panel = page.getByRole("region", { name: "Personale" });
     await panel.getByRole("textbox", { name: "Nome della persona" }).fill("Responsabile di sala");
-    await panel.getByRole("textbox", { name: "Email della persona" }).fill(email);
+    await panel.getByRole("textbox", { name: "Nome utente della persona" }).fill(username);
     await panel.getByLabel("Password della persona").fill("Prova123!");
     // Un amministratore aggiunge solo camerieri: nessuna scelta del ruolo.
     await expect(panel.getByRole("group", { name: "Ruolo" })).toHaveCount(0);
     await panel.getByRole("button", { name: "Crea account" }).click();
-    await expect(panel.getByRole("list", { name: "Persone con accesso" }).getByRole("listitem").filter({ hasText: "Responsabile di sala · Cameriere" })).toContainText(email, { timeout: 10_000 });
+    await expect(panel.getByRole("list", { name: "Persone con accesso" }).getByRole("listitem").filter({ hasText: "Responsabile di sala · Cameriere" })).toContainText(username, { timeout: 10_000 });
     // L'elenco si aggiorna già con la scrittura locale: sul server si aspetta che arrivi.
-    await expect.poll(() => findStaffByEmail(email)).toMatchObject({ role: "waiter", email });
+    await expect.poll(() => findStaffByEmail(email)).toMatchObject({ role: "waiter", username });
     // La cassa resta collegata come prima.
     await expect(nav).toBeVisible();
   } finally {

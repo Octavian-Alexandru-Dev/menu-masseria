@@ -228,9 +228,8 @@ Un account dedicato, invece di quello personale di qualcuno, rende chiaro
 chi fa cosa e si può revocare senza toccare gli altri.
 
 1. Dal proprietario (o da un amministratore, se basta il ruolo Cameriere),
-   nell'app: **Menù → Impostazioni → Personale → Nuovo account**. Nome `Cassa`, email ad esempio
-   `cassa@masseria-della-piana.it` (non deve esistere davvero: serve solo
-   come nome utente), una password robusta e il ruolo:
+   nell'app: **Menù → Impostazioni → Personale → Nuovo account**. Nome `Cassa`, nome utente ad esempio
+   `cassa`, una password robusta e il ruolo:
    - **Cameriere** (vede la Sala con preconti e chiusura tavoli, oltre a
      storico e prenotazioni);
    - **Amministratore** se alla cassa devono servire anche le sezioni
@@ -694,7 +693,7 @@ campi (niente zoom automatico su iOS); nessuno scorrimento laterale a
 | Menù pubblico: lingua scelta (`aria-pressed`) e categoria corrente (`aria-current`) leggibili dagli screen reader | `tests/client-view.spec.js` |
 | Impostazioni del menù (telefono): elenco e ritorno; Locale e link salvano solo ciò che cambia e il menù pubblico li mostra; tema evidenziato; coperto dal tastierino solo con «Usa» | `tests/menu-settings.spec.js` |
 | Impostazioni del menù (telefono): traduzione corretta a mano e lingua eliminata con conferma; ruolo dato a un account esistente (UID) e tolto con conferma | `tests/menu-settings.spec.js` |
-| Personale (telefono): nuovo account con email e password (minimo 6 caratteri, "Mostra"), l'admin resta collegato, la persona entra subito col suo ruolo e vede i tavoli; email già usata → errore e nessuno aggiunto; il proprio accesso non si può togliere ("Tu"); niente scorrimento laterale, comandi ≥ 48px, "Crea account" in fondo | `tests/menu-settings.spec.js` |
+| Personale (telefono): nuovo account con nome utente (niente email; un'email o caratteri non ammessi → errore, maiuscole → minuscole) e password (minimo 6 caratteri, "Mostra"), l'admin resta collegato, la persona entra subito col nome utente, col suo ruolo, vede i tavoli e dopo l'uscita "Rientra come" mostra il nome utente; nome utente già usato → errore e nessuno aggiunto; il proprio accesso non si può togliere ("Tu"); niente scorrimento laterale, comandi ≥ 48px, "Crea account" in fondo | `tests/menu-settings.spec.js` |
 | Cassa: Personale — l'admin crea un account (solo cameriere, nessuna scelta del ruolo) senza uscire | `tests/till-sala.spec.js` |
 | Ruoli: il proprietario sceglie Cameriere/Amministratore, dà il ruolo di amministratore da UID e lo toglie; l'amministratore aggiunge solo camerieri, non vede "Togli" sul proprietario; "Passa la proprietà…" con conferma (annulla) | `tests/menu-settings.spec.js` |
 | Ruoli: senza proprietario un amministratore lo diventa dopo conferma (annulla → nulla cambia), poi passa la proprietà a un altro amministratore e torna amministratore | `tests/owner-claim.spec.js` (fase propria) |

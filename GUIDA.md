@@ -253,8 +253,9 @@ script a mano come descritto sopra.
 
 **Posso aggiungere altri utenti (camerieri, altri amministratori)?**
 Sì, direttamente dall'app: **Menù → Impostazioni → Personale → Nuovo
-account**, scegli nome, email, password e ruolo, poi **Crea account**. La
-persona può entrare subito. "Togli accesso" le toglie il ruolo (l'account
+account**, scegli nome, **nome utente** (es. `marco`: niente email) e
+password, poi **Crea account**. La persona entra subito scrivendo il nome
+utente e la password nella schermata di accesso. "Togli accesso" le toglie il ruolo (l'account
 resta, si può riaggiungere da "Account esistente").
 
 I ruoli sono tre: il **proprietario** (uno solo) aggiunge e toglie
@@ -285,8 +286,15 @@ istruzioni per puntare il dominio (richiede accesso al pannello DNS di dove
 hai registrato il dominio).
 
 **Ho dimenticato la password admin, come la reimposto?**
-Firebase Authentication → Users → clicca sui tre puntini accanto al tuo
-utente → "Reimposta password", oppure elimina l'utente e ricrealo.
+Per un account con un'email vera: Firebase Authentication → Users → clicca
+sui tre puntini accanto al tuo utente → "Reimposta password", oppure
+elimina l'utente e ricrealo.
+
+Per un account con nome utente non arriva nessuna email (dietro c'è un
+indirizzo interno, `nome@staff.masseria.local`, che non riceve posta):
+**Personale → Togli accesso**, poi in Firebase Authentication → Users
+elimina l'utente `nome@staff.masseria.local` e ricrealo da **Personale →
+Nuovo account** con lo stesso nome utente e una password nuova.
 
 **Quanto costa nel tempo?**
 Per un solo ristorante con traffico normale resti sempre nella fascia

@@ -28,8 +28,9 @@ import { parseMenuJsonFile, downloadMenuJson } from "./menuBackup";
 import { DEFAULT_PRINT_OPTIONS, buildPrintPayload, openPrintPreview } from "./menuPrint";
 import {
   MIN_PASSWORD_LENGTH, OWNER_ROLE, staffRoleLabel, assignableRoles, canManageStaff, subscribeStaff, subscribeOwner, saveStaffMember,
-  createStaffMember, removeStaffMember, claimOwnership, transferOwnership, staffAccountErrorMessage,
+  createStaffMember, removeStaffMember, claimOwnership, transferOwnership, staffAccountErrorMessage, staffLoginLabel,
 } from "./staffData";
+import { isValidUsername, normalizeUsername, USERNAME_MIN_LENGTH, USERNAME_MAX_LENGTH } from "./staffUsername";
 import { auth } from "./firebase-auth";
 import { confirmAction } from "./confirmDialog";
 import { subscribeTillLock, saveTillLock, isValidPin, LOCK_TIMEOUTS, PIN_MIN_LENGTH, PIN_MAX_LENGTH } from "./tillLockData";
@@ -470,7 +471,7 @@ function TranslationsPanel({ t, menu, onPatch, onBack, sheet }) {
 
 /* --------------------------------- personale --------------------------------- */
 
-// "Nuovo account": the person's login (email + password) is created here,
+// "Nuovo account": the person's login (username + password) is created here,
 // no Firebase console needed. "Account esistente": a role for an account
 // that already exists (e.g. created earlier in the console), by its UID.
 const ACCOUNT_MODES = [
@@ -484,7 +485,7 @@ function StaffPanel({ t, onBack, sheet }) {
   const [mode, setMode] = useState("new");
   const [uidValue, setUidValue] = useState("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState("waiter");
@@ -507,24 +508,24 @@ function StaffPanel({ t, onBack, sheet }) {
   // An admin can only add waiters: no choice to make.
   const chosenRole = roles.some((r) => r.value === role) ? role : roles[0]?.value;
   const isNew = mode === "new";
-  const ready = chosenRole && name.trim() && (isNew ? email.trim() && password.length >= MIN_PASSWORD_LENGTH : uidValue.trim());
+  const ready = chosenRole && name.trim() && (isNew ? isValidUsername(username) && password.length >= MIN_PASSWORD_LENGTH : uidValue.trim());
 
   const add = async () => {
     if (!ready) return;
     setBusy(true);
     setNotice(null);
     try {
-      if (isNew) await createStaffMember({ email, password, name, role: chosenRole });
+      if (isNew) await createStaffMember({ username, password, name, role: chosenRole });
       else await saveStaffMember(uidValue, { name, role: chosenRole });
       setNotice({
         tone: "ok",
         text: isNew
-          ? `${name.trim()} aggiunto come ${staffRoleLabel(chosenRole).toLowerCase()}: entra con ${email.trim().toLowerCase()} e la password scelta.`
+          ? `${name.trim()} aggiunto come ${staffRoleLabel(chosenRole).toLowerCase()}: entra con il nome utente ${normalizeUsername(username)} e la password scelta.`
           : `${name.trim()} aggiunto come ${staffRoleLabel(chosenRole).toLowerCase()}.`,
       });
       setUidValue("");
       setName("");
-      setEmail("");
+      setUsername("");
       setPassword("");
       setShowPassword(false);
       setRole("waiter");
@@ -575,7 +576,7 @@ function StaffPanel({ t, onBack, sheet }) {
                 : <UserRound size={22} color={t.inkSoft} style={{ flexShrink: 0 }} aria-hidden="true" />}
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", fontSize: 17, fontWeight: 600 }}>{m.name || "Senza nome"} <span style={{ fontWeight: 500, color: t.inkSoft, fontSize: 15 }}>· {staffRoleLabel(m.role)}</span></span>
-                <span style={{ display: "block", fontSize: m.email ? 14 : 12, color: t.inkSoft, fontFamily: m.email ? FONT : "monospace", overflow: "hidden", textOverflow: "ellipsis" }}>{m.email || m.uid}</span>
+                <span style={{ display: "block", fontSize: m.username || m.email ? 14 : 12, color: t.inkSoft, fontFamily: m.username || m.email ? FONT : "monospace", overflow: "hidden", textOverflow: "ellipsis" }}>{staffLoginLabel(m)}</span>
               </span>
               {/* Your own access can't be removed from here (it would lock you
                   out); someone of your rank or above can't be removed at all. */}
@@ -599,14 +600,21 @@ function StaffPanel({ t, onBack, sheet }) {
             <Segmented t={t} label="Tipo di account" value={mode} onChange={(v) => { setMode(v); setNotice(null); }} options={ACCOUNT_MODES} />
             <div style={{ fontSize: 14, color: t.inkSoft, lineHeight: 1.45 }}>
               {isNew
-                ? "Crea il suo accesso: scegli email e password e comunicale alla persona. Potrà entrare subito, da telefono o dalla cassa."
+                ? "Crea il suo accesso: scegli nome utente e password e comunicali alla persona. Potrà entrare subito, da telefono o dalla cassa."
                 : "Per un account che esiste già (es. creato in Firebase Console o a cui era stato tolto l'accesso): incolla il suo UID."}
               {" "}Cameriere: Tavoli, Prenotazioni e Storico. Amministratore: tutto, e aggiunge o toglie camerieri. Proprietario: tutto, e aggiunge o toglie anche amministratori.
             </div>
             <Field t={t} label="Nome"><input aria-label="Nome della persona" style={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="es. Marco" /></Field>
             {isNew ? (
               <>
-                <Field t={t} label="Email"><input aria-label="Email della persona" type="email" style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="es. marco@esempio.it" autoCapitalize="off" autoCorrect="off" autoComplete="off" /></Field>
+                <Field t={t} label="Nome utente" hint={`${USERNAME_MIN_LENGTH}–${USERNAME_MAX_LENGTH} caratteri: lettere minuscole, numeri, punto, trattino. Servirà per entrare al posto dell'email.`}>
+                  <input aria-label="Nome utente della persona" style={input} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase())} placeholder="es. marco" autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false} />
+                </Field>
+                {/* Not while the first letters are being typed: only once it's
+                    long enough, or has a character that can't be used. */}
+                {!isValidUsername(username) && (username.trim().length >= USERNAME_MIN_LENGTH || /[^a-z0-9._-]/.test(username.trim())) && (
+                  <div role="alert" style={{ fontSize: 15, color: STATUS.danger, fontWeight: 600 }}>Nome utente non valido: usa solo lettere minuscole, numeri, punto o trattino, senza spazi né «@».</div>
+                )}
                 <Field t={t} label="Password" hint={`Almeno ${MIN_PASSWORD_LENGTH} caratteri.`}>
                   <span style={{ display: "flex", gap: 8 }}>
                     <input aria-label="Password della persona" type={showPassword ? "text" : "password"} style={{ ...input, flex: 1, minWidth: 0 }} value={password} onChange={(e) => setPassword(e.target.value)} autoCapitalize="off" autoCorrect="off" autoComplete="new-password" />
@@ -666,12 +674,12 @@ function OwnerSection({ t, staff, ownerUid, myUid, myRole, onNotice }) {
   };
   const transfer = async (member) => {
     const confirmed = await confirmAction({
-      title: `Passare la proprietà a ${member.name || member.email || member.uid}?`,
+      title: `Passare la proprietà a ${member.name || staffLoginLabel(member)}?`,
       message: "Diventerà il proprietario e tu tornerai amministratore: non potrai più aggiungere o togliere amministratori. Solo il nuovo proprietario potrà ridarti la proprietà.",
       confirmLabel: "Passa la proprietà",
       danger: true,
     });
-    if (confirmed) await run(() => transferOwnership(myUid, member.uid), `${member.name || member.email} è ora il proprietario.`);
+    if (confirmed) await run(() => transferOwnership(myUid, member.uid), `${member.name || staffLoginLabel(member)} è ora il proprietario.`);
   };
 
   return (
@@ -681,7 +689,7 @@ function OwnerSection({ t, staff, ownerUid, myUid, myRole, onNotice }) {
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: t.inkSoft }}>Proprietario</div>
           <div style={{ fontSize: 17, fontWeight: 700 }}>
-            {owner ? `${owner.name || owner.email || owner.uid}${iAmOwner ? " (tu)" : ""}` : "Nessun proprietario"}
+            {owner ? `${owner.name || staffLoginLabel(owner)}${iAmOwner ? " (tu)" : ""}` : "Nessun proprietario"}
           </div>
         </div>
       </div>
@@ -704,7 +712,7 @@ function OwnerSection({ t, staff, ownerUid, myUid, myRole, onNotice }) {
             {admins.length ? "A chi? Solo un amministratore può diventare proprietario." : "Nessun amministratore a cui passarla: aggiungine prima uno."}
           </div>
           {admins.map((m) => (
-            <TillButton key={m.uid} t={t} disabled={busy} onClick={() => transfer(m)}>{m.name || m.email || m.uid}</TillButton>
+            <TillButton key={m.uid} t={t} disabled={busy} onClick={() => transfer(m)}>{m.name || staffLoginLabel(m)}</TillButton>
           ))}
           <TillButton t={t} variant="secondary" disabled={busy} onClick={() => setChoosing(false)}>Annulla</TillButton>
         </div>

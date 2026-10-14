@@ -54,20 +54,20 @@ test.describe("Area cameriere", () => {
   });
 
   test("mostra il login per l'area cameriere", async ({ page }) => {
-    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Nome utente", exact: true })).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
     await expect(page.getByRole("button", { name: /accedi/i })).toBeVisible();
   });
 
   test("rifiuta credenziali non valide", async ({ page }) => {
-    await page.locator('input[type="email"]').fill("nonexistent-user@example.com");
+    await page.getByRole("textbox", { name: "Nome utente", exact: true }).fill("nonexistent-user@example.com");
     await page.locator('input[type="password"]').fill("wrong-password");
     await page.getByRole("button", { name: /accedi/i }).click();
     await expect(page.getByText(/non corrett|non riuscito/i)).toBeVisible({ timeout: 10_000 });
   });
 
   test("apre un tavolo, invia un piatto e mostra l'indicatore di sincronizzazione", async ({ page }) => {
-    await page.locator('input[type="email"]').fill(TEST_WAITER.email);
+    await page.getByRole("textbox", { name: "Nome utente", exact: true }).fill(TEST_WAITER.email);
     await page.locator('input[type="password"]').fill(TEST_WAITER.password);
     await page.getByRole("button", { name: /accedi/i }).click();
 
