@@ -227,8 +227,8 @@ non cambia mai):
 Un account dedicato, invece di quello personale di qualcuno, rende chiaro
 chi fa cosa e si può revocare senza toccare gli altri.
 
-1. Da un amministratore, nell'app: **Menù → Impostazioni → Personale →
-   Nuovo account**. Nome `Cassa`, email ad esempio
+1. Dal proprietario (o da un amministratore, se basta il ruolo Cameriere),
+   nell'app: **Menù → Impostazioni → Personale → Nuovo account**. Nome `Cassa`, email ad esempio
    `cassa@masseria-della-piana.it` (non deve esistere davvero: serve solo
    come nome utente), una password robusta e il ruolo:
    - **Cameriere** (vede la Sala con preconti e chiusura tavoli, oltre a
@@ -392,9 +392,16 @@ comande, preconto, chiusura.
     (recensioni Google/TripAdvisor, Instagram, Facebook, shop: link e
     interruttore "Mostra"), *Traduzioni* (per lingua: traduzione automatica
     dei testi mancanti, ogni testo correggibile a mano, eliminazione con
-    conferma), *Personale* (nuovo account con nome, email, password
-    e ruolo, oppure ruolo a un account esistente dal suo UID; "Togli
-    accesso" con conferma, mai sul proprio account), *Stampa del menù* (lingua, contenuto, impaginazione,
+    conferma), *Personale* (proprietario — "Diventa proprietario" se non
+    c'è, "Passa la proprietà…" per il proprietario —; nuovo account con
+    nome, email, password e ruolo, oppure ruolo a un account esistente dal
+    suo UID: il proprietario sceglie Cameriere o Amministratore,
+    l'amministratore aggiunge solo camerieri; "Togli accesso" con conferma
+    solo su chi ha un ruolo più basso del proprio, mai sul proprio account),
+    *Blocco cassa* (PIN da 4 a 12 cifre dal tastierino, blocco dopo 1–30
+    minuti senza tocchi o "Mai", bloccata all'avvio: vale **solo alla
+    cassa** — sul telefono la pagina c'è per impostarlo, ma il telefono non
+    si blocca, lo fa già da sé — vedi sotto), *Stampa del menù* (lingua, contenuto, impaginazione,
     categorie → anteprima di stampa / PDF), *Backup* (scarica il JSON;
     ripristino da file con conferma, subito su tutti i dispositivi) e *Vedi
     il menù dei clienti*. Non c'è più un editor "completo" separato (ex
@@ -451,6 +458,29 @@ Principi seguiti (nessuna invenzione da zero):
   schede invece di codici).
 
 Ogni funzione nuova va fatta in entrambe le versioni (regola in `CLAUDE.md`).
+
+#### Blocco della cassa con PIN (solo alla cassa)
+
+Facoltativo, impostato da **Menù → Impostazioni → Blocco cassa**
+(amministratore o proprietario, dalla cassa o dal telefono; dati in
+`config/tillLock`, `src/tillLockData.js`). Quando è attivo la cassa
+(`TillSala.jsx`) mostra la schermata **Cassa bloccata** (`TillLock.jsx`):
+
+- dopo i minuti scelti senza tocchi (1, 2, 5, 10, 30 o "Mai"), all'avvio se
+  scelto, oppure subito col pulsante **Blocca** nella barra in alto;
+- si apre col PIN (solo cifre, da 4 a 12) dal tastierino a schermo — o dalla
+  tastiera, se c'è: il PIN giusto apre da solo, **Sblocca** dice "PIN
+  errato" se è sbagliato; le cifre non si vedono mai, solo i pallini;
+- resta bloccata dopo un ricaricamento o un riavvio del programma;
+- intanto la stazione di stampa lavora: preconti e comande dai telefoni
+  escono lo stesso;
+- se un amministratore spegne il blocco, la cassa si riapre da sola.
+
+Solo alla cassa (eccezione voluta alla regola "una schermata per due
+dispositivi"): un telefono ha già il suo blocco schermo. La pagina delle
+impostazioni c'è anche sul telefono, così un PIN dimenticato si cambia da
+lì. Il menu Cassa nativo del client (rotella in basso a sinistra) resta
+raggiungibile anche a cassa bloccata.
 
 ### 4.2 App del telefono (area staff)
 
@@ -540,7 +570,8 @@ l'uso a una mano su uno schermo da 6":
   prima il numero.
 - **Installabile:** nell'area staff (solo lì, non nel menù pubblico) c'è il
   manifest `public/staff.webmanifest`: da Chrome/Safari "Aggiungi a
-  schermata Home" la apre a tutto schermo come un'app.
+  schermata Home" la apre a tutto schermo come un'app. Orientamento libero
+  (`"orientation": "any"`): su un tablet si usa anche in orizzontale.
 
 Principi in più rispetto alla cassa, per il telefono: azioni principali
 nella parte bassa dello schermo, raggiungibile col pollice; barra di
@@ -657,14 +688,19 @@ campi (niente zoom automatico su iOS); nessuno scorrimento laterale a
 | Cassa: Statistiche — "Visite al menù" con il numero del giorno e una colonna al giorno | `tests/till-sala.spec.js` |
 | Regole Firestore: visite al menù — chiunque può solo iniziare un giorno da 1 o aggiungere 1 (nessun altro valore o campo, nessuna eliminazione), solo il personale le legge | `tests/firestore-rules.spec.js` |
 | Telefono: gestione menù rapida — piatto nuovo con prezzo dal tastierino, "Aggiungi piatto"/"Salva" in fondo allo schermo, "Disponibile" spento → "Nascosto" | `tests/phone-app.spec.js` |
-| Telefono: area staff installabile (manifest solo nell'area staff) | `tests/phone-app.spec.js` |
+| Telefono: area staff installabile (manifest solo nell'area staff, orientamento libero: tablet anche in orizzontale) | `tests/phone-app.spec.js` |
 | Telefono: niente Dashboard, sezioni nella barra in basso (Menù/Statistiche solo admin), tasto Indietro del browser tra le sezioni | `tests/staff-home.spec.js` |
 | Telefono: nota, quantità e rimozione di una riga da inviare dalla comanda del tavolo | `tests/waiter-order.spec.js` |
 | Menù pubblico: lingua scelta (`aria-pressed`) e categoria corrente (`aria-current`) leggibili dagli screen reader | `tests/client-view.spec.js` |
 | Impostazioni del menù (telefono): elenco e ritorno; Locale e link salvano solo ciò che cambia e il menù pubblico li mostra; tema evidenziato; coperto dal tastierino solo con «Usa» | `tests/menu-settings.spec.js` |
 | Impostazioni del menù (telefono): traduzione corretta a mano e lingua eliminata con conferma; ruolo dato a un account esistente (UID) e tolto con conferma | `tests/menu-settings.spec.js` |
 | Personale (telefono): nuovo account con email e password (minimo 6 caratteri, "Mostra"), l'admin resta collegato, la persona entra subito col suo ruolo e vede i tavoli; email già usata → errore e nessuno aggiunto; il proprio accesso non si può togliere ("Tu"); niente scorrimento laterale, comandi ≥ 48px, "Crea account" in fondo | `tests/menu-settings.spec.js` |
-| Cassa: Personale — l'admin crea un account amministratore senza uscire | `tests/till-sala.spec.js` |
+| Cassa: Personale — l'admin crea un account (solo cameriere, nessuna scelta del ruolo) senza uscire | `tests/till-sala.spec.js` |
+| Ruoli: il proprietario sceglie Cameriere/Amministratore, dà il ruolo di amministratore da UID e lo toglie; l'amministratore aggiunge solo camerieri, non vede "Togli" sul proprietario; "Passa la proprietà…" con conferma (annulla) | `tests/menu-settings.spec.js` |
+| Ruoli: senza proprietario un amministratore lo diventa dopo conferma (annulla → nulla cambia), poi passa la proprietà a un altro amministratore e torna amministratore | `tests/owner-claim.spec.js` (fase propria) |
+| Regole: admin solo camerieri, proprietario admin e camerieri, nessuno toglie il proprietario o ne crea un secondo, presa in carico negata se c'è già; blocco cassa letto dal personale, scritto solo da admin con i campi previsti | `tests/firestore-rules.spec.js` |
+| Blocco cassa (telefono): senza PIN non si attiva, PIN corto rifiutato, PIN a lunghezza libera solo a pallini e salvato come hash, tempo e avvio salvati e ritrovati, nessuno scorrimento laterale, "Salva" ≥ 48px, il telefono non si blocca | `tests/menu-settings.spec.js` |
+| Blocco cassa (cassa): bloccata all'avvio, PIN errato, correzione di una cifra, sblocco automatico, "Blocca", resta bloccata dopo un ricaricamento, sblocco da tastiera; blocco dopo il tempo senza tocchi (un tocco fa ripartire il conto), riapertura se il blocco viene spento; Blocco cassa e Personale nelle impostazioni alla cassa | `tests/till-sala.spec.js` |
 | Regole Firestore: un account registrato da fuori o senza ruolo in uso (nessuno, "kitchen") non legge né scrive comande, prenotazioni, stampe, costi, menù, e non si dà un ruolo; il cameriere lavora ma non assegna ruoli; l'admin sì; menù pubblico in lettura | `tests/firestore-rules.spec.js` |
 | Impostazioni del menù (telefono): stampa del menù — errore senza categorie, anteprima in una nuova scheda; backup scaricato, file non valido, ripristino che chiede conferma; "Vedi il menù dei clienti" | `tests/menu-settings.spec.js` |
 | Costo interno del piatto dal tastierino nella scheda del piatto, salvato e mantenuto dopo il ricaricamento; scheda aperta prima dell'arrivo dei costi (bug corretto) | `tests/admin-menu-costs.spec.js` |

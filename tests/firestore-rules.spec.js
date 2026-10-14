@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { initializeApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, deleteDoc, collection, getDocs, increment, Timestamp } from "firebase/firestore";
-import { TEST_ADMIN, TEST_WAITER, TEST_KITCHEN, TEST_NO_ROLE } from "./test-env";
+import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, increment, Timestamp, writeBatch } from "firebase/firestore";
+import { TEST_OWNER, TEST_ADMIN, TEST_WAITER, TEST_KITCHEN, TEST_NO_ROLE } from "./test-env";
 
 // Regole di firestore.rules sull'emulatore, senza browser. Da quando gli
 // account si creano dall'app (Impostazioni > Personale), essere autenticati
@@ -91,13 +91,66 @@ test("prenotazioni: le elimina per sempre solo un amministratore; quelle scadute
   expect((await getDoc(expired)).exists()).toBe(false);
 });
 
-test("un amministratore assegna e toglie ruoli", async () => {
-  const { db } = await as(TEST_ADMIN);
+test("un amministratore aggiunge e toglie solo camerieri", async () => {
+  const { db, uid } = await as(TEST_ADMIN);
   const ref = doc(db, "staff", `rules-admin-${Date.now()}`);
   await setDoc(ref, { name: "Persona di prova", role: "waiter" });
   expect((await getDoc(ref)).data().role).toBe("waiter");
+  // Né un amministratore, né un proprietario, né promuovere il cameriere.
+  await denied(setDoc(doc(db, "staff", `rules-admin2-${Date.now()}`), { name: "Altro admin", role: "admin" }));
+  await denied(setDoc(doc(db, "staff", `rules-owner-${Date.now()}`), { name: "Altro proprietario", role: "owner" }));
+  await denied(updateDoc(ref, { role: "admin" }));
   await deleteDoc(ref);
   expect((await getDoc(ref)).exists()).toBe(false);
+
+  // Gli altri amministratori e il proprietario restano fuori portata.
+  const { uid: ownerUid } = await as(TEST_OWNER);
+  await denied(deleteDoc(doc(db, "staff", ownerUid)));
+  await denied(setDoc(doc(db, "staff", ownerUid), { name: "Declassato", role: "waiter" }));
+  // Con un proprietario già presente non si prende la proprietà.
+  const claim = writeBatch(db);
+  claim.update(doc(db, "staff", uid), { role: "owner" });
+  claim.set(doc(db, "config", "owner"), { uid });
+  await denied(claim.commit());
+  await denied(updateDoc(doc(db, "staff", uid), { role: "owner" }));
+  expect((await getDoc(doc(db, "config", "owner"))).data().uid).toBe(ownerUid);
+});
+
+test("il proprietario aggiunge e toglie amministratori e camerieri, ma non sé stesso né un secondo proprietario", async () => {
+  const { db, uid } = await as(TEST_OWNER);
+  const admin = doc(db, "staff", `rules-owner-admin-${Date.now()}`);
+  await setDoc(admin, { name: "Admin di prova", role: "admin" });
+  await updateDoc(admin, { role: "waiter" });
+  await updateDoc(admin, { role: "admin" });
+  await denied(updateDoc(admin, { role: "owner" })); // senza passare config/owner
+  await denied(setDoc(doc(db, "staff", `rules-owner2-${Date.now()}`), { name: "Secondo", role: "owner" }));
+  await deleteDoc(admin);
+  await denied(deleteDoc(doc(db, "staff", uid)));
+  await denied(updateDoc(doc(db, "staff", uid), { role: "admin" })); // declassarsi senza passare la proprietà
+  await denied(deleteDoc(doc(db, "config", "owner")));
+});
+
+test("un cameriere non toglie nessuno", async () => {
+  const { uid: adminUid } = await as(TEST_ADMIN);
+  const { db } = await as(TEST_WAITER);
+  await denied(deleteDoc(doc(db, "staff", adminUid)));
+  expect((await getDoc(doc(db, "config", "owner"))).exists()).toBe(true); // lo legge, per l'elenco del personale
+});
+
+test("blocco cassa: lo legge tutto il personale, lo imposta solo un amministratore, solo con i campi previsti", async () => {
+  const { db: waiterDb } = await as(TEST_WAITER);
+  await getDoc(doc(waiterDb, "config", "tillLock"));
+  const valid = { enabled: false, timeoutMinutes: 5, lockOnStart: true, pinHash: "", pinSalt: "" };
+  await denied(setDoc(doc(waiterDb, "config", "tillLock"), valid));
+  const { db: strangerDb } = await as(TEST_NO_ROLE);
+  await denied(getDoc(doc(strangerDb, "config", "tillLock")));
+  const { db } = await as(TEST_ADMIN);
+  await denied(setDoc(doc(db, "config", "tillLock"), { ...valid, pin: "1234" })); // mai il PIN in chiaro
+  await denied(setDoc(doc(db, "config", "tillLock"), { ...valid, timeoutMinutes: "5" }));
+  // (La scrittura valida dell'admin la copre tests/menu-settings.spec.js: qui
+  // cambierebbe il blocco sotto ai piedi di quel test, che gira in parallelo.)
+  // Altri documenti di config/ restano chiusi.
+  await denied(setDoc(doc(db, "config", "altro"), { x: 1 }));
 });
 
 test("visite al menù: chiunque può solo aggiungere 1 al giorno, e solo il personale le legge", async () => {

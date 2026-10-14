@@ -8,7 +8,9 @@
 //  - Traduzioni: automatic translation of the missing texts, every text
 //    correctable by hand, a language removed;
 //  - Personale: who can sign in to the staff area, and with which role
-//    (new accounts are created right here, see staffData.js);
+//    (new accounts are created right here, see staffData.js), plus who is
+//    the owner;
+//  - Blocco cassa: the till's PIN lock (TillLock.jsx);
 //  - Stampa del menù: printable version (PDF from the browser's print);
 //  - Backup: download the whole menu as JSON, restore it.
 //
@@ -18,17 +20,22 @@
 import React, { useState, useEffect } from "react";
 import {
   Store, Coins, Link2, Languages, Users, Printer, DatabaseBackup, Eye, ChevronRight, Check, Keyboard,
-  Download, Upload, Trash2, Sparkles, Plus, UserRound, EyeOff,
+  Download, Upload, Trash2, Sparkles, Plus, UserRound, EyeOff, KeyRound, Crown,
 } from "lucide-react";
 import { THEMES, LANGUAGES, BackButton, Logo, GlobalStyle, formatCentsAsPrice, parsePriceToCents, countMissingTranslations, generateMissingTranslations } from "./shared";
 import { menuEdits, combineEdits } from "./menuEdit";
 import { parseMenuJsonFile, downloadMenuJson } from "./menuBackup";
 import { DEFAULT_PRINT_OPTIONS, buildPrintPayload, openPrintPreview } from "./menuPrint";
-import { STAFF_ROLES, MIN_PASSWORD_LENGTH, staffRoleLabel, subscribeStaff, saveStaffMember, createStaffMember, removeStaffMember, staffAccountErrorMessage } from "./staffData";
+import {
+  MIN_PASSWORD_LENGTH, OWNER_ROLE, staffRoleLabel, assignableRoles, canManageStaff, subscribeStaff, subscribeOwner, saveStaffMember,
+  createStaffMember, removeStaffMember, claimOwnership, transferOwnership, staffAccountErrorMessage,
+} from "./staffData";
 import { auth } from "./firebase-auth";
 import { confirmAction } from "./confirmDialog";
+import { subscribeTillLock, saveTillLock, isValidPin, LOCK_TIMEOUTS, PIN_MIN_LENGTH, PIN_MAX_LENGTH } from "./tillLockData";
+import { PinDots, pressPinKey } from "./TillLock";
 import {
-  TOUCH, FONT, STATUS, TillButton, SidePanel, SectionTitle, Field, SwitchRow, Segmented, PriceKeypad, Notice, tillInputStyle,
+  TOUCH, FONT, STATUS, TillButton, SidePanel, SectionTitle, Field, SwitchRow, Segmented, PriceKeypad, Keypad, Notice, tillInputStyle,
 } from "./TillUi";
 
 // Saving state shared by the panels: busy flag + one-line outcome.
@@ -88,6 +95,7 @@ const PAGES = [
   { key: "links", label: "Link e social", description: "Recensioni, Instagram, Facebook, shop", icon: Link2 },
   { key: "translations", label: "Traduzioni", description: "Inglese, spagnolo, tedesco, francese", icon: Languages },
   { key: "staff", label: "Personale", description: "Chi accede all'area riservata e con quale ruolo", icon: Users },
+  { key: "tillLock", label: "Blocco cassa", description: "PIN per sbloccare la cassa, dopo quanto si blocca", icon: KeyRound },
   { key: "print", label: "Stampa del menù", description: "Versione da stampare o salvare in PDF", icon: Printer },
   { key: "backup", label: "Backup", description: "Scarica o ripristina tutto il menù", icon: DatabaseBackup },
 ];
@@ -472,6 +480,7 @@ const ACCOUNT_MODES = [
 
 function StaffPanel({ t, onBack, sheet }) {
   const [staff, setStaff] = useState(null);
+  const [ownerUid, setOwnerUid] = useState(undefined); // undefined = not known yet
   const [mode, setMode] = useState("new");
   const [uidValue, setUidValue] = useState("");
   const [name, setName] = useState("");
@@ -483,27 +492,35 @@ function StaffPanel({ t, onBack, sheet }) {
   const [notice, setNotice] = useState(null);
   const input = tillInputStyle(t);
   const myUid = auth.currentUser?.uid;
+  const myRole = staff?.find((m) => m.uid === myUid)?.role;
+  const roles = assignableRoles(myRole);
 
   useEffect(() => subscribeStaff(setStaff, (err) => {
     console.error("[menu] Lettura personale fallita:", err);
     setNotice({ tone: "error", text: "Impossibile leggere l'elenco del personale." });
   }), []);
+  useEffect(() => subscribeOwner(setOwnerUid, (err) => {
+    console.error("[menu] Lettura proprietario fallita:", err);
+    setOwnerUid(null);
+  }), []);
 
+  // An admin can only add waiters: no choice to make.
+  const chosenRole = roles.some((r) => r.value === role) ? role : roles[0]?.value;
   const isNew = mode === "new";
-  const ready = name.trim() && (isNew ? email.trim() && password.length >= MIN_PASSWORD_LENGTH : uidValue.trim());
+  const ready = chosenRole && name.trim() && (isNew ? email.trim() && password.length >= MIN_PASSWORD_LENGTH : uidValue.trim());
 
   const add = async () => {
     if (!ready) return;
     setBusy(true);
     setNotice(null);
     try {
-      if (isNew) await createStaffMember({ email, password, name, role });
-      else await saveStaffMember(uidValue, { name, role });
+      if (isNew) await createStaffMember({ email, password, name, role: chosenRole });
+      else await saveStaffMember(uidValue, { name, role: chosenRole });
       setNotice({
         tone: "ok",
         text: isNew
-          ? `${name.trim()} aggiunto come ${staffRoleLabel(role).toLowerCase()}: entra con ${email.trim().toLowerCase()} e la password scelta.`
-          : `${name.trim()} aggiunto come ${staffRoleLabel(role).toLowerCase()}.`,
+          ? `${name.trim()} aggiunto come ${staffRoleLabel(chosenRole).toLowerCase()}: entra con ${email.trim().toLowerCase()} e la password scelta.`
+          : `${name.trim()} aggiunto come ${staffRoleLabel(chosenRole).toLowerCase()}.`,
       });
       setUidValue("");
       setName("");
@@ -530,14 +547,14 @@ function StaffPanel({ t, onBack, sheet }) {
       await removeStaffMember(member.uid);
     } catch (err) {
       console.error("[menu] Eliminazione personale fallita:", err);
-      setNotice({ tone: "error", text: "Eliminazione non riuscita. Riprova." });
+      setNotice({ tone: "error", text: err?.code === "permission-denied" ? staffAccountErrorMessage(err) : "Eliminazione non riuscita. Riprova." });
     }
   };
 
   return (
     <SidePanel t={t} sheet={sheet} label="Personale"
       header={<PanelHeader t={t} title="Personale" subtitle="Accesso all'area riservata" onBack={onBack} />}
-      footer={(
+      footer={roles.length > 0 && (
         <>
           <Notice notice={notice} />
           <TillButton t={t} variant="primary" size={60} icon={Plus} disabled={busy || !ready} onClick={add}>
@@ -546,53 +563,234 @@ function StaffPanel({ t, onBack, sheet }) {
         </>
       )}>
       <div style={{ display: "grid", gap: 16, paddingTop: 6 }}>
+        <OwnerSection t={t} staff={staff} ownerUid={ownerUid} myUid={myUid} myRole={myRole} onNotice={setNotice} />
+
         <div role="list" aria-label="Persone con accesso" style={{ display: "grid", gap: 8 }}>
           {staff === null && <div style={{ color: t.inkSoft, fontSize: 16 }}>Caricamento…</div>}
           {staff?.length === 0 && <div style={{ color: t.inkSoft, fontSize: 16 }}>Nessuna persona configurata.</div>}
           {staff?.map((m) => (
             <div role="listitem" key={m.uid} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 14, border: `1.5px solid ${t.line}`, background: t.bg }}>
-              <UserRound size={22} color={t.inkSoft} style={{ flexShrink: 0 }} />
+              {m.role === OWNER_ROLE
+                ? <Crown size={22} color={t.primary} style={{ flexShrink: 0 }} aria-hidden="true" />
+                : <UserRound size={22} color={t.inkSoft} style={{ flexShrink: 0 }} aria-hidden="true" />}
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", fontSize: 17, fontWeight: 600 }}>{m.name || "Senza nome"} <span style={{ fontWeight: 500, color: t.inkSoft, fontSize: 15 }}>· {staffRoleLabel(m.role)}</span></span>
                 <span style={{ display: "block", fontSize: m.email ? 14 : 12, color: t.inkSoft, fontFamily: m.email ? FONT : "monospace", overflow: "hidden", textOverflow: "ellipsis" }}>{m.email || m.uid}</span>
               </span>
-              {/* Your own access can't be removed from here: it would lock you out (maybe the last admin). */}
+              {/* Your own access can't be removed from here (it would lock you
+                  out); someone of your rank or above can't be removed at all. */}
               {m.uid === myUid
                 ? <span style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft, padding: "0 12px" }}>Tu</span>
-                : <TillButton t={t} size={TOUCH} variant="danger" icon={Trash2} onClick={() => remove(m)} aria-label={`Togli accesso a ${m.name || m.uid}`} style={{ padding: "0 12px" }}>Togli</TillButton>}
+                : canManageStaff(myRole, m.role) && <TillButton t={t} size={TOUCH} variant="danger" icon={Trash2} onClick={() => remove(m)} aria-label={`Togli accesso a ${m.name || m.uid}`} style={{ padding: "0 12px" }}>Togli</TillButton>}
             </div>
           ))}
         </div>
 
-        <SectionTitle t={t} style={{ marginTop: 6 }}>Aggiungi una persona</SectionTitle>
-        <Segmented t={t} label="Tipo di account" value={mode} onChange={(v) => { setMode(v); setNotice(null); }} options={ACCOUNT_MODES} />
-        <div style={{ fontSize: 14, color: t.inkSoft, lineHeight: 1.45 }}>
-          {isNew
-            ? "Crea il suo accesso: scegli email e password e comunicale alla persona. Potrà entrare subito, da telefono o dalla cassa."
-            : "Per un account che esiste già (es. creato in Firebase Console o a cui era stato tolto l'accesso): incolla il suo UID."}
-          {" "}Cameriere: Tavoli e Prenotazioni. Amministratore: tutto.
-        </div>
-        <Field t={t} label="Nome"><input aria-label="Nome della persona" style={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="es. Marco" /></Field>
-        {isNew ? (
+        {staff !== null && roles.length === 0 && (
           <>
-            <Field t={t} label="Email"><input aria-label="Email della persona" type="email" style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="es. marco@esempio.it" autoCapitalize="off" autoCorrect="off" autoComplete="off" /></Field>
-            <Field t={t} label="Password" hint={`Almeno ${MIN_PASSWORD_LENGTH} caratteri.`}>
-              <span style={{ display: "flex", gap: 8 }}>
-                <input aria-label="Password della persona" type={showPassword ? "text" : "password"} style={{ ...input, flex: 1, minWidth: 0 }} value={password} onChange={(e) => setPassword(e.target.value)} autoCapitalize="off" autoCorrect="off" autoComplete="new-password" />
-                <TillButton t={t} size={TOUCH} variant="secondary" icon={showPassword ? EyeOff : Eye} aria-pressed={showPassword} onClick={(e) => { e.preventDefault(); setShowPassword((s) => !s); }} style={{ padding: "0 12px", flexShrink: 0 }}>
-                  {showPassword ? "Nascondi" : "Mostra"}
-                </TillButton>
-              </span>
-            </Field>
+            <Notice notice={notice} />
+            <div style={{ fontSize: 15, color: t.inkSoft, lineHeight: 1.45 }}>Il tuo ruolo non permette di aggiungere o togliere persone.</div>
           </>
-        ) : (
-          <Field t={t} label="UID (da Firebase Console)"><input aria-label="UID" style={input} value={uidValue} onChange={(e) => setUidValue(e.target.value)} placeholder="es. aBc123…" autoCapitalize="off" autoCorrect="off" /></Field>
         )}
-        <div style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft }}>Ruolo</span>
-          <Segmented t={t} label="Ruolo" value={role} onChange={setRole} options={STAFF_ROLES} />
+
+        {roles.length > 0 && (
+          <>
+            <SectionTitle t={t} style={{ marginTop: 6 }}>Aggiungi una persona</SectionTitle>
+            <Segmented t={t} label="Tipo di account" value={mode} onChange={(v) => { setMode(v); setNotice(null); }} options={ACCOUNT_MODES} />
+            <div style={{ fontSize: 14, color: t.inkSoft, lineHeight: 1.45 }}>
+              {isNew
+                ? "Crea il suo accesso: scegli email e password e comunicale alla persona. Potrà entrare subito, da telefono o dalla cassa."
+                : "Per un account che esiste già (es. creato in Firebase Console o a cui era stato tolto l'accesso): incolla il suo UID."}
+              {" "}Cameriere: Tavoli, Prenotazioni e Storico. Amministratore: tutto, e aggiunge o toglie camerieri. Proprietario: tutto, e aggiunge o toglie anche amministratori.
+            </div>
+            <Field t={t} label="Nome"><input aria-label="Nome della persona" style={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="es. Marco" /></Field>
+            {isNew ? (
+              <>
+                <Field t={t} label="Email"><input aria-label="Email della persona" type="email" style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="es. marco@esempio.it" autoCapitalize="off" autoCorrect="off" autoComplete="off" /></Field>
+                <Field t={t} label="Password" hint={`Almeno ${MIN_PASSWORD_LENGTH} caratteri.`}>
+                  <span style={{ display: "flex", gap: 8 }}>
+                    <input aria-label="Password della persona" type={showPassword ? "text" : "password"} style={{ ...input, flex: 1, minWidth: 0 }} value={password} onChange={(e) => setPassword(e.target.value)} autoCapitalize="off" autoCorrect="off" autoComplete="new-password" />
+                    <TillButton t={t} size={TOUCH} variant="secondary" icon={showPassword ? EyeOff : Eye} aria-pressed={showPassword} onClick={(e) => { e.preventDefault(); setShowPassword((s) => !s); }} style={{ padding: "0 12px", flexShrink: 0 }}>
+                      {showPassword ? "Nascondi" : "Mostra"}
+                    </TillButton>
+                  </span>
+                </Field>
+              </>
+            ) : (
+              <Field t={t} label="UID (da Firebase Console)"><input aria-label="UID" style={input} value={uidValue} onChange={(e) => setUidValue(e.target.value)} placeholder="es. aBc123…" autoCapitalize="off" autoCorrect="off" /></Field>
+            )}
+            <div style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft }}>Ruolo</span>
+              {roles.length > 1
+                ? <Segmented t={t} label="Ruolo" value={chosenRole} onChange={setRole} options={roles} />
+                : <span style={{ fontSize: 16 }}>{roles[0].label} <span style={{ color: t.inkSoft, fontSize: 14 }}>(solo il proprietario aggiunge amministratori)</span></span>}
+            </div>
+          </>
+        )}
+      </div>
+    </SidePanel>
+  );
+}
+
+// Who the owner is. No owner yet (a project from before the role existed):
+// an admin can claim it, once. The owner can hand it over to an admin.
+function OwnerSection({ t, staff, ownerUid, myUid, myRole, onNotice }) {
+  const [choosing, setChoosing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (staff === null || ownerUid === undefined) return null;
+  const owner = ownerUid ? staff.find((m) => m.uid === ownerUid) : null;
+  const iAmOwner = myRole === OWNER_ROLE && ownerUid === myUid;
+  const admins = staff.filter((m) => m.role === "admin" && m.uid !== myUid);
+
+  const run = async (action, okText) => {
+    setBusy(true);
+    onNotice(null);
+    try {
+      await action();
+      onNotice({ tone: "ok", text: okText });
+      setChoosing(false);
+    } catch (err) {
+      console.error("[menu] Cambio proprietario fallito:", err);
+      onNotice({ tone: "error", text: err?.code === "permission-denied" ? "Operazione non consentita: forse il proprietario è appena cambiato. Riapri la pagina." : "Operazione non riuscita. Verifica la connessione e riprova." });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const claim = async () => {
+    const confirmed = await confirmAction({
+      title: "Diventare il proprietario?",
+      message: "Il proprietario è uno solo: potrà aggiungere e togliere amministratori e camerieri. Gli altri amministratori potranno solo aggiungere o togliere camerieri. Si può passare la proprietà a un altro amministratore in seguito.",
+      confirmLabel: "Diventa proprietario",
+    });
+    if (confirmed) await run(() => claimOwnership(myUid), "Ora sei il proprietario.");
+  };
+  const transfer = async (member) => {
+    const confirmed = await confirmAction({
+      title: `Passare la proprietà a ${member.name || member.email || member.uid}?`,
+      message: "Diventerà il proprietario e tu tornerai amministratore: non potrai più aggiungere o togliere amministratori. Solo il nuovo proprietario potrà ridarti la proprietà.",
+      confirmLabel: "Passa la proprietà",
+      danger: true,
+    });
+    if (confirmed) await run(() => transferOwnership(myUid, member.uid), `${member.name || member.email} è ora il proprietario.`);
+  };
+
+  return (
+    <section aria-label="Proprietario" style={{ display: "grid", gap: 10, padding: 14, borderRadius: 14, border: `1.5px solid ${owner ? t.line : STATUS.waiting}`, background: t.card }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Crown size={22} color={owner ? t.primary : STATUS.waiting} aria-hidden="true" style={{ flexShrink: 0 }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: t.inkSoft }}>Proprietario</div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>
+            {owner ? `${owner.name || owner.email || owner.uid}${iAmOwner ? " (tu)" : ""}` : "Nessun proprietario"}
+          </div>
         </div>
       </div>
+      {!ownerUid && (
+        <div style={{ fontSize: 14, color: t.inkSoft, lineHeight: 1.45 }}>
+          {myRole === "admin"
+            ? "Il proprietario aggiunge e toglie amministratori. Finché non c'è, nessuno può farlo: il primo amministratore che lo diventa resta l'unico."
+            : "Finché non c'è un proprietario, nessuno può aggiungere amministratori."}
+        </div>
+      )}
+      {!ownerUid && myRole === "admin" && (
+        <TillButton t={t} variant="primary" icon={Crown} disabled={busy} onClick={claim}>Diventa proprietario</TillButton>
+      )}
+      {iAmOwner && !choosing && (
+        <TillButton t={t} icon={Crown} disabled={busy} onClick={() => setChoosing(true)}>Passa la proprietà…</TillButton>
+      )}
+      {iAmOwner && choosing && (
+        <div role="group" aria-label="Nuovo proprietario" style={{ display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 14, color: t.inkSoft }}>
+            {admins.length ? "A chi? Solo un amministratore può diventare proprietario." : "Nessun amministratore a cui passarla: aggiungine prima uno."}
+          </div>
+          {admins.map((m) => (
+            <TillButton key={m.uid} t={t} disabled={busy} onClick={() => transfer(m)}>{m.name || m.email || m.uid}</TillButton>
+          ))}
+          <TillButton t={t} variant="secondary" disabled={busy} onClick={() => setChoosing(false)}>Annulla</TillButton>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ------------------------------- blocco cassa ------------------------------- */
+
+// The till's PIN lock (tillLockData.js, TillLock.jsx), set from the till or a
+// phone. The PIN is typed on the keypad (the till has no keyboard) and
+// shown only as dots; leaving it empty keeps the current one.
+function TillLockPanel({ t, onBack, sheet }) {
+  const [config, setConfig] = useState(null);
+  const [values, setValues] = useState(null);
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
+
+  useEffect(() => subscribeTillLock((c) => {
+    setConfig(c);
+    setValues((v) => v || { enabled: c.enabled, timeoutMinutes: c.timeoutMinutes, lockOnStart: c.lockOnStart });
+  }, (err) => {
+    console.error("[menu] Lettura blocco cassa fallita:", err);
+    setNotice({ tone: "error", text: "Impossibile leggere le impostazioni del blocco." });
+  }), []);
+
+  const set = (key) => (value) => { setNotice(null); setValues((v) => ({ ...v, [key]: value })); };
+  const hasPin = Boolean(config?.pinHash);
+  const pinTyped = pin.length > 0;
+  const pinOk = !pinTyped || isValidPin(pin);
+  const needsPin = values?.enabled && !hasPin && !pinTyped;
+  const changed = values && config && (pinTyped || values.enabled !== config.enabled || values.timeoutMinutes !== config.timeoutMinutes || values.lockOnStart !== config.lockOnStart);
+
+  const save = async () => {
+    if (needsPin) { setNotice({ tone: "error", text: "Scegli un PIN per attivare il blocco." }); return; }
+    if (!pinOk) { setNotice({ tone: "error", text: `Il PIN deve avere da ${PIN_MIN_LENGTH} a ${PIN_MAX_LENGTH} cifre.` }); return; }
+    setBusy(true);
+    setNotice(null);
+    try {
+      await saveTillLock({ ...values, pin: pinTyped ? pin : undefined });
+      setPin("");
+      setNotice({ tone: "ok", text: values.enabled ? "Blocco della cassa salvato." : "Blocco della cassa disattivato." });
+    } catch (err) {
+      console.error("[menu] Salvataggio blocco cassa fallito:", err);
+      setNotice({ tone: "error", text: err?.code === "permission-denied" ? "Solo un amministratore può cambiare il blocco della cassa." : "Salvataggio non riuscito. Verifica la connessione e riprova." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SidePanel t={t} sheet={sheet} label="Blocco cassa"
+      header={<PanelHeader t={t} title="Blocco cassa" subtitle="PIN per sbloccare la cassa" onBack={onBack} />}
+      footer={(
+        <>
+          <Notice notice={notice} />
+          <TillButton t={t} variant="primary" size={60} icon={Check} disabled={busy || !changed} onClick={save}>
+            {busy ? "Salvataggio…" : "Salva"}
+          </TillButton>
+        </>
+      )}>
+      {!values ? (
+        <div style={{ color: t.inkSoft, fontSize: 16, paddingTop: 6 }}>Caricamento…</div>
+      ) : (
+        <div style={{ display: "grid", gap: 16, paddingTop: 6 }}>
+          <SwitchRow t={t} label="Blocca la cassa con un PIN" checked={values.enabled} onChange={set("enabled")}
+            description="La cassa mostra una schermata di blocco che si apre solo col PIN. Le stampe continuano anche da bloccata. Sul telefono non cambia nulla." />
+          <SectionTitle t={t}>PIN</SectionTitle>
+          <div style={{ fontSize: 14, color: t.inkSoft, lineHeight: 1.45 }}>
+            {hasPin ? "Un PIN è già impostato: scrivine uno nuovo solo per cambiarlo." : "Nessun PIN impostato."}
+            {` Solo numeri, da ${PIN_MIN_LENGTH} a ${PIN_MAX_LENGTH} cifre.`}
+          </div>
+          <PinDots t={t} length={pin.length} label={hasPin ? "Nuovo PIN" : "PIN"} />
+          {!pinOk && <div role="alert" style={{ color: STATUS.danger, fontSize: 15, fontWeight: 600, textAlign: "center" }}>Almeno {PIN_MIN_LENGTH} cifre.</div>}
+          <Keypad t={t} onKey={(k) => { setNotice(null); setPin((p) => pressPinKey(p, k)); }} keyHeight={56} />
+          <SectionTitle t={t}>Blocco automatico</SectionTitle>
+          <div style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: t.inkSoft }}>Si blocca dopo, senza tocchi</span>
+            <Segmented t={t} label="Si blocca dopo" value={values.timeoutMinutes} onChange={set("timeoutMinutes")} options={LOCK_TIMEOUTS} />
+          </div>
+          <SwitchRow t={t} label="Bloccata all'avvio" checked={values.lockOnStart} onChange={set("lockOnStart")}
+            description="All'apertura del programma della cassa chiede subito il PIN." />
+        </div>
+      )}
     </SidePanel>
   );
 }
@@ -776,6 +974,7 @@ export default function MenuSettings({ t, menu, admin, page, onPage, onClose, sh
     case "links": return <LinksPanel {...common} />;
     case "translations": return <TranslationsPanel {...common} />;
     case "staff": return <StaffPanel t={t} onBack={back} sheet={sheet} />;
+    case "tillLock": return <TillLockPanel t={t} onBack={back} sheet={sheet} />;
     case "print": return <PrintPanel t={t} menu={menu} onBack={back} sheet={sheet} />;
     case "backup": return <BackupPanel t={t} menu={menu} onRestore={admin.onRestore} onBack={back} sheet={sheet} />;
     default: return <SettingsHub t={t} menu={menu} sheet={sheet} onOpen={onPage} onClose={onClose} onPreview={admin.onExit} />;

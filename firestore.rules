@@ -4,23 +4,49 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Personale = account con un documento staff/{uid} e un ruolo in uso
-    // (admin/waiter). Non basta essere autenticati: con l'email/password
+    // (owner/admin/waiter). Non basta essere autenticati: con l'email/password
     // abilitata chiunque conosca la chiave web pubblica può crearsi un
     // account Firebase Auth (è anche così che l'app crea gli account dalle
     // Impostazioni > Personale, vedi src/firebase-auth.js), quindi i dati
     // dello staff si aprono solo a chi un amministratore ha dato un ruolo.
     // Costo: una lettura in più di staff/{uid} per richiesta (Firestore la
     // conta una sola volta anche se più regole la usano).
+    //
+    // Gerarchia (src/staffData.js): proprietario (owner, uno solo) >
+    // amministratore (admin) > cameriere (waiter). Proprietario e
+    // amministratore hanno gli stessi permessi sui dati (isAdmin); cambia
+    // solo chi possono aggiungere o togliere: solo persone di grado più basso
+    // del proprio (il proprietario admin e camerieri, l'amministratore solo
+    // camerieri, il cameriere nessuno).
     function staffRole() {
       return get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role;
     }
     function isStaff() {
       return request.auth != null
         && exists(/databases/$(database)/documents/staff/$(request.auth.uid))
-        && staffRole() in ['admin', 'waiter'];
+        && staffRole() in ['owner', 'admin', 'waiter'];
     }
     function isAdmin() {
-      return isStaff() && staffRole() == 'admin';
+      return isStaff() && staffRole() in ['owner', 'admin'];
+    }
+    // Il proprietario è unico: config/owner {uid} dice chi è, e il suo
+    // staff/{uid}.role è 'owner'. Le due cose si scrivono solo insieme (in un
+    // batch: presa in carico o passaggio di proprietà, vedi sotto).
+    function ownerPath() {
+      return /databases/$(database)/documents/config/owner;
+    }
+    function isOwner() {
+      return isStaff() && staffRole() == 'owner'
+        && exists(ownerPath()) && get(ownerPath()).data.uid == request.auth.uid;
+    }
+    function rankOf(role) {
+      return role == 'owner' ? 3 : (role == 'admin' ? 2 : 1);
+    }
+    function myRank() {
+      return isOwner() ? 3 : (isAdmin() ? 2 : 0);
+    }
+    function onlyRoleChanges() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']);
     }
 
     // Il menù è pubblico in lettura (lo vedono i clienti),
@@ -39,15 +65,70 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
-    // Ruoli del personale (admin/waiter). Ognuno legge il proprio documento
-    // (anche se non esiste: è così che l'app scopre "nessun ruolo" dopo il
-    // login, staff-shared.jsx); l'elenco lo legge il personale; solo un
-    // amministratore assegna o toglie ruoli (Impostazioni > Personale). Il
-    // primo amministratore di un progetto nuovo si crea a mano in Firebase
-    // Console (vedi GUIDA.md).
+    // Ruoli del personale. Ognuno legge il proprio documento (anche se non
+    // esiste: è così che l'app scopre "nessun ruolo" dopo il login,
+    // staff-shared.jsx); l'elenco lo legge il personale. Si aggiunge, cambia
+    // o toglie solo chi ha un grado più basso del proprio, e si assegna solo
+    // un ruolo più basso del proprio (Impostazioni > Personale): il ruolo
+    // 'owner' non si assegna così, solo con la presa in carico o il passaggio
+    // di proprietà. Il proprietario non lo toglie nessuno.
     match /staff/{uid} {
       allow read: if (request.auth != null && request.auth.uid == uid) || isStaff();
-      allow write: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.role in ['admin', 'waiter']
+        && rankOf(request.resource.data.role) < myRank();
+      allow update: if (isAdmin()
+          && request.resource.data.role in ['admin', 'waiter']
+          && rankOf(request.resource.data.role) < myRank()
+          && rankOf(resource.data.get('role', '')) < myRank())
+        // Presa in carico (progetto senza proprietario, es. quello già in
+        // produzione prima dell'introduzione del ruolo): un amministratore
+        // diventa proprietario, solo se non ce n'è ancora uno.
+        || (uid == request.auth.uid && isAdmin() && staffRole() == 'admin'
+          && !exists(ownerPath())
+          && request.resource.data.role == 'owner' && onlyRoleChanges()
+          && getAfter(ownerPath()).data.uid == uid)
+        // Passaggio di proprietà: il proprietario promuove un amministratore
+        // e torna amministratore, nello stesso batch che aggiorna config/owner.
+        || (uid != request.auth.uid && isOwner()
+          && resource.data.get('role', '') == 'admin'
+          && request.resource.data.role == 'owner' && onlyRoleChanges()
+          && getAfter(ownerPath()).data.uid == uid)
+        || (uid == request.auth.uid && isOwner()
+          && request.resource.data.role == 'admin' && onlyRoleChanges()
+          && getAfter(ownerPath()).data.uid != uid);
+      allow delete: if isAdmin() && rankOf(resource.data.get('role', '')) < myRank();
+    }
+
+    // Chi è il proprietario (vedi sopra). Si crea una volta sola, dalla presa
+    // in carico di un amministratore; poi cambia solo con un passaggio di
+    // proprietà deciso dal proprietario; non si elimina dall'app.
+    match /config/owner {
+      allow read: if isStaff();
+      allow create: if isAdmin() && staffRole() == 'admin'
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role == 'owner';
+      allow update: if isOwner()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid != request.auth.uid
+        && get(/databases/$(database)/documents/staff/$(request.resource.data.uid)).data.role == 'admin'
+        && getAfter(/databases/$(database)/documents/staff/$(request.resource.data.uid)).data.role == 'owner'
+        && getAfter(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role == 'admin';
+      allow delete: if false;
+    }
+
+    // Blocco della cassa con PIN (src/tillLock.js): lo legge la cassa (tutto
+    // il personale, l'account della cassa può essere un cameriere), lo
+    // imposta un amministratore o il proprietario. Il PIN non c'è in chiaro:
+    // solo il suo hash con sale.
+    match /config/tillLock {
+      allow read: if isStaff();
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['enabled', 'pinHash', 'pinSalt', 'timeoutMinutes', 'lockOnStart'])
+        && request.resource.data.enabled is bool
+        && request.resource.data.timeoutMinutes is int
+        && request.resource.data.lockOnStart is bool;
     }
 
     // Comande dei tavoli. La distinzione dei ruoli (cameriere vs

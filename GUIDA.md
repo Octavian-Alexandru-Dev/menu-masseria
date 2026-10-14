@@ -252,11 +252,32 @@ script a mano come descritto sopra.
 ## Domande frequenti
 
 **Posso aggiungere altri utenti (camerieri, altri amministratori)?**
-Sì, direttamente dall'app: entra come amministratore → **Menù →
-Impostazioni → Personale → Nuovo account**, scegli nome, email, password e
-ruolo, poi **Crea account**. La persona può entrare subito. "Togli accesso"
-le toglie il ruolo (l'account resta, si può riaggiungere da "Account
-esistente").
+Sì, direttamente dall'app: **Menù → Impostazioni → Personale → Nuovo
+account**, scegli nome, email, password e ruolo, poi **Crea account**. La
+persona può entrare subito. "Togli accesso" le toglie il ruolo (l'account
+resta, si può riaggiungere da "Account esistente").
+
+I ruoli sono tre: il **proprietario** (uno solo) aggiunge e toglie
+amministratori e camerieri; un **amministratore** aggiunge e toglie solo
+camerieri; un **cameriere** nessuno. Per il resto proprietario e
+amministratore vedono e fanno le stesse cose.
+
+**Chi è il proprietario?** In un progetto nuovo (o in uno nato prima di
+questo ruolo) non c'è: il primo amministratore che apre **Personale** vede
+"Nessun proprietario" e tocca **Diventa proprietario** (vale una volta
+sola: dopo, nessun altro può farlo). Il proprietario può poi passare il
+ruolo a un altro amministratore (**Passa la proprietà…**), tornando
+amministratore. In alternativa, da Firebase Console: crea il documento
+`config/owner` con il campo `uid` (stringa) uguale all'UID della persona e
+imposta `role` = `owner` nel suo documento `staff/{uid}` — **solo dopo** che
+le regole aggiornate sono state pubblicate.
+
+**Posso bloccare la cassa con un PIN?** Sì: **Menù → Impostazioni → Blocco
+cassa** (da amministratore o proprietario, anche dal telefono). Scegli un
+PIN di sole cifre (da 4 a 12), dopo quanti minuti senza tocchi si blocca (o
+"Mai") e se è bloccata all'avvio; alla cassa c'è anche il pulsante
+**Blocca**. Le stampe continuano anche a cassa bloccata. PIN dimenticato:
+un amministratore ne imposta uno nuovo dalla stessa pagina.
 
 **Posso usare un mio dominio (es. menu.masseriadellapiana.it)?**
 Sì, gratis: Firebase Hosting → "Aggiungi dominio personalizzato" e segui le

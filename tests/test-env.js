@@ -3,6 +3,8 @@
 // (tests/global-setup.js). Fisse e note perché l'emulatore è locale ed
 // effimero: non sono segreti da proteggere come lo sarebbero su un progetto
 // reale.
+// Il proprietario (unico): aggiunge e toglie anche gli amministratori.
+export const TEST_OWNER = { email: "owner@test.local", password: "Test1234!" };
 export const TEST_ADMIN = { email: "admin@test.local", password: "Test1234!" };
 export const TEST_WAITER = { email: "waiter@test.local", password: "Test1234!" };
 export const TEST_KITCHEN = { email: "kitchen@test.local", password: "Test1234!" };

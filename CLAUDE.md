@@ -8,11 +8,11 @@ After implementing or changing a UI feature (`ClientView.jsx`, `PrintMenu.jsx`, 
 npm run test:e2e:changed            # while developing: only the specs covering the files you changed (vs HEAD)
 npm run test:e2e:changed -- reservations till-sala   # specific specs, in the right stage order
 npm run test:e2e:changed -- --list  # show which specs would run and why, without running
-npm run test:e2e                    # the full suite — run it once at the end, to validate the whole job
+npm run test:e2e                    # the full suite — only before a commit/push, or when the user asks
 npm run test:e2e:ui                 # interactive UI mode, useful while investigating
 ```
 
-Use `test:e2e:changed` while iterating (faster, less output); always finish with the full `npm run test:e2e` before considering the task done, and say in the summary which runs you did. The file → spec map is `tests/spec-map.js`: **when you add a file in `src/` or a new spec, add it there** (an unmapped file makes the runner fall back to the full suite, with a warning). Don't run a single till spec with `npx playwright test tests/till-sala.spec.js`: project dependencies make Playwright run the whole `chromium` stage first — use `test:e2e:changed`. Details, and the rules that keep the tests deterministic (no fixed waits, `expect.poll` for server reads, per-test data and cleanup, never `afterAll` cleanup): `docs/testing.md`. A test that fails once and passes on rerun is a bug in the test to fix, not something to retry.
+Use `test:e2e:changed` while developing and to validate a task: the targeted specs are enough to consider it done. Run the full `npm run test:e2e` only right before a commit/push to `main` (or when the user asks for it), not at the end of every task. Say in the summary which runs you did. The file → spec map is `tests/spec-map.js`: **when you add a file in `src/` or a new spec, add it there** (an unmapped file makes the runner fall back to the full suite, with a warning). Don't run a single till spec with `npx playwright test tests/till-sala.spec.js`: project dependencies make Playwright run the whole `chromium` stage first — use `test:e2e:changed`. Details, and the rules that keep the tests deterministic (no fixed waits, `expect.poll` for server reads, per-test data and cleanup, never `afterAll` cleanup): `docs/testing.md`. A test that fails once and passes on rerun is a bug in the test to fix, not something to retry.
 
 Requires Docker running (`docker` CLI available). `playwright.config.js`'s `globalSetup`/`globalTeardown` start the emulator container and seed it with demo data (`scripts/seed-emulator.js`); `webServer` builds the app for production with `VITE_USE_FIREBASE_EMULATOR=true` and serves it with `vite preview` on port 4173 (never the dev server, never reused) — no `.env` or real Firebase credentials needed to run the suite.
 
@@ -47,6 +47,8 @@ Prenotazioni, Storico, Menù e Statistiche sono **la stessa schermata** sui due 
 | Gestione menù e impostazioni | `TillMenu.jsx`, `MenuSettings.jsx` | `TillMenu.jsx`, `MenuSettings.jsx` | `menuEdit.js`, `menuCosts.js`, `menuBackup.js`, `menuPrint.js`, `staffData.js` |
 | Statistiche | `TillStats.jsx` | `TillStats.jsx` | `statsData.js` |
 | Zoom dell'interfaccia (solo telefono/tablet, vedi `docs/stampa-scontrini.md` §4.2) | `PhoneApp.jsx` > Zoom | — | `displayZoom.js` |
+| Blocco con PIN (solo cassa, vedi `docs/stampa-scontrini.md` §4.1; impostazioni da entrambi) | `MenuSettings.jsx` > Blocco cassa | `TillLock.jsx` (in `TillSala.jsx`) | `tillLockData.js` |
+| Ruoli (proprietario > amministratore > cameriere) | `MenuSettings.jsx` > Personale | `MenuSettings.jsx` > Personale | `staffData.js`, `firestore.rules` |
 
 > 1. Ogni funzione o interazione nuova dell'area staff (un campo nuovo di un piatto, un'azione sulla comanda, un filtro…) deve funzionare **su entrambi i dispositivi** nello stesso intervento: nelle schermate condivise basta farla una volta (controllando entrambe le disposizioni), nella Sala va fatta in `Waiter.jsx` e in `TillSala.jsx`. Se una funzione deve esistere solo da una parte, dillo esplicitamente nel riepilogo all'utente e scrivilo in `docs/stampa-scontrini.md` §4.1.
 > 2. La logica (dati, regole, calcoli, scritture su Firestore) sta nei moduli condivisi della colonna a destra, mai duplicata nei componenti, che cambiano solo la presentazione. Le modifiche al menù si salvano una alla volta con `onPatch` (MenuApp.jsx > `handlePatch`, una transazione sul menù com'è sul server) e scrivono solo i campi cambiati; un campo nuovo del menù passa da `menuEdit.js`; aggiorna anche `scripts/seed-emulator.js` (se serve per i test) e `docs/data-model.md`.
@@ -55,7 +57,7 @@ Prenotazioni, Storico, Menù e Statistiche sono **la stessa schermata** sui due 
 
 # Contract testing E2E — regola obbligatoria
 
-> 1. Durante lo sviluppo esegui i test della parte toccata (`npm run test:e2e:changed`); prima di considerare completata qualsiasi implementazione che tocchi l'interfaccia utente, esegui l'intera suite E2E (`npm run test:e2e`). Se per un motivo eccezionale non la esegui, specifica quali test sono stati eseguiti e perché non l'intera suite.
+> 1. Durante lo sviluppo, e per considerare completata un'implementazione che tocchi l'interfaccia utente, bastano i test della parte toccata (`npm run test:e2e:changed`, mirati tramite `tests/spec-map.js`). L'intera suite E2E (`npm run test:e2e`) si esegue solo prima di un commit/push su `main` o quando l'utente lo chiede. Nel riepilogo indica sempre quali test sono stati eseguiti.
 > 2. Se un test fallisce dopo una modifica:
 >    - **(a)** Analizza se il fallimento è dovuto a un cambiamento intenzionale dell'interfaccia/comportamento (la modifica richiesta ha legittimamente cambiato il contratto). In questo caso aggiorna il test, spiegando esplicitamente cosa è cambiato e perché, mostrando il diff minimo necessario.
 >    - **(b)** Se invece il fallimento rivela una regressione o un bug introdotto dall'implementazione appena fatta, **non modificare il test per farlo passare**. Segnala il problema, fermati e chiedi conferma su come procedere prima di continuare.

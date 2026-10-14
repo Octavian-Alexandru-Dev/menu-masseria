@@ -16,6 +16,9 @@ export const STAGES = [
   // page (print station) can claim its print jobs.
   { name: "till-sala", spec: /till-sala\.spec\.js$/ },
   { name: "desktop-client", spec: /desktop-client\.spec\.js$/ },
+  // Changes who the (only) owner is: alone, after everything else, so no
+  // other test sees a project without an owner.
+  { name: "owner-claim", spec: /owner-claim\.spec\.js$/ },
 ];
 
 // La fase di una spec ("tests/till-sala.spec.js" → "till-sala").

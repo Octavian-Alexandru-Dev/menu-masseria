@@ -74,15 +74,47 @@ uid. Accounts are created from the app (Menù → Impostazioni → Personale →
 app creates the Auth account so the admin stays signed in, then the admin
 writes this doc; if that write fails the new account is deleted again). A
 role can also be given to an existing account by uid. Each user reads their
-own doc, staff read all of them, **only an admin writes** (see "Trust
-boundary" below). The very first admin of a new project is created by hand
-in the Firebase console (GUIDA.md).
+own doc, staff read all of them; writes follow the hierarchy below (see
+"Trust boundary"). The very first admin of a new project is created by hand
+in the Firebase console (GUIDA.md), and then claims the owner role from
+Personale.
+
+**Hierarchy** (`staffData.js`): `owner` (only one) > `admin` > `waiter`.
+Owner and admin have the same rights in the app; they differ only in whom
+they can add, change or remove — people of a lower rank than their own: the
+owner admins and waiters, an admin only waiters, a waiter nobody. Nobody
+removes the owner. The `owner` role is never assigned from the form: it is
+claimed once (no owner yet, `claimOwnership`) or handed over by the owner to
+an admin (`transferOwnership`, the owner becomes an admin), each time in one
+batch with `config/owner`.
 
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | Display name, shown as "Ciao, {name}" etc. |
 | `email` | string? | Login email, set when the account was created from the app (shown in the Personale list instead of the uid). Missing for accounts added by uid. |
-| `role` | string | `"admin"` or `"waiter"`. `"kitchen"` is an old role: the kitchen area was removed (the kitchen works from printed tickets), such accounts get a message asking for a role change. Any other value (or a missing doc) is a valid state the UI handles explicitly (`useStaffSession` in `staff-shared.jsx`: `"no-role"` / an unrecognized role → "Accesso non consentito"). |
+| `role` | string | `"owner"`, `"admin"` or `"waiter"`. `"kitchen"` is an old role: the kitchen area was removed (the kitchen works from printed tickets), such accounts get a message asking for a role change. Any other value (or a missing doc) is a valid state the UI handles explicitly (`useStaffSession` in `staff-shared.jsx`: `"no-role"` / an unrecognized role → "Accesso non consentito"). |
+
+## `config/owner`
+
+`{ uid: string }`: who the owner is (their `staff/{uid}.role` is
+`"owner"`). Missing on a project created before the role existed, until an
+admin claims it (Personale → "Diventa proprietario"). Created only by that
+claim, then changed only by a handover; never deleted from the app. Read by
+staff.
+
+## `config/tillLock`
+
+The till's PIN lock (`src/tillLockData.js`, `TillLock.jsx`), set from Menù
+→ Impostazioni → Blocco cassa by an admin or the owner; read by staff (the
+till's account may be a waiter). Missing = lock off.
+
+| Field | Type | Notes |
+|---|---|---|
+| `enabled` | boolean | Lock on/off. |
+| `pinHash` | string | SHA-256 (hex) of `"{pinSalt}:{pin}"`. The PIN (4–12 digits) is never stored. |
+| `pinSalt` | string | Random, new at every PIN change. |
+| `timeoutMinutes` | number | Minutes without touches before the till locks; `0` = never by itself. |
+| `lockOnStart` | boolean | Locked when the till starts. A lock also survives a reload (`mdp.tillLocked` in the till's localStorage). |
 
 ## `menuViews/{YYYY-MM-DD}` (one document per day)
 
@@ -163,11 +195,14 @@ the till client at startup — no TTL policy or scheduled job.
 Being signed in is **not** enough: with email/password enabled anyone who
 has the (public) web API key can create a Firebase Auth account — that's
 also how the app creates staff accounts. So every collection requires
-`isStaff()`: a `staff/{uid}` doc with a role in use (`admin` / `waiter`;
+`isStaff()`: a `staff/{uid}` doc with a role in use (`owner` / `admin` / `waiter`;
 the old `kitchen` role and unknown roles are out). `menu/data` is publicly
 readable. `staff/{uid}`: own doc readable by its owner (even when missing:
 that's how the UI detects "no role"), all docs readable by staff, writes by
-`isAdmin()` only. Cost: one extra read of the caller's `staff` doc per
+rank (`rankOf`/`myRank`: you write or delete only docs whose current and new
+role rank below yours; plus the owner claim and handover, which must update
+`config/owner` in the same batch). `isAdmin()` (owner or admin) covers the
+admin-only writes elsewhere. Cost: one extra read of the caller's `staff` doc per
 request.
 
 Beyond that there is no per-role enforcement in the rules: a waiter can

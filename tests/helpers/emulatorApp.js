@@ -11,7 +11,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, connectAuthEmulator, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
-import { TEST_ADMIN, TEST_WAITER } from "../test-env.js";
+import { TEST_ADMIN, TEST_WAITER, TEST_OWNER } from "../test-env.js";
 
 const sessions = new Map(); // email → Promise<Firestore>
 
@@ -34,3 +34,4 @@ export function dbAs(account) {
 
 export const waiterDb = () => dbAs(TEST_WAITER);
 export const adminDb = () => dbAs(TEST_ADMIN);
+export const ownerDb = () => dbAs(TEST_OWNER);

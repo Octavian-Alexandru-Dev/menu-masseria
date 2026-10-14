@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { TEST_ADMIN } from "./test-env";
+import { TEST_ADMIN, TEST_OWNER } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
 import { PHONE, navTo, sheet } from "./helpers/phone";
+import { getTillLock, pinMatchesRemotely, resetTillLockRemotely } from "./helpers/staffRoles";
 import { getMenu, setTranslationRemotely, removeTranslationRemotely, setMenuFieldsRemotely, removeStaffRemotely, findStaffByEmail, removeStaffByEmailRemotely } from "./helpers/menuDoc";
 
 // Impostazioni del menù (MenuSettings.jsx) dal telefono: Menù → Impostazioni,
@@ -11,9 +12,9 @@ import { getMenu, setTranslationRemotely, removeTranslationRemotely, setMenuFiel
 // condiviso dell'emulatore: ogni test ripristina ciò che cambia.
 test.use(PHONE);
 
-async function openSettings(page, item) {
+async function openSettings(page, item, account = TEST_ADMIN) {
   await page.goto("/?area=staff");
-  await staffLogin(page, TEST_ADMIN);
+  await staffLogin(page, account);
   await navTo(page, "Menù");
   await page.getByRole("button", { name: "Impostazioni", exact: true }).click();
   const hub = sheet(page, "Impostazioni del menù");
@@ -109,10 +110,11 @@ test("Traduzioni: un testo si corregge a mano e la lingua si elimina dopo confer
   }
 });
 
-test("Personale: a un account esistente si dà un ruolo dal suo UID e si toglie dopo conferma", async ({ page }) => {
+test("Personale: il proprietario dà a un account esistente il ruolo di amministratore dal suo UID e lo toglie dopo conferma", async ({ page }) => {
   const uid = `test-uid-${Date.now()}`;
   try {
-    const panel = await openSettings(page, "Personale");
+    const panel = await openSettings(page, "Personale", TEST_OWNER);
+    await expect(panel.getByRole("region", { name: "Proprietario" })).toContainText("Proprietario di test (tu)", { timeout: 10_000 });
     await panel.getByRole("group", { name: "Tipo di account" }).getByRole("button", { name: "Account esistente" }).click();
     await panel.getByRole("textbox", { name: "UID" }).fill(uid);
     await panel.getByRole("textbox", { name: "Nome della persona" }).fill("Persona di prova");
@@ -203,8 +205,97 @@ test("Personale: un'email già usata dà errore e non aggiunge nessuno; il propr
   await expect(list.getByRole("button", { name: "Togli accesso a Cameriere di test" })).toBeVisible();
 });
 
-test("Personale sul telefono: nessuno scorrimento laterale, 'Crea account' in basso e grande", async ({ page }) => {
+test("Personale: un amministratore aggiunge solo camerieri e non tocca il proprietario né gli altri amministratori", async ({ page }) => {
   const panel = await openSettings(page, "Personale");
+  const list = panel.getByRole("list", { name: "Persone con accesso" });
+  await expect(list).toContainText("Proprietario di test · Proprietario", { timeout: 10_000 });
+  const owner = panel.getByRole("region", { name: "Proprietario" });
+  await expect(owner).toContainText("Proprietario di test");
+  // C'è già un proprietario: niente presa in carico, niente passaggio.
+  await expect(owner.getByRole("button")).toHaveCount(0);
+  await expect(list.getByRole("button", { name: "Togli accesso a Proprietario di test" })).toHaveCount(0);
+  await expect(list.getByRole("button", { name: "Togli accesso a Cameriere di test" })).toBeVisible();
+  // Il ruolo non si sceglie: solo Cameriere.
+  await expect(panel.getByRole("group", { name: "Ruolo" })).toHaveCount(0);
+  await expect(panel.getByText("solo il proprietario aggiunge amministratori")).toBeVisible();
+});
+
+test("Personale: il proprietario sceglie tra Cameriere e Amministratore, toglie gli amministratori e può passare la proprietà (poi annulla)", async ({ page }) => {
+  const panel = await openSettings(page, "Personale", TEST_OWNER);
+  const list = panel.getByRole("list", { name: "Persone con accesso" });
+  await expect(list).toContainText("Admin di test", { timeout: 10_000 });
+  await expect(list.getByRole("button", { name: "Togli accesso a Admin di test" })).toBeVisible();
+  await expect(list.getByRole("listitem").filter({ hasText: "Proprietario di test" })).toContainText("Tu");
+  const roles = panel.getByRole("group", { name: "Ruolo" });
+  await expect(roles.getByRole("button", { name: "Cameriere" })).toHaveAttribute("aria-pressed", "true");
+  await expect(roles.getByRole("button", { name: "Amministratore" })).toBeVisible();
+  await expect(roles.getByRole("button", { name: "Proprietario" })).toHaveCount(0);
+
+  const owner = panel.getByRole("region", { name: "Proprietario" });
+  await owner.getByRole("button", { name: "Passa la proprietà…" }).click();
+  const choice = owner.getByRole("group", { name: "Nuovo proprietario" });
+  await choice.getByRole("button", { name: "Admin di test" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Passare la proprietà a Admin di test?" });
+  await confirm.getByRole("button", { name: "Annulla" }).click();
+  await choice.getByRole("button", { name: "Annulla" }).click();
+  await expect(owner).toContainText("Proprietario di test (tu)");
+});
+
+test("Blocco cassa: senza PIN non si attiva; PIN da tastierino (mai in chiaro), tempo e avvio si salvano", async ({ page }) => {
+  try {
+    await resetTillLockRemotely();
+    const panel = await openSettings(page, "Blocco cassa");
+    await expect(panel.getByText("Nessun PIN impostato.")).toBeVisible({ timeout: 10_000 });
+    const save = panel.getByRole("button", { name: "Salva" });
+    await expect(save).toBeDisabled(); // nulla di cambiato
+    await panel.getByRole("switch", { name: "Blocca la cassa con un PIN" }).click();
+    await save.click();
+    await expect(panel.getByRole("alert")).toContainText("Scegli un PIN");
+
+    // Troppo corto.
+    for (const d of "123") await panel.getByRole("button", { name: `Cifra ${d}` }).click();
+    await expect(panel.getByRole("status", { name: "PIN: 3 cifre" })).toBeVisible();
+    await save.click();
+    await expect(panel.getByRole("alert").first()).toContainText("4");
+    // Lunghezza libera: 6 cifre.
+    for (const d of "456") await panel.getByRole("button", { name: `Cifra ${d}` }).click();
+    await expect(panel.getByRole("status", { name: "PIN: 6 cifre" })).toBeVisible();
+    await expect(panel.getByText("123456", { exact: true })).toHaveCount(0); // solo pallini
+    await panel.getByRole("group", { name: "Si blocca dopo" }).getByRole("button", { name: "10 min" }).click();
+    await panel.getByRole("switch", { name: "Bloccata all'avvio" }).click();
+    await save.click();
+    await expect(panel.getByRole("status").filter({ hasText: "Blocco della cassa salvato." })).toBeVisible({ timeout: 10_000 });
+
+    await expect.poll(getTillLock).toMatchObject({ enabled: true, timeoutMinutes: 10, lockOnStart: false });
+    const saved = await getTillLock();
+    expect(JSON.stringify(saved)).not.toContain("123456");
+    expect(await pinMatchesRemotely("123456", saved)).toBe(true);
+    // Dopo il salvataggio: PIN già impostato, il campo è vuoto.
+    await expect(panel.getByText(/Un PIN è già impostato/)).toBeVisible();
+    await expect(panel.getByRole("status", { name: "Nuovo PIN: 0 cifre" })).toBeVisible();
+
+    // Il telefono non si blocca: niente "Blocca" né schermata di blocco.
+    await expect(page.getByRole("dialog", { name: "Cassa bloccata" })).toHaveCount(0);
+
+    // Persistenza: riaperta la pagina, le scelte sono quelle salvate.
+    await page.reload();
+    await navTo(page, "Menù");
+    await page.getByRole("button", { name: "Impostazioni", exact: true }).click();
+    await sheet(page, "Impostazioni del menù").getByRole("button", { name: /^Blocco cassa/ }).click();
+    const again = sheet(page, "Blocco cassa");
+    await expect(again.getByRole("switch", { name: "Blocca la cassa con un PIN" })).toHaveAttribute("aria-checked", "true", { timeout: 10_000 });
+    await expect(again.getByRole("group", { name: "Si blocca dopo" }).getByRole("button", { name: "10 min" })).toHaveAttribute("aria-pressed", "true");
+    const overflow = await page.evaluate(() => globalThis.document.documentElement.scrollWidth - globalThis.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    expect((await again.getByRole("button", { name: "Salva" }).boundingBox()).height).toBeGreaterThanOrEqual(48);
+  } finally {
+    await resetTillLockRemotely();
+  }
+});
+
+test("Personale sul telefono: nessuno scorrimento laterale, 'Crea account' in basso e grande", async ({ page }) => {
+  // Come proprietario: è l'unico con la scelta del ruolo (Cameriere/Amministratore).
+  const panel = await openSettings(page, "Personale", TEST_OWNER);
   await expect(panel.getByRole("list", { name: "Persone con accesso" })).toContainText("Admin di test", { timeout: 10_000 });
   const overflow = await page.evaluate(() => globalThis.document.documentElement.scrollWidth - globalThis.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -212,7 +303,7 @@ test("Personale sul telefono: nessuno scorrimento laterale, 'Crea account' in ba
   const box = await create.boundingBox();
   expect(box.height).toBeGreaterThanOrEqual(48);
   expect(box.y + box.height).toBeGreaterThan(851 - 120); // nella barra in fondo alla pagina
-  for (const name of ["Mostra", "Nuovo account", "Account esistente", "Cameriere", "Amministratore"]) {
+  for (const name of ["Mostra", "Nuovo account", "Account esistente", "Cameriere", "Amministratore", "Passa la proprietà…"]) {
     expect((await panel.getByRole("button", { name, exact: true }).boundingBox()).height).toBeGreaterThanOrEqual(48);
   }
 });

@@ -242,6 +242,8 @@ test("l'area staff si installa come app (manifest solo lì, non nel menù pubbli
   const manifest = await (await request.get("/staff.webmanifest")).json();
   expect(manifest.display).toBe("standalone");
   expect(manifest.start_url).toBe("/?area=staff");
+  // Installata su un tablet si usa anche in orizzontale: nessun blocco in verticale.
+  expect(manifest.orientation ?? "any").toBe("any");
   expect(manifest.icons.map((i) => i.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
 });
 

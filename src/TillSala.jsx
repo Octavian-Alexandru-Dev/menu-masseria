@@ -21,7 +21,9 @@
 //    total stays in view; changes apply only on "Salva";
 //  - touch targets ≥ 48px, on-screen keypads (no keyboard at the till),
 //    confirmation before irreversible actions, no "Esci" (it lives in the
-//    client's settings).
+//    client's settings);
+//  - optional PIN lock (TillLock.jsx): after some minutes without touches,
+//    at startup, or with "Blocca" in the top bar.
 //
 // No kitchen states ("uscita"): the kitchen has no screen, lines are just
 // "sent" (see the Cucina note in docs/stampa-scontrini.md).
@@ -43,6 +45,8 @@ import { usePrintJob } from "./usePrintJob";
 import {
   TOUCH, FONT, STATUS, SIDE_PANEL_WIDTH, TillButton, Stepper, Keypad, SidePanel, SectionTitle, StatusPill, PrintStatusLine, CategoryGrid,
 } from "./TillUi";
+import { isAdminRole } from "./staffData";
+import { useTillLock, TillLockScreen } from "./TillLock";
 
 const TillHistory = lazy(() => import("./TillHistory"));
 const TillReservations = lazy(() => import("./TillReservations"));
@@ -62,7 +66,7 @@ const DATE_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "num
 
 /* --------------------------------- top bar --------------------------------- */
 
-function TopBar({ t, session, tab, onTab, openCount, withAdmin }) {
+function TopBar({ t, session, tab, onTab, openCount, withAdmin, onLock }) {
   const now = useClock();
   const tabs = [
     { key: "floor", label: "Tavoli", icon: LayoutGrid, badge: openCount },
@@ -107,6 +111,10 @@ function TopBar({ t, session, tab, onTab, openCount, withAdmin }) {
           );
         })}
       </nav>
+      {/* PIN lock on (Menù › Impostazioni › Blocco cassa): lock it now. */}
+      {onLock && (
+        <TillButton t={t} icon={Lock} size={TOUCH} onClick={onLock} style={{ fontSize: 15, flexShrink: 0 }}>Blocca</TillButton>
+      )}
       {/* Only for clients older than 1.4.0, which have no "Esci
           dall'account" in their settings yet (confirmed, see staffLogout). */}
       {!logoutHiddenAtTill() && (
@@ -505,6 +513,7 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
 export default function TillSala({ menu, session, initialTab = "floor", admin = null }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
   const sala = useSalaData({ menu, session });
+  const tillLock = useTillLock();
   const withAdmin = Boolean(admin);
   const [tab, setTab] = useState(() => (!withAdmin && (initialTab === "menu" || initialTab === "stats") ? "floor" : initialTab)); // floor | reservations | history | menu | stats
   const [openOrderId, setOpenOrderId] = useState(null);
@@ -547,7 +556,7 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
   return (
     <div className="mdp-root" style={{ height: "100vh", display: "flex", flexDirection: "column", background: t.bg, overflow: "hidden" }}>
       <GlobalStyle t={t} />
-      <TopBar t={t} session={session} tab={tab} onTab={goTab} openCount={sala.orders.length} withAdmin={withAdmin} />
+      <TopBar t={t} session={session} tab={tab} onTab={goTab} openCount={sala.orders.length} withAdmin={withAdmin} onLock={tillLock.active ? tillLock.lock : null} />
 
       {tab === "menu" && withAdmin && (
         <Suspense fallback={loading}>
@@ -563,7 +572,7 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
 
       {tab === "history" && (
         <Suspense fallback={loading}>
-          <TillHistory t={t} menu={menu} isAdmin={session.role === "admin"} />
+          <TillHistory t={t} menu={menu} isAdmin={isAdminRole(session.role)} />
         </Suspense>
       )}
 
@@ -602,6 +611,8 @@ export default function TillSala({ menu, session, initialTab = "floor", admin = 
           onGoTo={(orderId) => { setDialog(null); goToOrder(orderId); }}
         />
       )}
+
+      {tillLock.locked && <TillLockScreen t={t} config={tillLock.config} sessionName={session.name} onUnlock={tillLock.unlock} />}
     </div>
   );
 }

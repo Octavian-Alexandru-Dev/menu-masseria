@@ -4,6 +4,7 @@ import { deleteTestOrderByTableNumber, deleteTestReservationByName } from "./fir
 import { installDesktopBridgeMock, printedTexts } from "./helpers/desktopBridge";
 import { deletePrintJobsByTableLabel } from "./helpers/printJobs";
 import { swipeLeft } from "./helpers/swipe";
+import { setTillLockRemotely, resetTillLockRemotely } from "./helpers/staffRoles";
 import { findReservationByName } from "./helpers/reservations";
 import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix, findStaffByEmail, removeStaffByEmailRemotely } from "./helpers/menuDoc";
 
@@ -727,11 +728,12 @@ test("alla cassa l'admin crea l'account di una persona nuova dal Personale, senz
     await panel.getByRole("textbox", { name: "Nome della persona" }).fill("Responsabile di sala");
     await panel.getByRole("textbox", { name: "Email della persona" }).fill(email);
     await panel.getByLabel("Password della persona").fill("Prova123!");
-    await panel.getByRole("group", { name: "Ruolo" }).getByRole("button", { name: "Amministratore" }).click();
+    // Un amministratore aggiunge solo camerieri: nessuna scelta del ruolo.
+    await expect(panel.getByRole("group", { name: "Ruolo" })).toHaveCount(0);
     await panel.getByRole("button", { name: "Crea account" }).click();
-    await expect(panel.getByRole("list", { name: "Persone con accesso" }).getByRole("listitem").filter({ hasText: "Responsabile di sala · Amministratore" })).toContainText(email, { timeout: 10_000 });
+    await expect(panel.getByRole("list", { name: "Persone con accesso" }).getByRole("listitem").filter({ hasText: "Responsabile di sala · Cameriere" })).toContainText(email, { timeout: 10_000 });
     // L'elenco si aggiorna già con la scrittura locale: sul server si aspetta che arrivi.
-    await expect.poll(() => findStaffByEmail(email)).toMatchObject({ role: "admin", email });
+    await expect.poll(() => findStaffByEmail(email)).toMatchObject({ role: "waiter", email });
     // La cassa resta collegata come prima.
     await expect(nav).toBeVisible();
   } finally {
@@ -797,4 +799,95 @@ test("statistiche della cassa: periodo a tocco, numeri grandi, confronto e class
   await expect(views.getByTestId("kpi-views")).toHaveText("12", { timeout: 10_000 });
   await periods.getByRole("button", { name: "Ultimi 7 giorni" }).click();
   await expect(views.getByRole("group", { name: "Visite al menù nel tempo" }).getByRole("button")).toHaveCount(7, { timeout: 10_000 });
+});
+
+/* ------------------------------ blocco cassa ------------------------------ */
+
+async function typePin(scope, pin) {
+  for (const d of pin) await scope.getByRole("button", { name: `Cifra ${d}` }).click();
+}
+
+test("blocco cassa: bloccata all'avvio, PIN errato rifiutato, quello giusto sblocca; «Blocca» e un ricaricamento la richiudono", async ({ page }) => {
+  try {
+    await setTillLockRemotely({ pin: "2468", lockOnStart: true, timeoutMinutes: 0 });
+    await installDesktopBridgeMock(page, { savedLogin: TEST_WAITER });
+    await page.goto("/cameriere");
+    const lock = page.getByRole("dialog", { name: "Cassa bloccata" });
+    await expect(lock).toBeVisible({ timeout: 15_000 });
+    // Tasti grandi, PIN mai mostrato in cifre.
+    expect((await lock.getByRole("button", { name: "Cifra 5" }).boundingBox()).height).toBeGreaterThanOrEqual(48);
+    const unlock = lock.getByRole("button", { name: "Sblocca" });
+    await expect(unlock).toBeDisabled(); // meno di 4 cifre
+
+    await typePin(lock, "1111");
+    await expect(lock.getByRole("status", { name: "PIN inserito: 4 cifre" })).toBeVisible();
+    await unlock.click();
+    await expect(lock.getByRole("alert")).toHaveText(/PIN errato/);
+    await expect(lock.getByRole("status", { name: "PIN inserito: 0 cifre" })).toBeVisible();
+    // "Cancella ultima cifra" corregge senza ricominciare; quello giusto apre da solo.
+    await typePin(lock, "246");
+    await lock.getByRole("button", { name: "Cancella ultima cifra" }).click();
+    await typePin(lock, "68");
+    await expect(lock).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Nuovo tavolo" })).toBeVisible();
+
+    // A mano, dalla barra in alto.
+    const blocca = page.getByRole("button", { name: "Blocca", exact: true });
+    expect((await blocca.boundingBox()).height).toBeGreaterThanOrEqual(48);
+    await blocca.click();
+    await expect(lock).toBeVisible();
+    // Ricaricare non la apre (vale anche col blocco all'avvio spento).
+    await setTillLockRemotely({ pin: "2468", lockOnStart: false, timeoutMinutes: 0 });
+    await page.reload();
+    await expect(lock).toBeVisible({ timeout: 15_000 });
+    // Anche dalla tastiera, se la cassa ne ha una.
+    await page.keyboard.type("2468");
+    await expect(lock).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Nuovo tavolo" })).toBeVisible({ timeout: 15_000 });
+    await expect(lock).toHaveCount(0);
+  } finally {
+    await resetTillLockRemotely();
+  }
+});
+
+test("blocco cassa: si chiude da sola dopo il tempo scelto senza tocchi (un tocco fa ripartire il conto) e si apre se il blocco viene spento", async ({ page }) => {
+  try {
+    await setTillLockRemotely({ pin: "13579", lockOnStart: false, timeoutMinutes: 1 });
+    await page.clock.install();
+    await openTill(page);
+    const lock = page.getByRole("dialog", { name: "Cassa bloccata" });
+    await expect(page.getByRole("button", { name: "Blocca", exact: true })).toBeVisible();
+    await page.clock.fastForward("00:40");
+    await expect(lock).toHaveCount(0);
+    await page.getByRole("navigation", { name: "Sezioni della sala" }).getByRole("button", { name: /^storico$/i }).click();
+    await page.clock.fastForward("00:40"); // 80 s dall'apertura, 40 dall'ultimo tocco
+    await expect(lock).toHaveCount(0);
+    await page.clock.fastForward("00:25");
+    await expect(lock).toBeVisible();
+
+    // Un amministratore spegne il blocco (es. dal telefono): la cassa si riapre.
+    await resetTillLockRemotely();
+    await expect(lock).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Blocca", exact: true })).toHaveCount(0);
+  } finally {
+    await resetTillLockRemotely();
+  }
+});
+
+test("blocco cassa e personale alla cassa: l'admin trova «Blocco cassa» e «Personale» nelle impostazioni del menù", async ({ page }) => {
+  await openTill(page, { savedLogin: TEST_ADMIN });
+  await page.getByRole("navigation", { name: "Sezioni della sala" }).getByRole("button", { name: /^menù$/i }).click();
+  await page.getByRole("button", { name: "Impostazioni", exact: true }).click();
+  await page.getByRole("button", { name: /^Blocco cassa/ }).click();
+  const panel = page.getByRole("region", { name: "Blocco cassa" });
+  await expect(panel.getByRole("switch", { name: "Blocca la cassa con un PIN" })).toBeVisible({ timeout: 10_000 });
+  // Tastierino a schermo per il PIN, come per i numeri alla cassa.
+  await typePin(panel, "9876");
+  await expect(panel.getByRole("status", { name: /PIN: 4 cifre/ })).toBeVisible();
+  await panel.getByRole("button", { name: "Impostazioni" }).click();
+  await page.getByRole("button", { name: /^Personale/ }).click();
+  const staff = page.getByRole("region", { name: "Personale" });
+  await expect(staff.getByRole("region", { name: "Proprietario" })).toContainText("Proprietario di test", { timeout: 10_000 });
+  await expect(staff.getByRole("button", { name: "Togli accesso a Proprietario di test" })).toHaveCount(0);
 });

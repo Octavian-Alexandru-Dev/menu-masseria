@@ -25,6 +25,7 @@ import {
 import { confirmAction } from "./confirmDialog";
 import { BackButton } from "./shared";
 import { FONT, STATUS, TOUCH, SIDE_PANEL_WIDTH, TillButton, Stepper, SidePanel, SectionTitle, StatusPill, SwipeAction, useCompactLayout } from "./TillUi";
+import { isAdminRole } from "./staffData";
 
 const MONTH_LABEL = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const WEEKDAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "short" });
@@ -325,7 +326,7 @@ export default function TillReservations({ t, session, initialReservation = null
   const dayCovers = active.reduce((s, r) => s + (r.covers?.adults || 0) + (r.covers?.children || 0), 0);
   const selected = panel.mode === "detail" ? dayList.find((r) => r.id === panel.id) : null;
   const by = { uid: session.user.uid, name: session.name };
-  const canDelete = session.role === "admin";
+  const canDelete = isAdminRole(session.role);
 
   const selectDate = (key) => {
     setSelectedDate(key);

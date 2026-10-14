@@ -18,6 +18,9 @@ connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
 connectFirestoreEmulator(db, "localhost", 8080);
 
 export const SEED_ACCOUNTS = {
+  // Il proprietario (unico, config/owner — vedi firestore.rules): aggiunge e
+  // toglie amministratori e camerieri.
+  owner: { email: "owner@test.local", password: "Test1234!", name: "Proprietario di test", role: "owner" },
   admin: { email: "admin@test.local", password: "Test1234!", name: "Admin di test", role: "admin" },
   waiter: { email: "waiter@test.local", password: "Test1234!", name: "Cameriere di test", role: "waiter" },
   kitchen: { email: "kitchen@test.local", password: "Test1234!", name: "Cucina di test", role: "kitchen" },
@@ -220,9 +223,10 @@ async function seedTestOrders(uids) {
   }
 }
 
-// staff/{uid} lo scrive solo un amministratore (firestore.rules), e al primo
-// avvio non ce n'è ancora uno: si scrive con le credenziali "owner" della
-// REST API dell'emulatore, che ignorano le regole (solo in locale — sul
+// staff/{uid} e config/owner li scrive solo il personale con il grado giusto
+// (firestore.rules), e al primo avvio non c'è ancora nessuno: si scrivono con
+// le credenziali "owner" della REST API dell'emulatore (nulla a che vedere
+// col ruolo di proprietario), che ignorano le regole (solo in locale — sul
 // progetto reale il primo admin si crea a mano, vedi GUIDA.md).
 async function setDocAsOwner(path, fields) {
   const url = `http://localhost:8080/v1/projects/${PROJECT_ID}/databases/(default)/documents/${path}`;
@@ -257,6 +261,7 @@ async function main() {
       await withRetry(() => setStaffDocAsOwner(uid, { name: account.name, role: account.role, email: account.email }));
     }
   }
+  await withRetry(() => setDocAsOwner("config/owner", { uid: uids.owner }));
   // Il resto (menù, comande) lo scrive l'admin, come farebbe dall'app.
   await withRetry(() => signInWithEmailAndPassword(auth, SEED_ACCOUNTS.admin.email, SEED_ACCOUNTS.admin.password));
 

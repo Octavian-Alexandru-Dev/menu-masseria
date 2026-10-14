@@ -24,6 +24,7 @@ import { staffLogout, logoutHiddenAtTill } from "./staff-shared";
 import { subscribeOpenOrders } from "./orders";
 import { ZOOM_LEVELS, zoomLabel, getSavedZoom, saveZoom, applyZoom, zoomSupported } from "./displayZoom";
 import { FONT, TOUCH, TillButton, SidePanel, Segmented, SectionTitle, useCompactLayout } from "./TillUi";
+import { isAdminRole } from "./staffData";
 
 const WaiterPanel = lazy(() => import("./Waiter").then((m) => ({ default: m.WaiterPanel })));
 const TillReservations = lazy(() => import("./TillReservations"));
@@ -186,7 +187,7 @@ function BottomNav({ t, sections, current, onChoose }) {
 // onExit) — present only for admin accounts, it adds the Menù section.
 export default function PhoneApp({ menu, session, admin = null, initialSection = "waiter" }) {
   const t = THEMES[menu?.theme] || THEMES.minimal;
-  const isAdmin = session.role === "admin";
+  const isAdmin = isAdminRole(session.role);
   const [section, setSection] = useUrlState("sezione", initialSection);
   const [immersive, setImmersive] = useState(false);
   // From Prenotazioni to Tavoli: { type: "avvia", reservation } or { type: "open", orderId }.

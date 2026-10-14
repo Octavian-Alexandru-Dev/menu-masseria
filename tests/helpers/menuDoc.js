@@ -4,7 +4,7 @@
 // test. Le scritture sono transazioni sul documento com'è ora, come fa la
 // cassa (MenuApp.jsx > handlePatch), così non si cancellano a vicenda.
 import { doc, getDoc, runTransaction, deleteDoc, collection, query, where, getDocs, updateDoc, deleteField } from "firebase/firestore";
-import { adminDb } from "./emulatorApp.js";
+import { adminDb, ownerDb } from "./emulatorApp.js";
 
 const menuRef = (db) => doc(db, "menu", "data");
 
@@ -88,12 +88,11 @@ export async function setMenuFieldsRemotely(fields) {
 }
 
 // Best-effort: una persona aggiunta dal test al personale (staff/{uid}).
-// staff/ lo scrive solo un amministratore (firestore.rules): si rientra
-// esplicitamente come admin, perché nello stesso processo altri helper
-// (firestore-cleanup.js) usano la stessa sessione come cameriere.
+// Si toglie come proprietario: è l'unico che può togliere anche gli
+// amministratori (firestore.rules).
 export async function removeStaffRemotely(uid) {
   try {
-    const db = await adminDb();
+    const db = await ownerDb();
     await deleteDoc(doc(db, "staff", uid));
   } catch (err) {
     console.error(`[test cleanup] Pulizia personale "${uid}" fallita:`, err.message || err);

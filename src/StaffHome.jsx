@@ -23,6 +23,7 @@ import {
 } from "./staff-shared";
 import { getDesktopBridge } from "./desktop";
 import { MenuBootstrap } from "./MenuSettings";
+import { isAdminRole, isStaffRole } from "./staffData";
 
 // Each interface is loaded only when needed: a phone never downloads the
 // till's screens, and the phone app loads each section on first use.
@@ -41,8 +42,9 @@ export default function StaffHome({ menu, menuMissing = false, entrySection = "w
   const [area] = useUrlState("sezione", entrySection);
   const theme = menu?.theme;
 
-  const canAdmin = session.status === "ready" && session.role === "admin";
-  const canWaiter = session.status === "ready" && (session.role === "waiter" || session.role === "admin");
+  // Owner and admin: the same areas (they differ only in Personale).
+  const canAdmin = session.status === "ready" && isAdminRole(session.role);
+  const canWaiter = session.status === "ready" && isStaffRole(session.role);
   const atTill = Boolean(getDesktopBridge()) && canWaiter;
 
   if (session.status === "loading") return <StaffLoadingScreen theme={theme} />;
