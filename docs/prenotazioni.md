@@ -88,7 +88,22 @@ usato in `orders.js`.
                └──(data passata, mai avviata)──▶ no_show (automatico)
 ```
 
-`started`, `cancelled`, `no_show` sono stati terminali.
+`started`, `cancelled`, `no_show` sono stati terminali. Nella schermata
+Prenotazioni l'elenco del giorno (e il riepilogo del calendario) mostra solo
+le prenotazioni ancora da arrivare (`isBooked`): appena avviata, una
+prenotazione passa ai Tavoli e finisce, con annullate e non presentate,
+sotto **"Mostra avviate, annullate e non presentate"**.
+
+**Eliminazione (solo admin, ottobre 2026).** Un amministratore può togliere
+per sempre qualunque prenotazione (avviata, annullata, non presentata o
+inserita per errore) per tenere in ordine il calendario: **swipe verso
+sinistra** sulla riga (corto: compare "Elimina" da toccare; lungo: chiede
+subito la conferma) oppure **"Elimina prenotazione"** nella scheda delle
+prenotazioni non più da arrivare; sempre con conferma
+(`deleteReservation()`, `reservationsData.js`). Il tavolo già aperto da una
+prenotazione avviata resta com'è. Un cameriere non vede né lo swipe né il
+pulsante, e le regole lo impediscono anche lato server (§4): può creare,
+modificare, annullare e avviare, ma tutto ciò che fa resta tracciato.
 
 **Niente più "da confermare" (ottobre 2026).** Lo staff registra solo
 prenotazioni già concordate col cliente, quindi il passaggio di conferma
@@ -105,11 +120,12 @@ finché la pulizia dei 30 giorni non le cancella.
 
 ## 4. Regole di sicurezza
 
-`firestore.rules` estende alla nuova collection lo stesso confine di fiducia
-già usato per `staff/*` e `orders/*`: qualunque account autenticato può
-leggere/scrivere, la distinzione cameriere/admin resta solo lato interfaccia
-(gli account sono creati a mano dall'amministratore, non c'è
-autoregistrazione pubblica).
+`firestore.rules`: leggere, creare e modificare (annullare, avviare) le
+prenotazioni può tutto il personale (account con un ruolo in `staff/{uid}`);
+**eliminarle solo un amministratore**. Unica eccezione: le prenotazioni
+scadute (`expireAt` passato, §7) le può eliminare anche il dispositivo di un
+cameriere, perché la pulizia automatica gira su qualunque dispositivo dello
+staff. Coperto da `tests/firestore-rules.spec.js`.
 
 ---
 

@@ -32,7 +32,7 @@ async function openTable(page) {
   await page.getByRole("button", { name: /nuovo tavolo/i }).click();
   await page.getByRole("textbox", { name: "Numero tavolo" }).or(page.getByRole("spinbutton", { name: "Numero tavolo" })).fill(String(n));
   await page.getByRole("button", { name: `Apri tavolo ${n}` }).click();
-  await expect(page.getByText(`Tavolo ${n}`, { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(`Tavolo ${n}`, { exact: true }).first()).toBeVisible({ timeout: 10_000 });
   return n;
 }
 
@@ -243,4 +243,128 @@ test("l'area staff si installa come app (manifest solo lì, non nel menù pubbli
   expect(manifest.display).toBe("standalone");
   expect(manifest.start_url).toBe("/?area=staff");
   expect(manifest.icons.map((i) => i.sizes)).toEqual(expect.arrayContaining(["192x192", "512x512"]));
+});
+
+/* ------------------------------ zoom e tablet ------------------------------ */
+
+// Zoom dell'interfaccia (PhoneApp.jsx > ZoomPage, src/displayZoom.js): su
+// telefoni e tablet il browser non ha uno zoom; quello dell'app cambia la
+// larghezza della pagina (meta viewport), quindi tutto si ridispone.
+const layoutWidth = (page) => page.evaluate(() => globalThis.innerWidth);
+const savedZoom = (page) => page.evaluate(() => globalThis.localStorage.getItem("mdp.displayZoom"));
+
+test("zoom: si sceglie dalla barra in alto, si vede subito, 'Salva' lo tiene sul dispositivo anche dopo un ricaricamento", async ({ page }) => {
+  await page.goto("/?area=staff");
+  await staffLogin(page, TEST_WAITER);
+  await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+  expect(await layoutWidth(page)).toBe(393);
+
+  // Anteprima immediata; tornando indietro senza salvare si torna com'era.
+  const zoomButton = page.getByRole("banner").getByRole("button", { name: "Zoom" });
+  expect((await zoomButton.boundingBox()).height).toBeGreaterThanOrEqual(48);
+  await zoomButton.click();
+  const zoom = page.getByRole("dialog", { name: "Zoom" });
+  await expect(zoom.getByRole("button", { name: "100% · normale" })).toHaveAttribute("aria-pressed", "true");
+  await expect(zoom.getByRole("button", { name: "Zoom 100% salvato" })).toBeDisabled();
+  await zoom.getByRole("button", { name: "125%" }).click();
+  await expect.poll(() => layoutWidth(page)).toBe(314);
+  await zoom.getByRole("button", { name: "Tavoli" }).click();
+  await expect(zoom).toHaveCount(0);
+  await expect.poll(() => layoutWidth(page)).toBe(393);
+  expect(await savedZoom(page)).toBeNull();
+
+  // Salvato: resta dopo un ricaricamento (localStorage del dispositivo).
+  await zoomButton.click();
+  await zoom.getByRole("button", { name: "150%" }).click();
+  const save = zoom.getByRole("button", { name: "Salva zoom 150%" });
+  const saveBox = await save.boundingBox();
+  // "Salva" in fondo alla pagina (in pixel della pagina ingrandita: alta 851 / 1,5).
+  expect(saveBox.y + saveBox.height).toBeGreaterThan((await page.evaluate(() => globalThis.innerHeight)) * 0.85);
+  await save.click();
+  await expect(zoom).toHaveCount(0);
+  expect(await savedZoom(page)).toBe("1.5");
+  await page.reload();
+  await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+  expect(await layoutWidth(page)).toBe(262);
+
+  // A 150% tutto si ridispone: niente scorrimento laterale, comandi ancora ≥ 48px.
+  for (const name of ["Tavoli", "Prenotazioni", "Storico"]) {
+    await page.getByRole("navigation", { name: "Sezioni" }).getByRole("button", { name, exact: true }).click();
+    await expect(page.getByText(/^Caricamento/)).toHaveCount(0);
+    await expectNoSideScroll(page, `${name} al 150%`);
+  }
+  expect((await zoomButton.boundingBox()).height).toBeGreaterThanOrEqual(48);
+  expect((await page.getByRole("banner").getByRole("button", { name: "Esci" }).boundingBox()).height).toBeGreaterThanOrEqual(48);
+
+  // Di nuovo al 100%: il valore salvato sparisce.
+  await zoomButton.click();
+  await zoom.getByRole("button", { name: "100% · normale" }).click();
+  await zoom.getByRole("button", { name: "Salva zoom 100%" }).click();
+  await expect.poll(() => layoutWidth(page)).toBe(393);
+  expect(await savedZoom(page)).toBeNull();
+});
+
+test.describe("tablet da 10\"", () => {
+  // Tablet Android da 10" in verticale (800×1280 CSS px).
+  test.use({ viewport: { width: 800, height: 1280 }, deviceScaleFactor: 2 });
+
+  test("i Tavoli usano tutto lo schermo e la comanda è sempre visibile accanto ai piatti", async ({ page }) => {
+    await page.goto("/?area=staff");
+    await staffLogin(page, TEST_WAITER);
+    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+    expect((await page.getByTestId("phone-tables-grid").boundingBox()).width).toBeGreaterThan(700);
+
+    const n = await openTable(page);
+    // Nessuna pagina a schermo intero né barra in basso: la comanda è una colonna a destra.
+    const ticket = page.getByRole("region", { name: "Comanda del tavolo" });
+    await expect(ticket).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Apri la comanda del tavolo" })).toHaveCount(0);
+    const ticketBox = await ticket.boundingBox();
+    expect(ticketBox.x).toBeGreaterThan(400);
+    expect(ticketBox.y + ticketBox.height).toBeCloseTo(1280, -1);
+    await expect(ticket).toContainText(`Tavolo ${n}`);
+
+    // Un tocco sul piatto lo mette subito nella colonna; si invia da lì.
+    const dish = page.getByRole("button", { name: /^Aggiungi / }).first();
+    const dishName = (await dish.getAttribute("aria-label")).replace(/^Aggiungi (.*), € .*$/, "$1");
+    await dish.click();
+    await expect(ticket.getByRole("group", { name: "Da inviare" })).toContainText(dishName);
+    await ticket.getByRole("button", { name: "Invia comanda (1)" }).click();
+    await expect(ticket.getByRole("group", { name: "Già inviato" })).toContainText(dishName, { timeout: 10_000 });
+
+    // Il preconto si apre al posto della comanda, nella stessa colonna, e si torna indietro.
+    await ticket.getByRole("button", { name: "Preconto" }).click();
+    await expect(page.getByRole("region", { name: "Preconto" })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("region", { name: "Preconto" }).getByRole("button", { name: "Comanda" }).click();
+    await expect(ticket).toBeVisible();
+    await expectNoSideScroll(page, "comanda su tablet");
+  });
+
+  test("con lo zoom al 125% il tablet passa alla disposizione del telefono", async ({ page }) => {
+    await page.addInitScript(() => globalThis.localStorage.setItem("mdp.displayZoom", "1.25"));
+    await page.goto("/?area=staff");
+    await staffLogin(page, TEST_WAITER);
+    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+    expect(await layoutWidth(page)).toBe(640);
+    await openTable(page);
+    await expect(page.getByRole("button", { name: "Apri la comanda del tavolo" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toHaveCount(0);
+  });
+});
+
+test.describe("computer", () => {
+  test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
+
+  test("dal computer la pagina Zoom rimanda allo zoom del browser, che lì esiste già", async ({ page }) => {
+    await page.goto("/?area=staff");
+    await staffLogin(page, TEST_WAITER);
+    await expect(page.getByRole("button", { name: /nuovo tavolo/i })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("banner").getByRole("button", { name: "Zoom" }).click();
+    const zoom = page.getByRole("dialog", { name: "Zoom" });
+    await expect(zoom.getByRole("status")).toContainText("zoom del browser");
+    await expect(zoom.getByRole("group", { name: "Livello di zoom" })).toHaveCount(0);
+    await expect(zoom.getByRole("button", { name: /^Salva/ })).toHaveCount(0);
+  });
 });

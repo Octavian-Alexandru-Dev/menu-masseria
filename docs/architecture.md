@@ -65,6 +65,14 @@ draft, send + kitchen ticket, line edits, close), `orders.js`,
 `staffData.js`, `printJobs.js`/`usePrintJob.js`, `statsData.js` (see
 `CLAUDE.md`, "Telefono e cassa").
 
+Tablets use the phone app too: above 760px (`useCompactLayout`) the
+shared screens take the till's list + side panel layout, and Tavoli splits
+a table's order into dishes and an always-visible ticket column. On phones
+and tablets the staff can zoom the whole interface (`displayZoom.js`, saved
+per device in `localStorage`): it rewrites the viewport meta tag, so the
+browser lays the page out again at the new width and the layout switch
+follows; desktop browsers and the till ignore it.
+
 Printing: browsers can't reach the thermal printer, so every device writes
 a job to `printJobs` (receipt on "Stampa", kitchen ticket on "Invia
 comanda") and the till's print station (`PrintStation.jsx`, mounted only in

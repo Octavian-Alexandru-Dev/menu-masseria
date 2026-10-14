@@ -21,10 +21,14 @@ const DISCOUNTS = [10, 20, 50];
 // One of today's reservations in Tavoli: tapping the card opens it in
 // Prenotazioni (details, edit, start); "Avvia" stays as the shortcut that
 // opens the table right away. `stacked` puts "Avvia" under the details (the
-// till's narrow side column) instead of beside them (phone).
+// till's narrow side column) instead of beside them (phone). With a table
+// already assigned, its number comes first (what matters during service),
+// the name second — as on the tables (tableIdentity).
 export function ReservationCard({ t, reservation: r, onOpen, onAvvia, stacked = false }) {
   const name = r.name || "Senza nome";
   const details = `${coversLabel(r.covers)}${r.tableNumber ? ` · Tavolo ${r.tableNumber}` : ""}`;
+  const title = r.tableNumber ? `Tavolo ${r.tableNumber}` : name;
+  const subtitle = r.tableNumber ? `${name} · ${coversLabel(r.covers)}` : coversLabel(r.covers);
   return (
     <div style={{
       display: "flex", flexDirection: stacked ? "column" : "row", alignItems: stacked ? "stretch" : "center", gap: stacked ? 8 : 10,
@@ -38,9 +42,9 @@ export function ReservationCard({ t, reservation: r, onOpen, onAvvia, stacked = 
         }}>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: "block", fontSize: 17, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {name}{r.time ? ` · ${r.time}` : ""}
+            {title}{r.time ? ` · ${r.time}` : ""}
           </span>
-          <span style={{ display: "block", fontSize: 14, color: t.inkSoft, marginTop: 2 }}>{details}</span>
+          <span style={{ display: "block", fontSize: 14, color: t.inkSoft, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitle}</span>
         </span>
         <ChevronRight size={20} color={t.inkSoft} aria-hidden="true" style={{ flexShrink: 0 }} />
       </button>

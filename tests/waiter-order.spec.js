@@ -3,6 +3,13 @@ import { TEST_WAITER } from "./test-env";
 import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
 import { staffLogin } from "./helpers/staffLogin";
 import { failPrintJobsByTableLabel } from "./helpers/printJobs";
+import { PHONE } from "./helpers/phone";
+
+// Sul telefono (6"): da quando su schermi larghi (tablet) la comanda è una
+// colonna sempre visibile accanto ai piatti, la comanda a pagina intera e la
+// barra in basso esistono solo sotto i 760px. La disposizione da tablet è
+// provata in tests/phone-app.spec.js.
+test.use(PHONE);
 
 // Numero di tavolo "sentinella" molto alto e randomizzato ad ogni run, per
 // non essere mai confuso con un tavolo reale e per non collidere con un

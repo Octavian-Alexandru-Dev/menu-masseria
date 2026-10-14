@@ -58,9 +58,16 @@ service cloud.firestore {
     }
 
     // Prenotazioni tavoli, inserite manualmente da cameriere/amministrazione
-    // (vedi docs/prenotazioni.md). Stesso confine delle comande.
+    // (vedi docs/prenotazioni.md). Le crea, modifica, annulla e avvia tutto il
+    // personale; eliminarle per sempre (swipe o "Elimina", TillReservations.jsx)
+    // può solo un amministratore. Eccezione: quelle scadute (expireAt passato,
+    // 30 giorni dopo annullamento/mancata presentazione) le toglie la pulizia
+    // automatica da qualunque dispositivo dello staff
+    // (runDailyExpiredReservationsCleanup in src/reservationsData.js).
     match /reservations/{reservationId} {
-      allow read, write: if isStaff();
+      allow read, create, update: if isStaff();
+      allow delete: if isAdmin()
+        || (isStaff() && resource.data.get('expireAt', null) != null && resource.data.expireAt <= request.time);
     }
 
     // Coda di stampa dei preconti verso la stampante termica della cassa

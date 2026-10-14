@@ -94,6 +94,14 @@ export async function cancelReservation(id, by) {
   });
 }
 
+// Removes a reservation for good (swipe on its row, or "Elimina" in its
+// detail): for one already started (the table's order lives on in orders,
+// untouched), cancelled, not shown up — or entered by mistake. Without it
+// they'd stay in the calendar until the 30-day cleanup.
+export async function deleteReservation(id) {
+  return deleteDoc(reservationRef(id));
+}
+
 // "Start": reuses orders.js's openOrder() with the data already on the
 // reservation (table/covers/notes), so the waiter doesn't have to retype
 // anything, then links the newly opened order to the reservation.

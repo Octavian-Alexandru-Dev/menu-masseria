@@ -8,16 +8,23 @@
 // form offers (landing page) or typed ("Altro orario"), covers and table
 // with steppers. `initialReservation`: opens straight on that reservation
 // (tapped in Tavoli).
+//
+// The day's list shows the reservations still to come; the ones already
+// started (the guests are at their table, see Tavoli), cancelled or not
+// shown up are folded under "Mostra…", never deleted by a waiter (what was
+// booked always leaves a trace). An admin can delete any reservation for
+// good, to keep the calendar tidy: swipe its row to the left, or "Elimina"
+// in its detail (enforced by firestore.rules too).
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Plus, Check, X, Play, Pencil, Phone, Users, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Check, X, Play, Pencil, Phone, Users, CalendarDays, Trash2 } from "lucide-react";
 import {
   subscribeReservationsForRange, subscribeReservationsForDate, dateKey, coversLabel, autoFlagNoShows, isBooked,
-  createReservation, updateReservation, cancelReservation,
+  createReservation, updateReservation, cancelReservation, deleteReservation,
   runDailyExpiredReservationsCleanup,
 } from "./reservationsData";
 import { confirmAction } from "./confirmDialog";
 import { BackButton } from "./shared";
-import { FONT, STATUS, TOUCH, SIDE_PANEL_WIDTH, TillButton, Stepper, SidePanel, SectionTitle, StatusPill, useCompactLayout } from "./TillUi";
+import { FONT, STATUS, TOUCH, SIDE_PANEL_WIDTH, TillButton, Stepper, SidePanel, SectionTitle, StatusPill, SwipeAction, useCompactLayout } from "./TillUi";
 
 const MONTH_LABEL = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
 const WEEKDAY_LABEL = new Intl.DateTimeFormat("it-IT", { weekday: "short" });
@@ -36,8 +43,9 @@ const STATUS_INFO = {
   no_show: { label: "Non presentata", color: STATUS.idle },
 };
 const statusInfo = (r) => (isBooked(r) ? BOOKED : STATUS_INFO[r.status] || BOOKED);
-// Still counted for the day: booked, or already at the table.
-const isActive = (r) => isBooked(r) || r.status === "started";
+// Still to come, counted for the day: the ones already at their table are
+// in Tavoli now.
+const isActive = isBooked;
 
 function parseKey(key) {
   return new Date(`${key}T00:00:00`);
@@ -220,7 +228,7 @@ function ReservationForm({ t, initial, defaultDate, busy, onCancel, onSave, shee
 
 /* --------------------------------- detail --------------------------------- */
 
-function ReservationDetail({ t, r, busy, onCancelReservation, onEdit, onAvvia, onGoToTable, sheet = false, onClose }) {
+function ReservationDetail({ t, r, busy, onCancelReservation, onDelete, onEdit, onAvvia, onGoToTable, sheet = false, onClose }) {
   const info = statusInfo(r);
   const isToday = r.date === dateKey();
   const row = (lbl, val) => val ? (
@@ -239,8 +247,15 @@ function ReservationDetail({ t, r, busy, onCancelReservation, onEdit, onAvvia, o
         </div>
       </>
     );
-  } else if (r.status === "started" && r.orderId) {
-    footer = <TillButton t={t} variant="primary" size={60} icon={Play} onClick={() => onGoToTable(r.orderId)}>Vai al tavolo</TillButton>;
+  } else {
+    footer = (
+      <>
+        {r.status === "started" && r.orderId && (
+          <TillButton t={t} variant="primary" size={60} icon={Play} onClick={() => onGoToTable(r.orderId)}>Vai al tavolo</TillButton>
+        )}
+        {onDelete && <TillButton t={t} variant="danger" icon={Trash2} disabled={busy} onClick={onDelete}>Elimina prenotazione</TillButton>}
+      </>
+    );
   }
   return (
     <SidePanel
@@ -310,6 +325,7 @@ export default function TillReservations({ t, session, initialReservation = null
   const dayCovers = active.reduce((s, r) => s + (r.covers?.adults || 0) + (r.covers?.children || 0), 0);
   const selected = panel.mode === "detail" ? dayList.find((r) => r.id === panel.id) : null;
   const by = { uid: session.user.uid, name: session.name };
+  const canDelete = session.role === "admin";
 
   const selectDate = (key) => {
     setSelectedDate(key);
@@ -341,10 +357,26 @@ export default function TillReservations({ t, session, initialReservation = null
     }
   };
 
+  const remove = async (r) => {
+    const started = r.status === "started";
+    if (await confirmAction({
+      title: `Eliminare la prenotazione di ${r.name || "senza nome"}?`,
+      message: started
+        ? "Sparisce dal calendario. Il tavolo già aperto resta com'è, con la sua comanda."
+        : "Sparisce dal calendario e non si può recuperare.",
+      confirmLabel: "Elimina", cancelLabel: "Indietro", danger: true,
+    })) {
+      run(async () => {
+        await deleteReservation(r.id);
+        if (panel.mode === "detail" && panel.id === r.id) setPanel({ mode: "none" });
+      });
+    }
+  };
+
   const rowFor = (r) => {
     const info = statusInfo(r);
     const isSel = panel.mode === "detail" && panel.id === r.id;
-    return (
+    const row = (
       <button key={r.id} type="button" onClick={() => setPanel({ mode: "detail", id: r.id })} aria-pressed={isSel} className="mdp-btn"
         aria-label={`${r.name || "Senza nome"}${r.time ? `, ore ${r.time}` : ""}, ${coversLabel(r.covers)}, ${info.label}`}
         style={{
@@ -364,6 +396,12 @@ export default function TillReservations({ t, session, initialReservation = null
         <StatusPill color={info.color}>{info.label}</StatusPill>
       </button>
     );
+    if (!canDelete) return row;
+    return (
+      <SwipeAction key={r.id} actionLabel={`Elimina la prenotazione di ${r.name || "senza nome"}`} actionText="Elimina" icon={Trash2} onAction={() => remove(r)}>
+        {row}
+      </SwipeAction>
+    );
   };
 
   let side;
@@ -373,6 +411,7 @@ export default function TillReservations({ t, session, initialReservation = null
   } else if (selected) {
     side = <ReservationDetail t={t} r={selected} busy={busy} sheet={compact} onClose={() => setPanel({ mode: "none" })}
       onCancelReservation={() => cancel(selected)}
+      onDelete={canDelete ? () => remove(selected) : null}
       onEdit={() => setPanel({ mode: "edit", r: selected })}
       onAvvia={() => onAvvia(selected)}
       onGoToTable={onGoToTable} />;
@@ -411,7 +450,7 @@ export default function TillReservations({ t, session, initialReservation = null
       {others.length > 0 && (
         <div style={{ marginTop: 18 }}>
           <TillButton t={t} variant="ghost" onClick={() => setShowOthers((v) => !v)} aria-expanded={showOthers} style={{ paddingLeft: 0, textAlign: "left" }}>
-            {showOthers ? "Nascondi" : "Mostra"} annullate e non presentate ({others.length})
+            {showOthers ? "Nascondi" : "Mostra"} avviate, annullate e non presentate ({others.length})
           </TillButton>
           {showOthers && <div style={{ display: "grid", gap: 10, marginTop: 8, opacity: 0.8 }}>{others.map(rowFor)}</div>}
         </div>

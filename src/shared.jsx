@@ -213,14 +213,11 @@ export function currentShiftStart() {
 }
 
 // A table/order's identity wherever it appears in the UI (table list,
-// detail, kitchen, history): if a name was given, that's the primary
-// identity and the number becomes secondary; otherwise the number stays
-// the only identity.
+// detail, history, printed receipts): the number first — during service
+// it's what staff look for — and the name, when one was given (a
+// reservation's, "Compleanno"…), second and smaller.
 export function tableIdentity(order) {
-  if (order.tableName) {
-    return { primary: order.tableName, secondary: `Tavolo ${order.tableNumber}` };
-  }
-  return { primary: `Tavolo ${order.tableNumber}`, secondary: null };
+  return { primary: `Tavolo ${order.tableNumber}`, secondary: order.tableName || null };
 }
 
 /* ============================== LANGUAGES (customer side) ============================== */

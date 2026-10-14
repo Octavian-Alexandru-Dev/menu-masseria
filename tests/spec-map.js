@@ -65,6 +65,7 @@ export const SPECS_BY_FILE = {
   "src/UpdateBanner.jsx": ["till-client", "desktop-client"],
   "desktop-client/": ["desktop-client", "till-client"],
   "public/staff.webmanifest": ["phone-app"],
+  "src/displayZoom.js": ["phone-app"],
 };
 
 // Più ogni file Markdown (*.md), ovunque.

@@ -3,6 +3,8 @@ import { TEST_WAITER, TEST_ADMIN } from "./test-env";
 import { deleteTestOrderByTableNumber, deleteTestReservationByName } from "./firestore-cleanup";
 import { installDesktopBridgeMock, printedTexts } from "./helpers/desktopBridge";
 import { deletePrintJobsByTableLabel } from "./helpers/printJobs";
+import { swipeLeft } from "./helpers/swipe";
+import { findReservationByName } from "./helpers/reservations";
 import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix, findStaffByEmail, removeStaffByEmailRemotely } from "./helpers/menuDoc";
 
 // Sala della cassa (TillSala.jsx): l'interfaccia a tutto schermo in stile
@@ -318,9 +320,9 @@ test("prenotazioni della cassa: si crea con orari a tocco, è subito valida e si
   const dialog = page.getByRole("dialog", { name: `Avvia ${name}` });
   for (const digit of String(tableNumber)) await dialog.getByRole("button", { name: `Cifra ${digit}` }).click();
   await dialog.getByRole("button", { name: "Apri comanda" }).click();
-  // Il tavolo prende il nome della prenotazione; il numero è nell'intestazione.
-  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — ${name}`, { timeout: 10_000 });
-  await expect(page.getByRole("region", { name: "Menu" })).toContainText(`Tavolo ${tableNumber}`);
+  // Il tavolo prende il nome della prenotazione, in secondo piano: prima il numero.
+  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — Tavolo ${tableNumber}`, { timeout: 10_000 });
+  await expect(page.getByRole("region", { name: "Menu" })).toContainText(`Tavolo ${tableNumber} · ${name}`);
 });
 
 test("Tavoli della cassa: toccando una prenotazione di oggi si apre la sua scheda in Prenotazioni, da cui si avvia; 'Avvia' resta il tasto rapido", async ({ page }) => {
@@ -356,7 +358,7 @@ test("Tavoli della cassa: toccando una prenotazione di oggi si apre la sua sched
   let dialog = page.getByRole("dialog", { name: `Avvia ${name}` });
   for (const digit of String(tableNumber)) await dialog.getByRole("button", { name: `Cifra ${digit}` }).click();
   await dialog.getByRole("button", { name: "Apri comanda" }).click();
-  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — ${name}`, { timeout: 10_000 });
+  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — Tavolo ${tableNumber}`, { timeout: 10_000 });
 
   // Il tasto rapido "Avvia" sulla scheda nei Tavoli funziona ancora, senza passare dal dettaglio.
   await sections.getByRole("button", { name: /^Tavoli( \d+)?$/ }).click();
@@ -367,7 +369,96 @@ test("Tavoli della cassa: toccando una prenotazione di oggi si apre la sua sched
   dialog = page.getByRole("dialog", { name: `Avvia ${quick}` });
   for (const digit of String(quickTable)) await dialog.getByRole("button", { name: `Cifra ${digit}` }).click();
   await dialog.getByRole("button", { name: "Apri comanda" }).click();
-  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — ${quick}`, { timeout: 10_000 });
+  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — Tavolo ${quickTable}`, { timeout: 10_000 });
+});
+
+// Alla cassa, come `account`: crea una prenotazione di oggi e la avvia sul
+// tavolo `tableNumber`; ritorna in Prenotazioni.
+async function bookAndStartAtTill(page, name, tableNumber) {
+  const sections = page.getByRole("navigation", { name: "Sezioni della sala" });
+  await sections.getByRole("button", { name: /^prenotazioni$/i }).click();
+  await page.getByRole("region", { name: "Prenotazioni del giorno" }).getByRole("button", { name: "Nuova" }).click();
+  const form = page.getByRole("region", { name: "Nuova prenotazione" });
+  await form.getByRole("button", { name: "20:45" }).click();
+  await form.getByRole("textbox", { name: "Nome *" }).fill(name);
+  await form.getByRole("button", { name: "Salva prenotazione" }).click();
+  const detail = page.getByRole("region", { name: "Dettaglio prenotazione" });
+  await expect(detail).toContainText(name, { timeout: 10_000 });
+  await detail.getByRole("button", { name: "Avvia (apri il tavolo)" }).click();
+  const dialog = page.getByRole("dialog", { name: `Avvia ${name}` });
+  for (const digit of String(tableNumber)) await dialog.getByRole("button", { name: `Cifra ${digit}` }).click();
+  await dialog.getByRole("button", { name: "Apri comanda" }).click();
+  await expect(page.getByRole("region", { name: "Comanda del tavolo" })).toContainText(`Comanda — Tavolo ${tableNumber}`, { timeout: 10_000 });
+  await sections.getByRole("button", { name: /^prenotazioni$/i }).click();
+}
+
+test("prenotazioni della cassa: un'avviata lascia l'elenco del giorno e il cameriere non la può eliminare", async ({ page }) => {
+  await openTill(page);
+  const name = `Avviata Cassa ${Date.now()}`;
+  usedReservations.push(name);
+  const tableNumber = freshTableNumber();
+  usedTables.push(tableNumber);
+  await bookAndStartAtTill(page, name, tableNumber);
+
+  const day = page.getByRole("region", { name: "Prenotazioni del giorno" });
+  const row = day.getByRole("button", { name: new RegExp(`^${name}, .*Al tavolo`) });
+  await expect(row).toHaveCount(0);
+  await day.getByRole("button", { name: /mostra avviate, annullate e non presentate/i }).click();
+  await row.click();
+  const detail = page.getByRole("region", { name: "Dettaglio prenotazione" });
+  await expect(detail).toContainText("Al tavolo");
+  await expect(detail.getByRole("button", { name: "Vai al tavolo" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Elimina prenotazione" })).toHaveCount(0);
+  // Nemmeno con lo swipe.
+  await swipeLeft(page, row, 0.9);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: `Elimina la prenotazione di ${name}` })).toHaveCount(0);
+  await expect.poll(() => findReservationByName(name)).not.toBeNull();
+});
+
+test("prenotazioni della cassa: l'admin elimina un'avviata dalla scheda, con conferma, e il tavolo resta aperto", async ({ page }) => {
+  await openTill(page, { savedLogin: TEST_ADMIN });
+  const name = `Elimina Cassa ${Date.now()}`;
+  usedReservations.push(name);
+  const tableNumber = freshTableNumber();
+  usedTables.push(tableNumber);
+  await bookAndStartAtTill(page, name, tableNumber);
+
+  const day = page.getByRole("region", { name: "Prenotazioni del giorno" });
+  await day.getByRole("button", { name: /mostra avviate, annullate e non presentate/i }).click();
+  const row = day.getByRole("button", { name: new RegExp(`^${name}, `) });
+  await row.click();
+  const detail = page.getByRole("region", { name: "Dettaglio prenotazione" });
+  await detail.getByRole("button", { name: "Elimina prenotazione" }).click();
+  const confirm = page.getByRole("alertdialog", { name: `Eliminare la prenotazione di ${name}?` });
+  await expect(confirm).toContainText("Il tavolo già aperto resta");
+  await confirm.getByRole("button", { name: "Elimina" }).click();
+  await expect(row).toHaveCount(0, { timeout: 10_000 });
+  await expect.poll(() => findReservationByName(name)).toBeNull();
+
+  // Il tavolo resta, col numero in primo piano e il nome in secondo.
+  await page.getByRole("navigation", { name: "Sezioni della sala" }).getByRole("button", { name: /^Tavoli( \d+)?$/ }).click();
+  await expect(page.getByRole("button", { name: `Tavolo ${tableNumber} (${name})`, exact: false })).toBeVisible();
+});
+
+test("prenotazioni della cassa: l'admin elimina con uno swipe verso sinistra (anche col mouse), dopo conferma", async ({ page }) => {
+  await openTill(page, { savedLogin: TEST_ADMIN });
+  const name = `Swipe Cassa ${Date.now()}`;
+  usedReservations.push(name);
+  await page.getByRole("navigation", { name: "Sezioni della sala" }).getByRole("button", { name: /^prenotazioni$/i }).click();
+  const day = page.getByRole("region", { name: "Prenotazioni del giorno" });
+  await day.getByRole("button", { name: "Nuova" }).click();
+  const form = page.getByRole("region", { name: "Nuova prenotazione" });
+  await form.getByRole("button", { name: "22:00" }).click();
+  await form.getByRole("textbox", { name: "Nome *" }).fill(name);
+  await form.getByRole("button", { name: "Salva prenotazione" }).click();
+  const row = day.getByRole("button", { name: new RegExp(`^${name}, `) });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+
+  await swipeLeft(page, row, 0.9);
+  await page.getByRole("alertdialog", { name: `Eliminare la prenotazione di ${name}?` }).getByRole("button", { name: "Elimina" }).click();
+  await expect(row).toHaveCount(0, { timeout: 10_000 });
+  await expect.poll(() => findReservationByName(name)).toBeNull();
 });
 
 test("il calendario della cassa riassume prenotazioni e coperti del giorno", async ({ page }) => {

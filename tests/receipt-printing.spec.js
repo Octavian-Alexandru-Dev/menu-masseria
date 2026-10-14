@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { TEST_WAITER, TEST_ADMIN } from "./test-env";
 import { staffLogin } from "./helpers/staffLogin";
+import { PHONE } from "./helpers/phone";
 import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
 import { installDesktopBridgeMock, printedTexts } from "./helpers/desktopBridge";
 import { seedPrintJob, getPrintJob, deletePrintJobsByTableLabel, describePrintJobsByTableLabel } from "./helpers/printJobs";
@@ -16,6 +17,11 @@ import { seedPrintJob, getPrintJob, deletePrintJobsByTableLabel, describePrintJo
 // vera), quindi due test di questo file in parallelo si ruberebbero le
 // stampe a vicenda. Nessun altro file di test preme "Stampa" nel preconto.
 test.describe.configure({ mode: "serial" });
+
+// `page` è il telefono del cameriere (6"): sugli schermi larghi la comanda è
+// una colonna accanto ai piatti (tablet, vedi phone-app.spec.js), qui si
+// prova il flusso del telefono. La cassa è un contesto a parte (openTill).
+test.use(PHONE);
 
 const SENT_LINE = "Bruschetta";
 

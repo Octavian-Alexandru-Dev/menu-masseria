@@ -7,7 +7,8 @@
 // The tabs sit at the bottom, within reach of the thumb, as in native phone
 // apps (Material navigation bar: 3–5 destinations, icon + visible label).
 //
-//  - top bar: the section's name, who is signed in and the shift, "Esci";
+//  - top bar: the section's name, who is signed in and the shift, "Zoom"
+//    (size of the whole interface on this device, displayZoom.js) and "Esci";
 //  - bottom bar: the sections, with the number of open tables as a badge
 //    on Tavoli;
 //  - task screens (a table's order, a new table, a dish being edited, the
@@ -17,11 +18,12 @@
 // The section is kept in the URL (?sezione=…, useUrlState) so the browser's
 // Back button and a reload stay where they were.
 import React, { useState, useEffect, Suspense, lazy } from "react";
-import { LayoutGrid, CalendarDays, History, BookOpen, BarChart3, LogOut } from "lucide-react";
-import { THEMES, GlobalStyle, currentShiftLabel, useUrlState, scrollBehavior } from "./shared";
+import { LayoutGrid, CalendarDays, History, BookOpen, BarChart3, LogOut, ZoomIn } from "lucide-react";
+import { THEMES, GlobalStyle, currentShiftLabel, useUrlState, scrollBehavior, BackButton } from "./shared";
 import { staffLogout, logoutHiddenAtTill } from "./staff-shared";
 import { subscribeOpenOrders } from "./orders";
-import { FONT, TOUCH, useCompactLayout } from "./TillUi";
+import { ZOOM_LEVELS, zoomLabel, getSavedZoom, saveZoom, applyZoom, zoomSupported } from "./displayZoom";
+import { FONT, TOUCH, TillButton, SidePanel, Segmented, SectionTitle, useCompactLayout } from "./TillUi";
 
 const WaiterPanel = lazy(() => import("./Waiter").then((m) => ({ default: m.WaiterPanel })));
 const TillReservations = lazy(() => import("./TillReservations"));
@@ -52,30 +54,92 @@ function useStaffAppMeta(t) {
   }, [t.card]);
 }
 
-function TopBar({ t, title, session }) {
+// A top-bar action: icon above a short label, like the bottom bar's (it
+// keeps its label even at the largest zoom, where the bar is narrowest).
+function TopBarButton({ t, icon: Icon, label, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="mdp-btn" style={{
+      minWidth: 56, minHeight: TOUCH, padding: "2px 6px", borderRadius: 12, border: "none", background: "none",
+      color: t.inkSoft, fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: "pointer", flexShrink: 0,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+    }}>
+      <Icon size={22} /> {label}
+    </button>
+  );
+}
+
+function TopBar({ t, title, session, onZoom }) {
   return (
     <header style={{
       position: "sticky", top: 0, zIndex: 40, background: t.card, borderBottom: `1px solid ${t.line}`,
-      padding: "env(safe-area-inset-top) 12px 0 16px", fontFamily: FONT, color: t.ink,
+      padding: "env(safe-area-inset-top) 8px 0 16px", fontFamily: FONT, color: t.ink,
     }}>
-      <div style={{ height: TOP_BAR_HEIGHT, display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ height: TOP_BAR_HEIGHT, display: "flex", alignItems: "center", gap: 4 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, lineHeight: 1.15, fontFamily: FONT }}>{title}</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, lineHeight: 1.15, fontFamily: FONT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</h1>
           <div style={{ fontSize: 13, color: t.inkSoft, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {session.name} · turno di {currentShiftLabel()}
           </div>
         </div>
-        {!logoutHiddenAtTill() && (
-          <button type="button" onClick={staffLogout} className="mdp-btn" style={{
-            minHeight: TOUCH, padding: "0 12px", borderRadius: 12, border: "none", background: "none",
-            color: t.inkSoft, fontSize: 15, fontWeight: 600, fontFamily: FONT, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6,
-          }}>
-            <LogOut size={20} /> Esci
-          </button>
-        )}
+        <TopBarButton t={t} icon={ZoomIn} label="Zoom" onClick={onZoom} />
+        {!logoutHiddenAtTill() && <TopBarButton t={t} icon={LogOut} label="Esci" onClick={staffLogout} />}
       </div>
     </header>
+  );
+}
+
+// The size of the whole interface on this device (displayZoom.js), as a
+// full-screen page. A level applies at once, as a preview — the page itself
+// is redrawn at that size, so the effect is seen before deciding; "Salva"
+// keeps it on this device, going back without saving restores the previous
+// one. On a computer the browser has its own zoom: the page says so.
+function ZoomPage({ t, backLabel, onClose }) {
+  const supported = zoomSupported();
+  const [saved] = useState(getSavedZoom);
+  const [value, setValue] = useState(saved);
+  const choose = (zoom) => { setValue(zoom); applyZoom(zoom); };
+  const cancel = () => { applyZoom(saved); onClose(); };
+  const save = () => { saveZoom(value); onClose(); };
+  return (
+    <SidePanel
+      t={t}
+      sheet
+      label="Zoom"
+      header={(
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <BackButton t={t} onClick={cancel} label={backLabel} />
+          <div style={{ fontSize: 21, fontWeight: 700, minWidth: 0 }}>Zoom</div>
+        </div>
+      )}
+      footer={supported && (
+        <TillButton t={t} variant="primary" size={60} disabled={value === saved} onClick={save}>
+          {value === saved ? `Zoom ${zoomLabel(saved)} salvato` : `Salva zoom ${zoomLabel(value)}`}
+        </TillButton>
+      )}
+    >
+      <div style={{ maxWidth: 560, margin: "0 auto", display: "grid", gap: 16, paddingTop: 4, fontSize: 16, lineHeight: 1.45 }}>
+        {supported ? (
+          <>
+            <p style={{ margin: 0 }}>
+              Ingrandisci o rimpicciolisci testi e pulsanti di tutta l'app, solo su questo dispositivo.
+              L'anteprima è immediata: premi «Salva» per tenerla anche le prossime volte.
+            </p>
+            <SectionTitle t={t}>Livello di zoom</SectionTitle>
+            <Segmented t={t} label="Livello di zoom" value={value} onChange={choose}
+              options={ZOOM_LEVELS.map((zoom) => ({ value: zoom, label: zoom === 1 ? "100% · normale" : zoomLabel(zoom) }))} />
+            <p style={{ margin: 0, fontSize: 14, color: t.inkSoft }}>
+              Più grande è più facile da leggere; più piccolo mostra più cose insieme. Su un tablet, ingrandendo
+              si passa alla disposizione del telefono (una colonna).
+            </p>
+          </>
+        ) : (
+          <p role="status" style={{ margin: 0 }}>
+            Su un computer usa lo zoom del browser: <b>Ctrl</b> e <b>+</b> o <b>−</b> (<b>⌘</b> su Mac).
+            Questa impostazione serve su telefoni e tablet, dove il browser non ha uno zoom.
+          </p>
+        )}
+      </div>
+    </SidePanel>
   );
 }
 
@@ -130,6 +194,7 @@ export default function PhoneApp({ menu, session, admin = null, initialSection =
   // The other way: a reservation of today tapped in Tavoli, opened in Prenotazioni.
   const [reservationToOpen, setReservationToOpen] = useState(null);
   const [openTables, setOpenTables] = useState(0);
+  const [zoomOpen, setZoomOpen] = useState(false);
   const compact = useCompactLayout();
   useStaffAppMeta(t);
 
@@ -194,11 +259,12 @@ export default function PhoneApp({ menu, session, admin = null, initialSection =
       "--mdp-bottom-nav": immersive ? "0px" : `calc(${BOTTOM_NAV_HEIGHT + 1}px + env(safe-area-inset-bottom))`,
     }}>
       <GlobalStyle t={t} />
-      {!immersive && <TopBar t={t} title={current.title} session={session} />}
+      {!immersive && <TopBar t={t} title={current.title} session={session} onZoom={() => setZoomOpen(true)} />}
       <main style={{ paddingBottom: "var(--mdp-bottom-nav)" }}>
         <Suspense fallback={loading}>{content}</Suspense>
       </main>
       {!immersive && <BottomNav t={t} sections={sections} current={current.key} onChoose={choose} />}
+      {zoomOpen && <ZoomPage t={t} backLabel={current.title} onClose={() => setZoomOpen(false)} />}
     </div>
   );
 }

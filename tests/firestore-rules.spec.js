@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { initializeApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, deleteDoc, collection, getDocs, increment } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator, doc, getDoc, setDoc, deleteDoc, collection, getDocs, increment, Timestamp } from "firebase/firestore";
 import { TEST_ADMIN, TEST_WAITER, TEST_KITCHEN, TEST_NO_ROLE } from "./test-env";
 
 // Regole di firestore.rules sull'emulatore, senza browser. Da quando gli
@@ -72,6 +72,23 @@ test("un cameriere lavora su comande e prenotazioni e vede il personale, ma non 
   expect((await getDocs(collection(db, "staff"))).size).toBeGreaterThan(0);
   await denied(setDoc(doc(db, "staff", uid), { name: "Cameriere di test", role: "admin" }));
   await denied(setDoc(doc(db, "staff", `rules-waiter-${Date.now()}`), { name: "Amico", role: "waiter" }));
+});
+
+test("prenotazioni: le elimina per sempre solo un amministratore; quelle scadute anche la pulizia automatica di un cameriere", async () => {
+  const waiter = await as(TEST_WAITER);
+  const admin = await as(TEST_ADMIN);
+  const base = { date: "2026-01-01", name: `Regole ${Date.now()}`, status: "started" };
+  const ref = doc(waiter.db, "reservations", `rules-res-${Date.now()}`);
+  await setDoc(ref, base);
+  await denied(deleteDoc(ref));
+  await deleteDoc(doc(admin.db, "reservations", ref.id));
+  expect((await getDoc(ref)).exists()).toBe(false);
+
+  // Scaduta (expireAt nel passato): la pulizia giornaliera gira anche sul telefono di un cameriere.
+  const expired = doc(waiter.db, "reservations", `rules-res-expired-${Date.now()}`);
+  await setDoc(expired, { ...base, status: "cancelled", expireAt: Timestamp.fromMillis(Date.now() - 60_000) });
+  await deleteDoc(expired);
+  expect((await getDoc(expired)).exists()).toBe(false);
 });
 
 test("un amministratore assegna e toglie ruoli", async () => {

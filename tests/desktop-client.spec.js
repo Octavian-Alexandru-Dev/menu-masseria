@@ -11,6 +11,7 @@ import { staffLogin } from "./helpers/staffLogin";
 import { deleteTestOrderByTableNumber } from "./firestore-cleanup";
 import { deletePrintJobsByTableLabel } from "./helpers/printJobs";
 import { APP_URL } from "./helpers/appUrl";
+import { PHONE } from "./helpers/phone";
 
 // Smoke test del vero client Windows della cassa (desktop-client/, Electron):
 // lo avvia puntato sul sito locale (emulatore) e su una finta stampante TCP
@@ -72,6 +73,10 @@ test.afterAll(async () => {
   await deleteTestOrderByTableNumber(tableNumber);
   await deletePrintJobsByTableLabel(`Tavolo ${tableNumber}`);
 });
+
+// `page` è il telefono del cameriere (6"): sugli schermi larghi la comanda è
+// una colonna accanto ai piatti (tablet), qui serve il flusso del telefono.
+test.use(PHONE);
 
 test("il client carica la web app, espone il bridge e stampa un preconto inviato da un telefono", async ({ page }) => {
   const till = await app.firstWindow();

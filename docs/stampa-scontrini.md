@@ -463,7 +463,7 @@ l'uso a una mano su uno schermo da 6":
   stanno nella **barra in basso** (Tavoli · Prenotazioni · Storico e, per
   gli admin, Menù · Statistiche), con icona ed etichetta sempre visibili; i
   tavoli aperti sono il badge su Tavoli. In alto: nome della sezione, chi è
-  collegato, il turno ed "Esci". La sezione resta nell'URL (`?sezione=…`):
+  collegato, il turno, **Zoom** ed "Esci". La sezione resta nell'URL (`?sezione=…`):
   il tasto Indietro e un ricaricamento restano lì.
 - **Tavoli:** riquadri a due colonne (numero, nome, coperti, tempo, totale,
   stato scritto su colore fisso come alla cassa); **Nuovo tavolo** è il
@@ -516,6 +516,28 @@ l'uso a una mano su uno schermo da 6":
 - **Accesso e messaggi** (`staff-shared.jsx`): la schermata di accesso,
   "Rientra come …" e i messaggi (account senza ruolo, ecc.) usano gli
   stessi pezzi e lo stesso aspetto dell'app.
+- **Zoom** (solo telefono e tablet, `src/displayZoom.js`): dalla barra in
+  alto, pagina intera con i livelli 80–150%. L'anteprima è immediata (la
+  pagina si ridispone davvero: il livello cambia la larghezza del meta
+  viewport, quindi anche la disposizione telefono/tablet di
+  `useCompactLayout`); **Salva** lo tiene nel `localStorage` del dispositivo,
+  tornando indietro senza salvare si torna al livello di prima. Su un
+  computer la pagina rimanda allo zoom del browser (Ctrl/⌘ + e −), che lì
+  esiste già. **Non c'è alla cassa**: il client Windows ignora il meta
+  viewport e lo schermo della cassa è fisso.
+- **Tablet** (oltre 760px di larghezza, es. 10" in verticale; un 7" in
+  verticale usa la disposizione del telefono): i Tavoli usano tutta la
+  larghezza (più colonne di tavoli, prenotazioni di oggi e chiusi nel
+  turno affiancati); la comanda di un tavolo è divisa come alla cassa —
+  piatti a sinistra, **comanda sempre visibile in una colonna a destra**
+  (Invia, Preconto, Chiudi tavolo), dove si aprono anche la modifica riga e
+  il preconto; niente barra in basso. Prenotazioni, Storico, Menù e
+  Statistiche avevano già la disposizione della cassa.
+- **Numero prima del nome:** ovunque (tavoli, comanda, Storico, preconto
+  stampato) il tavolo è "Tavolo N" in grande e il nome (della prenotazione o
+  scelto all'apertura) piccolo, in secondo piano (`tableIdentity`). Anche la
+  scheda di una prenotazione di oggi nei Tavoli, se ha già il tavolo, mostra
+  prima il numero.
 - **Installabile:** nell'area staff (solo lì, non nel menù pubblico) c'è il
   manifest `public/staff.webmanifest`: da Chrome/Safari "Aggiungi a
   schermata Home" la apre a tutto schermo come un'app.
@@ -610,6 +632,12 @@ campi (niente zoom automatico su iOS); nessuno scorrimento laterale a
 | Cassa: Storico con dettaglio e ristampa preconto | `tests/till-sala.spec.js` |
 | Cassa: Prenotazioni — nuova con orari a tocco e un solo "Salva prenotazione" (subito valida, niente "da confermare"), avvio con tastierino che apre il tavolo; calendario con prenotazioni e coperti del giorno | `tests/till-sala.spec.js` |
 | Cassa: Tavoli — toccando una prenotazione di oggi si apre la sua scheda in Prenotazioni (giorno e riga selezionati) e da lì si avvia; il tasto rapido "Avvia" sulla scheda apre subito il tavolo | `tests/till-sala.spec.js` |
+| Cassa: Prenotazioni — un'avviata lascia l'elenco del giorno e si ritrova tra "avviate, annullate e non presentate"; il cameriere non la elimina (né pulsante né swipe); l'admin la elimina dalla scheda con conferma e il tavolo resta aperto ("Tavolo N (nome)"); swipe lungo col mouse → conferma → eliminata dal server | `tests/till-sala.spec.js` |
+| Prenotazioni (telefono): avviata fuori dall'elenco del giorno e tra le avviate, cameriere senza "Elimina" né swipe; admin elimina un'annullata dalla scheda (≥ 48px, "Indietro" la lascia, sparisce anche dopo il ricaricamento); swipe corto scopre "Elimina" senza aprire la scheda, lungo chiede subito conferma | `tests/reservations.spec.js` |
+| Regole Firestore: le prenotazioni le elimina solo un admin; quelle scadute anche un cameriere (pulizia automatica) | `tests/firestore-rules.spec.js` |
+| Numero prima del nome: scheda di una prenotazione di oggi con tavolo assegnato ("Tavolo N · ora", nome sotto), intestazione della comanda "Tavolo N · nome", riquadro del tavolo "Tavolo N (nome)"; alla cassa "Comanda — Tavolo N" | `tests/reservations.spec.js`, `tests/till-sala.spec.js` |
+| Zoom (telefono): dalla barra in alto (≥ 48px), anteprima immediata, "Indietro" senza salvare la annulla, "Salva" in fondo la tiene dopo il ricaricamento (`localStorage`), al 150% nessuno scorrimento laterale e comandi ≥ 48px, ritorno al 100%; dal computer rimanda allo zoom del browser | `tests/phone-app.spec.js` |
+| Tablet 10" (800×1280): tavoli a tutta larghezza; comanda in una colonna sempre visibile accanto ai piatti (nessuna pagina intera né barra in basso), aggiunta e invio da lì, preconto nella stessa colonna e ritorno; con lo zoom al 125% passa alla disposizione del telefono | `tests/phone-app.spec.js` |
 | Comanda per la cucina: solo piatti "In comanda", ordine del menù, piatti tolti dal menù stampati, AGGIUNTA solo se c'erano già piatti per la cucina, niente da stampare con sole bevande | `tests/escpos.spec.js` |
 | Comanda stampata: tavolo a dimensione tripla, piatti a doppia (≤ 21 colonne), note e AGGIUNTA in negativo, grassetto, niente prezzi/logo, taglio subito | `tests/escpos.spec.js` |
 | Piatto nuovo: "In comanda" ereditato dalla categoria | `tests/escpos.spec.js`, `tests/till-sala.spec.js` |

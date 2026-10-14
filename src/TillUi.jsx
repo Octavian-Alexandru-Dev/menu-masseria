@@ -335,3 +335,88 @@ export function DishThumb({ t, src, size = 52 }) {
     }} />
   );
 }
+
+// A list row that slides to the left under the finger, as in phone apps'
+// lists (Mail, Gmail…), revealing one action behind it on the right (e.g.
+// "Elimina"): a short swipe leaves the action showing (tap it), a long one
+// runs it straight away. The action must also exist somewhere visible (the
+// item's detail page): a swipe can't be seen and isn't reachable without a
+// finger or a mouse. The action itself asks for confirmation (confirmAction)
+// when it can't be undone. Vertical scrolling stays the browser's
+// (touch-action: pan-y); a swipe never counts as a tap on the row.
+const SWIPE_ACTION_WIDTH = 104;
+
+export function SwipeAction({ actionLabel, actionText, icon: Icon, color = STATUS.danger, onAction, radius = 14, children }) {
+  const [offset, setOffsetState] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  // The latest offset for the pointer handlers (events can come faster than renders).
+  const offsetRef = React.useRef(0);
+  const setOffset = (value) => { offsetRef.current = value; setOffsetState(value); };
+  const rowRef = React.useRef(null);
+  const gesture = React.useRef(null); // { x, y, base, id, swiping }
+  const swiped = React.useRef(false);
+  const open = offset !== 0 && !dragging;
+
+  const run = () => { setOffset(0); onAction(); };
+  const onPointerDown = (e) => {
+    if (e.button !== 0) return;
+    gesture.current = { x: e.clientX, y: e.clientY, base: offsetRef.current, id: e.pointerId, swiping: false };
+    swiped.current = false;
+  };
+  const onPointerMove = (e) => {
+    const g = gesture.current;
+    if (!g || g.id !== e.pointerId) return;
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+    if (!g.swiping) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      if (Math.abs(dy) > Math.abs(dx)) { gesture.current = null; return; } // a vertical scroll
+      g.swiping = true;
+      swiped.current = true;
+      setDragging(true);
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+    const width = rowRef.current?.offsetWidth || 400;
+    setOffset(Math.min(0, Math.max(-width, g.base + dx)));
+  };
+  const onPointerEnd = () => {
+    const g = gesture.current;
+    gesture.current = null;
+    if (!g?.swiping) return;
+    setDragging(false);
+    const width = rowRef.current?.offsetWidth || 400;
+    const end = offsetRef.current;
+    if (end < -width * 0.55) run();
+    else setOffset(end < -SWIPE_ACTION_WIDTH / 2 ? -SWIPE_ACTION_WIDTH : 0);
+  };
+  // The click that ends a swipe (or a tap on a row left open) only closes it.
+  const onClickCapture = (e) => {
+    const endsSwipe = swiped.current;
+    swiped.current = false;
+    if (endsSwipe || (open && !e.target.closest("[data-swipe-action]"))) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!endsSwipe) setOffset(0);
+    }
+  };
+
+  return (
+    <div ref={rowRef} onClickCapture={onClickCapture} style={{ position: "relative", overflow: "hidden", borderRadius: radius }}>
+      <button type="button" data-swipe-action onClick={run} aria-label={actionLabel} aria-hidden={!open} tabIndex={open ? 0 : -1} className="mdp-btn" style={{
+        position: "absolute", top: 0, right: 0, bottom: 0, width: Math.max(SWIPE_ACTION_WIDTH, -offset), border: "none", background: color, color: "#fff",
+        visibility: offset === 0 ? "hidden" : "visible",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+        fontSize: 15, fontWeight: 700, fontFamily: FONT, cursor: "pointer",
+      }}>
+        {Icon && <Icon size={22} />} {actionText}
+      </button>
+      <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd}
+        style={{
+          position: "relative", touchAction: "pan-y", transform: `translateX(${offset}px)`,
+          transition: dragging ? "none" : "transform .18s ease-out", display: "grid", gridTemplateColumns: "minmax(0, 1fr)",
+        }}>
+        {children}
+      </div>
+    </div>
+  );
+}

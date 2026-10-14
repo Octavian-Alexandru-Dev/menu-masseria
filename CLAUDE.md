@@ -46,6 +46,7 @@ Prenotazioni, Storico, Menù e Statistiche sono **la stessa schermata** sui due 
 | Prenotazioni | `TillReservations.jsx` | `TillReservations.jsx` | `reservationsData.js` |
 | Gestione menù e impostazioni | `TillMenu.jsx`, `MenuSettings.jsx` | `TillMenu.jsx`, `MenuSettings.jsx` | `menuEdit.js`, `menuCosts.js`, `menuBackup.js`, `menuPrint.js`, `staffData.js` |
 | Statistiche | `TillStats.jsx` | `TillStats.jsx` | `statsData.js` |
+| Zoom dell'interfaccia (solo telefono/tablet, vedi `docs/stampa-scontrini.md` §4.2) | `PhoneApp.jsx` > Zoom | — | `displayZoom.js` |
 
 > 1. Ogni funzione o interazione nuova dell'area staff (un campo nuovo di un piatto, un'azione sulla comanda, un filtro…) deve funzionare **su entrambi i dispositivi** nello stesso intervento: nelle schermate condivise basta farla una volta (controllando entrambe le disposizioni), nella Sala va fatta in `Waiter.jsx` e in `TillSala.jsx`. Se una funzione deve esistere solo da una parte, dillo esplicitamente nel riepilogo all'utente e scrivilo in `docs/stampa-scontrini.md` §4.1.
 > 2. La logica (dati, regole, calcoli, scritture su Firestore) sta nei moduli condivisi della colonna a destra, mai duplicata nei componenti, che cambiano solo la presentazione. Le modifiche al menù si salvano una alla volta con `onPatch` (MenuApp.jsx > `handlePatch`, una transazione sul menù com'è sul server) e scrivono solo i campi cambiati; un campo nuovo del menù passa da `menuEdit.js`; aggiorna anche `scripts/seed-emulator.js` (se serve per i test) e `docs/data-model.md`.
