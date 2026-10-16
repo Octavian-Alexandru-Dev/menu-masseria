@@ -244,11 +244,28 @@ const setStaffDocAsOwner = (uid, fields) => setDocAsOwner(`staff/${uid}`, fields
 // +1 per volta, quindi anche queste si scrivono come "owner".
 const SEED_MENU_VIEWS = { 1: 12, 2: 7, 4: 20, 5: 3, 6: 9 }; // giorni fa → visite
 async function seedMenuViews() {
+  const seeded = new Set();
   for (const [daysAgo, count] of Object.entries(SEED_MENU_VIEWS)) {
     const d = new Date();
     d.setDate(d.getDate() - Number(daysAgo));
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    seeded.add(key);
     await withRetry(() => setDocAsOwner(`menuViews/${key}`, { count }));
+  }
+  // Il resto va via: la snapshot dentro l'immagine (seed-data/) porta le visite
+  // relative al giorno in cui è stata esportata, che con il passare dei giorni
+  // cadrebbero dentro il periodo controllato dai test e ne cambierebbero i
+  // totali. Oggi compreso: lo incrementano solo i test.
+  const base = `http://localhost:8080/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+  const res = await withRetry(() => fetch(`${base}/menuViews?pageSize=1000`, { headers: { Authorization: "Bearer owner" } }));
+  const { documents = [] } = await res.json();
+  for (const { name } of documents) {
+    const key = name.split("/").pop();
+    if (seeded.has(key)) continue;
+    await withRetry(async () => {
+      const del = await fetch(`${base}/menuViews/${key}`, { method: "DELETE", headers: { Authorization: "Bearer owner" } });
+      if (!del.ok) throw new Error(`menuViews/${key}: ${del.status}`);
+    });
   }
 }
 

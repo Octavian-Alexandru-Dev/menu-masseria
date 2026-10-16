@@ -53,6 +53,30 @@ export async function removeMenuItemsByNamePrefix(prefix) {
   }
 }
 
+// Categorie intere aggiunte da un test (es. un menù lungo come quello vero,
+// per provare il layout) e la loro pulizia, per prefisso del nome.
+export async function addMenuCategoriesRemotely(categories) {
+  const db = await adminDb();
+  await runTransaction(db, async (tx) => {
+    const menu = (await tx.get(menuRef(db))).data();
+    menu.categories = [...menu.categories, ...categories];
+    tx.set(menuRef(db), menu);
+  });
+}
+
+export async function removeMenuCategoriesByNamePrefix(prefix) {
+  try {
+    const db = await adminDb();
+    await runTransaction(db, async (tx) => {
+      const menu = (await tx.get(menuRef(db))).data();
+      menu.categories = menu.categories.filter((c) => !String(c.name || "").startsWith(prefix));
+      tx.set(menuRef(db), menu);
+    });
+  } catch (err) {
+    console.error(`[test cleanup] Pulizia categorie "${prefix}" dal menù fallita:`, err.message || err);
+  }
+}
+
 // Una traduzione scritta "da un altro dispositivo" (per provarne la
 // correzione a mano) e la sua pulizia.
 export async function setTranslationRemotely(lang, translation) {

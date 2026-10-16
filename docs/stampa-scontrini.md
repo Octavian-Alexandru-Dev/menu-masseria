@@ -334,9 +334,17 @@ comande, preconto, chiusura.
   aperto lo segnala e offre "Vai al tavolo".
 - **Comanda:** a sinistra **tutte le categorie in una griglia** sempre
   visibile (nome, quanti piatti e quanti "da inviare", mai una striscia che
-  scorre di lato), la ricerca e i piatti a riquadri con la **foto in
+  scorre di lato) e sotto i piatti a riquadri con la **foto in
   miniatura** quando c'è (la stessa del menù dei clienti; tocco = +1, con il
-  conteggio sul riquadro); a destra, nella barra
+  conteggio sul riquadro). Sotto l'intestazione del tavolo, categorie e
+  piatti **scorrono insieme**, così con un menù lungo, su uno schermo
+  piccolo o con lo zoom del client l'ultimo piatto si raggiunge sempre; se
+  i piatti della categoria toccata partono troppo in basso, l'elenco sale da
+  solo fino a mostrarli. **Niente ricerca dei piatti alla cassa** (né campo
+  né etichette): la barra di ricerca con le sue etichette occupava metà
+  dello schermo e copriva i piatti; si sceglie dalle categorie. La ricerca
+  resta solo sul telefono (§4.2) e nel menù dei clienti, ed è l'unica
+  differenza voluta della comanda tra i due dispositivi. A destra, nella barra
   laterale, lo scontrino del tavolo ("Da inviare" e "Già inviato") e, sempre
   nello stesso posto in basso, Totale, **Invia comanda**, **Stampa
   preconto** (stampa diretta, con lo stato della stampa sotto) e **Chiudi
@@ -652,7 +660,8 @@ campi (niente zoom automatico su iOS); nessuno scorrimento laterale a
 | Client Electron vero: API 1.1.0/1.2.0 (stato schermo intero, nessuna credenziale, stato aggiornamenti "dev"), errore tastiera fuori da Windows | `tests/desktop-client.spec.js` |
 | Cassa: griglia dei tavoli a tutta larghezza, schede e "Nuovo tavolo" ≥ 48px | `tests/till-sala.spec.js` |
 | Cassa: apertura con tastierino, comanda a riquadri per categoria, nota dall'editor, invio, stato e totale sul riquadro del tavolo | `tests/till-sala.spec.js` |
-| Cassa: ricerca piatti, tavolo già aperto segnalato con "Vai al tavolo", chiusura con conferma e tavolo nello Storico | `tests/till-sala.spec.js` |
+| Cassa: niente ricerca piatti (né campo né etichette), si sceglie dalle categorie; tavolo già aperto segnalato con "Vai al tavolo", chiusura con conferma e tavolo nello Storico | `tests/till-sala.spec.js` |
+| Cassa: menù lungo (12 categorie × 10 piatti) su schermo 1024×738 — categorie e piatti scorrono insieme con la rotellina, l'ultimo piatto si raggiunge e si aggiunge, niente tagliato sotto il bordo | `tests/till-sala.spec.js` |
 | Nessun "Esci" alla cassa con client 1.4 (tutte le sezioni e le impostazioni del menù); logout dalle impostazioni senza rientro automatico; "Esci" con conferma per i client 1.1–1.3 | `tests/till-client.spec.js` |
 | Telefono: "Indietro" con etichetta e alto almeno 48px | `tests/waiter-order.spec.js` |
 | Cassa: modifica riga nella barra laterale (quantità, sconto, offerto, prezzo libero da tastierino), solo con "Salva"; su righe da inviare e già inviate; preconto stampato con "(sconto 20%)"/"(prezzo modificato)" | `tests/till-sala.spec.js` |

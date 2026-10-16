@@ -6,7 +6,7 @@ import { deletePrintJobsByTableLabel } from "./helpers/printJobs";
 import { swipeLeft } from "./helpers/swipe";
 import { setTillLockRemotely, resetTillLockRemotely } from "./helpers/staffRoles";
 import { findReservationByName } from "./helpers/reservations";
-import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix, findStaffByEmail, removeStaffByEmailRemotely, usernameEmail } from "./helpers/menuDoc";
+import { getMenu, findMenuItemByName, addMenuItemRemotely, updateMenuItemRemotely, removeMenuItemsByNamePrefix, addMenuCategoriesRemotely, removeMenuCategoriesByNamePrefix, findStaffByEmail, removeStaffByEmailRemotely, usernameEmail } from "./helpers/menuDoc";
 
 // Sala della cassa (TillSala.jsx): l'interfaccia a tutto schermo in stile
 // cassa POS mostrata solo dentro il client Windows (window.mdpDesktop,
@@ -28,7 +28,9 @@ const usedReservations = [];
 // Prefisso delle voci di menù create dai test di questo file (ripulite anche
 // se un test si interrompe a metà).
 const TEST_DISH_PREFIX = "Prova cassa ";
+const TEST_CATEGORY_PREFIX = "Prova cassa categoria ";
 test.afterEach(async () => {
+  await removeMenuCategoriesByNamePrefix(TEST_CATEGORY_PREFIX);
   await removeMenuItemsByNamePrefix(TEST_DISH_PREFIX);
   for (const n of usedTables.splice(0)) {
     await deleteTestOrderByTableNumber(n);
@@ -221,14 +223,54 @@ test("una riga già inviata si può rimuovere dall'editor, con conferma", async 
   await expect(page.getByTestId("till-order-total")).toHaveText("€ 0,00");
 });
 
-test("la ricerca trova i piatti in tutte le categorie", async ({ page }) => {
+test("alla cassa non c'è la ricerca dei piatti: si sceglie dalle categorie", async ({ page }) => {
   await openTill(page);
   await openTableWithKeypad(page, { adults: 0 });
-  await page.getByRole("textbox", { name: "Cerca un piatto" }).fill("tiram");
+  await expect(page.getByRole("tablist", { name: "Categorie del menù" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Cerca un piatto" })).toHaveCount(0);
+  // Nemmeno le etichette di ricerca dei piatti (searchTags "Bibita" nel menù demo).
+  await expect(page.getByRole("button", { name: "Bibita", exact: true })).toHaveCount(0);
+  await page.getByRole("tab", { name: /^Dolci/ }).click();
   await expect(page.getByRole("button", { name: /^Aggiungi Tiramisù/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Aggiungi Bruschetta/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Cancella ricerca" }).click();
-  await expect(page.getByRole("button", { name: /^Aggiungi Bruschetta/ })).toBeVisible();
+});
+
+// Regressione: con un menù lungo come quello vero (molte categorie, molte
+// etichette) su uno schermo da cassa piccolo, la parte fissa sopra i piatti
+// riempiva lo schermo e i piatti non si potevano più scorrere né raggiungere.
+test("con un menù lungo su uno schermo piccolo i piatti si raggiungono scorrendo", async ({ page }) => {
+  const stamp = Date.now();
+  const categories = Array.from({ length: 12 }, (_, c) => ({
+    id: `prova-cat-${stamp}-${c + 1}`, name: `${TEST_CATEGORY_PREFIX}${c + 1}`, subtitle: "", visible: true,
+    items: Array.from({ length: 10 }, (_, i) => ({
+      id: `prova-item-${stamp}-${c + 1}-${i + 1}`, name: `${TEST_DISH_PREFIX}${c + 1}.${i + 1}`, price: "5,00", tag: "", description: "",
+      searchTags: `Etichetta ${c + 1}, Etichetta ${i + 1}`, visible: true, staffOnly: false,
+    })),
+  }));
+  await addMenuCategoriesRemotely(categories);
+  await page.setViewportSize({ width: 1024, height: 738 });
+  await openTill(page);
+  await openTableWithKeypad(page, { adults: 0 });
+
+  await page.getByRole("tab", { name: new RegExp(`^${TEST_CATEGORY_PREFIX}12`) }).click();
+  const lastDish = page.getByRole("button", { name: new RegExp(`^Aggiungi ${TEST_DISH_PREFIX}12\\.10,`) });
+  await expect(lastDish).toBeAttached({ timeout: 10_000 });
+  // Come farebbe una persona: scorrere con la rotellina sopra il menù, finché
+  // l'ultimo piatto è tutto sullo schermo (prima della correzione non si
+  // muoveva nulla e restava tagliato fuori).
+  const menu = page.getByRole("region", { name: "Menu" });
+  const box = await menu.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(async () => {
+    await page.mouse.wheel(0, 400);
+    await expect(lastDish).toBeInViewport({ ratio: 1, timeout: 500 });
+  }).toPass({ timeout: 10_000 });
+  // Il menù resta dentro lo schermo: niente tagliato sotto il bordo.
+  const menuBox = await menu.boundingBox();
+  expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(738 + 1);
+
+  await lastDish.click();
+  const draft = page.getByRole("region", { name: "Comanda del tavolo" }).getByRole("group", { name: "Da inviare" });
+  await expect(draft.getByRole("button", { name: new RegExp(`^Modifica ${TEST_DISH_PREFIX}12\\.10`) })).toBeVisible();
 });
 
 test("un tavolo già aperto viene segnalato nel tastierino, con il collegamento al tavolo", async ({ page }) => {

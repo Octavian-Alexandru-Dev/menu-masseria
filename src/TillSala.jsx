@@ -14,8 +14,8 @@
 //    screen — number, name, covers, elapsed time, running total, status
 //    written on a fixed colour;
 //  - order screen split like common restaurant POS: menu tiles on the left
-//    (every category at once in a grid + search; dish tiles with their
-//    photo), the ticket in the side panel on the right.
+//    (every category at once in a grid, no search; categories and dish
+//    tiles — with their photo — scroll together under the table header), the ticket in the side panel on the right.
 //    Tapping a ticket line opens its editor right there (quantity, price —
 //    offered, discounted, custom — note, removal): editing in context, the
 //    total stays in view; changes apply only on "Salva";
@@ -27,9 +27,9 @@
 //
 // No kitchen states ("uscita"): the kitchen has no screen, lines are just
 // "sent" (see the Cucina note in docs/stampa-scontrini.md).
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import React, { useState, useEffect, useRef, Suspense, lazy } from "react";
 import {
-  Plus, X, Users, Clock, Search, Utensils, CalendarDays, History, LayoutGrid, BookOpen, BarChart3,
+  Plus, Users, Clock, Utensils, CalendarDays, History, LayoutGrid, BookOpen, BarChart3,
   Send, Lock, Printer, LogOut,
 } from "lucide-react";
 import {
@@ -293,6 +293,8 @@ function NewTableDialog({ t, openOrders, onCancel, onCreate, onGoTo, busy, reser
 function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
   const d = useOrderDraft({ menu, menuCosts, order, senderName });
   const [categoryId, setCategoryId] = useState(null);
+  const menuScrollRef = useRef(null);
+  const dishGridRef = useRef(null);
   const [editing, setEditing] = useState(null); // { lineId, sent }
   const printer = usePrintJob();
   const id = tableIdentity(order);
@@ -304,20 +306,25 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
   ];
   const activeTab = categoryId && tabs.some((tb) => tb.id === categoryId) ? categoryId : tabs[0]?.id;
 
-  // Which tiles to show: the selected category, or — while searching —
-  // every match across the menu.
+  // Which tiles to show: the selected category. No dish search at the till:
+  // the category grid is enough there, and the search field with its tag
+  // chips took so much height that the dishes no longer fitted on screen.
   let tiles;
-  if (d.isItemSearching) {
-    tiles = [
-      ...d.filteredNormalItems.flatMap((c) => c.items.map((item) => ({ item, categoryId: c.id, categoryName: c.name, offMenu: false }))),
-      ...d.filteredOffMenuItems.map((item) => ({ item, categoryId: item._categoryId, categoryName: item._categoryName, offMenu: true })),
-    ];
-  } else if (activeTab === "__offmenu__") {
+  if (activeTab === "__offmenu__") {
     tiles = d.offMenuItems.map((item) => ({ item, categoryId: item._categoryId, categoryName: item._categoryName, offMenu: true }));
   } else {
     const cat = d.normalItems.find((c) => c.id === activeTab);
     tiles = (cat?.items || []).map((item) => ({ item, categoryId: cat.id, categoryName: cat.name, offMenu: false }));
   }
+  // A category tapped while its dishes would start low on the screen (small
+  // till screen or zoom, long category grid): bring the dishes up.
+  useEffect(() => {
+    const box = menuScrollRef.current;
+    const grid = dishGridRef.current;
+    if (!categoryId || !box || !grid) return;
+    const top = grid.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    if (top < 0 || top > box.clientHeight * 0.6) box.scrollTo({ top: box.scrollTop + top - 12, behavior: "smooth" });
+  }, [categoryId]);
   const draftQty = (itemId) => d.draft.filter((l) => l.menuItemId === itemId).reduce((s, l) => s + l.quantity, 0);
   // Every category at once (CategoryGrid): how many dishes, how many already
   // picked and not sent yet.
@@ -451,44 +458,13 @@ function OrderView({ t, menu, menuCosts, order, senderName, onBack }) {
           <div style={{ marginLeft: "auto" }}><CoversControl t={t} order={order} /></div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 20px 0" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <CategoryGrid t={t} label="Categorie del menù" minWidth={150} categories={categoryCards}
-              activeId={d.isItemSearching ? null : activeTab} onSelect={(cid) => { d.setItemSearch(""); setCategoryId(cid); }} />
-          </div>
-          {d.searchEnabled && (
-            <div style={{ position: "relative", width: 260, flexShrink: 0 }}>
-              <Search size={18} color={t.inkSoft} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-              <input type="text" value={d.itemSearch} onChange={(e) => d.setItemSearch(e.target.value)} placeholder="Cerca un piatto…" aria-label="Cerca un piatto"
-                style={{ width: "100%", minHeight: 52, padding: "0 48px 0 42px", borderRadius: 12, border: `1.5px solid ${t.line}`, background: t.card, color: t.ink, fontSize: 17, fontFamily: FONT, boxSizing: "border-box" }} />
-              {d.isItemSearching && (
-                <button type="button" onClick={() => d.setItemSearch("")} aria-label="Cancella ricerca" className="mdp-btn" style={{
-                  position: "absolute", right: 2, top: 2, width: TOUCH, height: TOUCH, border: "none", background: "none", color: t.inkSoft, cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}><X size={20} /></button>
-              )}
-            </div>
-          )}
-        </div>
-        {d.searchEnabled && d.searchTagChips.length > 0 && (
-          <div style={{ display: "flex", gap: 8, padding: "10px 20px 0", flexWrap: "wrap" }}>
-            {d.searchTagChips.map((tag) => {
-              const active = d.itemSearch.trim().toLowerCase() === tag.toLowerCase();
-              return (
-                <button key={tag} type="button" aria-pressed={active} onClick={() => d.toggleSearchTag(tag)} className="mdp-btn" style={{
-                  minHeight: 44, padding: "0 16px", borderRadius: 22, fontSize: 15, cursor: "pointer", fontFamily: FONT,
-                  border: `1.5px solid ${active ? t.ink : t.line}`, background: active ? t.ink : t.bg, color: active ? t.bg : t.inkSoft,
-                }}>{tag}</button>
-              );
-            })}
-          </div>
-        )}
-
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 20px 96px" }}>
-          {d.isItemSearching && tiles.length === 0 && (
-            <div style={{ color: t.inkSoft, fontSize: 17, padding: "24px 0" }}>Nessun piatto trovato.</div>
-          )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }}>
+        {/* Categories and dishes scroll together under the table header: with
+            a long menu the category grid alone can fill a small till screen,
+            and the dishes must stay reachable at any size and zoom. */}
+        <div ref={menuScrollRef} data-testid="till-menu-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 20px 96px" }}>
+          <CategoryGrid t={t} label="Categorie del menù" minWidth={150} categories={categoryCards}
+            activeId={activeTab} onSelect={setCategoryId} />
+          <div ref={dishGridRef} aria-label="Piatti" role="group" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12, marginTop: 14 }}>
             {tiles.map(({ item, categoryId: cId, categoryName, offMenu }) => (
               <DishTile key={`${cId}-${item.id}`} t={t} item={item} offMenu={offMenu} quantityInDraft={draftQty(item.id)}
                 onAdd={() => d.addToDraft(item, cId, categoryName)} />

@@ -247,7 +247,7 @@ function CopertoPanel({ t, menu, onPatch, onBack, sheet }) {
           <div style={{ fontSize: 14, color: t.inkSoft, lineHeight: 1.4 }}>Vale per i tavoli aperti da ora in poi: quelli già aperti mantengono il coperto di quando sono stati aperti.</div>
         </div>
         <SwitchRow t={t} label="Ricerca dei piatti" checked={searchEnabled} onChange={setSearchEnabled}
-          description="La barra di ricerca nel menù dei clienti e nella presa della comanda." />
+          description="La barra di ricerca nel menù dei clienti e nella presa della comanda dal telefono (alla cassa si sceglie dalle categorie)." />
       </div>
     </SidePanel>
   );
